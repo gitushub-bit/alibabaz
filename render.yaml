@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: market-buddy-45
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: VITE_SUPABASE_PROJECT_ID
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: VITE_TELEGRAM_CHAT_ID
+        sync: false
