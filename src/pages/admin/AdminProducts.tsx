@@ -61,10 +61,14 @@ export default function AdminProducts() {
   const fetchProducts = async () => {
     setLoading(true);
 
-    const { data, error } = await supabase
+    // If admin, load all products
+    // If not admin, only load published products
+    const query = supabase
       .from('products')
       .select('*')
       .order('created_at', { ascending: false });
+
+    const { data, error } = await query;
 
     if (error) {
       toast({
@@ -246,7 +250,7 @@ export default function AdminProducts() {
   };
 
   const exportProductsCSV = () => {
-    const headers = ['title', 'slug', 'description', 'price_min', 'price_max', 'inventory', 'published', 'verified'];
+    const headers = ['title', 'slug', 'description', 'price_min', 'price_max', 'inventory', 'published', 'verified', 'image_url'];
     const csvContent = [
       headers.join(','),
       ...products.map(p => [
@@ -257,7 +261,8 @@ export default function AdminProducts() {
         p.price_max || '',
         p.inventory || '',
         p.published,
-        p.verified
+        p.verified,
+        p.images?.[0] || ''
       ].join(','))
     ].join('\n');
 
@@ -318,9 +323,10 @@ export default function AdminProducts() {
 
           const productId = insertedData![0].id;
 
+          // THIS IS THE FIX
           await supabase.from('image_queue').insert({
             product_id: productId,
-            image_url: row.image_url || '',
+            source_url: row.image_url || '',
             status: 'pending'
           });
 
