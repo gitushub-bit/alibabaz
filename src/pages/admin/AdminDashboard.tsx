@@ -18,7 +18,10 @@ import {
   Palette,
   Plug,
   Crown,
-  Send
+  Send,
+  Image,
+  Megaphone,
+  Layers
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
@@ -36,7 +39,10 @@ const sidebarLinks: SidebarLink[] = [
   { to: '/admin/suppliers', icon: Building2, label: 'Suppliers' },
   { to: '/admin/products', icon: Package, label: 'Products' },
   { to: '/admin/categories', icon: FileText, label: 'Categories' },
-  { to: '/admin/deals', icon: Tag, label: 'Deals & Promotions' },
+  { to: '/admin/deals', icon: Tag, label: 'Deals' },
+  { to: '/admin/promo-slides', icon: Layers, label: 'Promo Slides' },
+  { to: '/admin/popups', icon: Megaphone, label: 'Popup Promos' },
+  { to: '/admin/image-queue', icon: Image, label: 'Image Queue' },
   { to: '/admin/orders', icon: Package, label: 'Orders' },
   { to: '/admin/rfqs', icon: FileText, label: 'RFQs' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },

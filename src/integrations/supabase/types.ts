@@ -126,6 +126,7 @@ export type Database = {
         Row: {
           created_at: string
           discount: number | null
+          ends_at: string | null
           id: string
           image: string | null
           is_active: boolean | null
@@ -143,6 +144,7 @@ export type Database = {
         Insert: {
           created_at?: string
           discount?: number | null
+          ends_at?: string | null
           id?: string
           image?: string | null
           is_active?: boolean | null
@@ -160,6 +162,7 @@ export type Database = {
         Update: {
           created_at?: string
           discount?: number | null
+          ends_at?: string | null
           id?: string
           image?: string | null
           is_active?: boolean | null
@@ -251,6 +254,83 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      frequently_searched: {
+        Row: {
+          created_at: string
+          id: string
+          image: string | null
+          is_active: boolean | null
+          slug: string
+          sort_order: number | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image?: string | null
+          is_active?: boolean | null
+          slug: string
+          sort_order?: number | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image?: string | null
+          is_active?: boolean | null
+          slug?: string
+          sort_order?: number | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      image_queue: {
+        Row: {
+          attempts: number | null
+          created_at: string
+          error: string | null
+          id: string
+          processed_at: string | null
+          processed_url: string | null
+          product_id: string | null
+          source_url: string
+          status: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          processed_at?: string | null
+          processed_url?: string | null
+          product_id?: string | null
+          source_url: string
+          status?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          processed_at?: string | null
+          processed_url?: string | null
+          product_id?: string | null
+          source_url?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "image_queue_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       industry_hub_products: {
         Row: {
@@ -521,6 +601,60 @@ export type Database = {
           },
         ]
       }
+      popup_promotions: {
+        Row: {
+          created_at: string
+          cta_link: string | null
+          cta_text: string | null
+          description: string | null
+          discount_code: string | null
+          discount_percent: number | null
+          display_frequency: string | null
+          end_at: string | null
+          id: string
+          image: string | null
+          is_active: boolean | null
+          show_on_pages: string[] | null
+          start_at: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cta_link?: string | null
+          cta_text?: string | null
+          description?: string | null
+          discount_code?: string | null
+          discount_percent?: number | null
+          display_frequency?: string | null
+          end_at?: string | null
+          id?: string
+          image?: string | null
+          is_active?: boolean | null
+          show_on_pages?: string[] | null
+          start_at?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cta_link?: string | null
+          cta_text?: string | null
+          description?: string | null
+          discount_code?: string | null
+          discount_percent?: number | null
+          display_frequency?: string | null
+          end_at?: string | null
+          id?: string
+          image?: string | null
+          is_active?: boolean | null
+          show_on_pages?: string[] | null
+          start_at?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           ai_description: string | null
@@ -532,7 +666,12 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          image_approved: boolean | null
+          image_confidence: string | null
+          image_review_notes: string | null
           images: string[] | null
+          is_available: boolean | null
+          low_stock_threshold: number | null
           meta_description: string | null
           moq: number | null
           price_max: number | null
@@ -540,8 +679,10 @@ export type Database = {
           published: boolean | null
           seller_id: string
           seo_title: string | null
+          sku: string | null
           slug: string
           specifications: Json | null
+          stock_quantity: number | null
           tags: string[] | null
           title: string
           unit: string | null
@@ -558,7 +699,12 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          image_approved?: boolean | null
+          image_confidence?: string | null
+          image_review_notes?: string | null
           images?: string[] | null
+          is_available?: boolean | null
+          low_stock_threshold?: number | null
           meta_description?: string | null
           moq?: number | null
           price_max?: number | null
@@ -566,8 +712,10 @@ export type Database = {
           published?: boolean | null
           seller_id: string
           seo_title?: string | null
+          sku?: string | null
           slug: string
           specifications?: Json | null
+          stock_quantity?: number | null
           tags?: string[] | null
           title: string
           unit?: string | null
@@ -584,7 +732,12 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          image_approved?: boolean | null
+          image_confidence?: string | null
+          image_review_notes?: string | null
           images?: string[] | null
+          is_available?: boolean | null
+          low_stock_threshold?: number | null
           meta_description?: string | null
           moq?: number | null
           price_max?: number | null
@@ -592,8 +745,10 @@ export type Database = {
           published?: boolean | null
           seller_id?: string
           seo_title?: string | null
+          sku?: string | null
           slug?: string
           specifications?: Json | null
+          stock_quantity?: number | null
           tags?: string[] | null
           title?: string
           unit?: string | null
@@ -658,6 +813,45 @@ export type Database = {
           state_province?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      promo_slides: {
+        Row: {
+          created_at: string
+          cta_link: string | null
+          cta_text: string | null
+          id: string
+          image: string | null
+          is_active: boolean | null
+          sort_order: number | null
+          subtitle: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cta_link?: string | null
+          cta_text?: string | null
+          id?: string
+          image?: string | null
+          is_active?: boolean | null
+          sort_order?: number | null
+          subtitle?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cta_link?: string | null
+          cta_text?: string | null
+          id?: string
+          image?: string | null
+          is_active?: boolean | null
+          sort_order?: number | null
+          subtitle?: string | null
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -861,6 +1055,44 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      stock_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          id: string
+          is_resolved: boolean | null
+          message: string
+          product_id: string | null
+          resolved_at: string | null
+        }
+        Insert: {
+          alert_type?: string
+          created_at?: string
+          id?: string
+          is_resolved?: boolean | null
+          message: string
+          product_id?: string | null
+          resolved_at?: string | null
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          id?: string
+          is_resolved?: boolean | null
+          message?: string
+          product_id?: string | null
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_alerts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       suppliers: {
         Row: {

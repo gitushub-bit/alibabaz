@@ -47,6 +47,9 @@ import AdminPayments from "./pages/admin/AdminPayments";
 import AdminSiteContent from "./pages/admin/AdminSiteContent";
 import AdminIntegrations from "./pages/admin/AdminIntegrations";
 import AdminTelegram from "./telegram/AdminTelegram";
+import AdminPromoSlides from "./pages/admin/AdminPromoSlides";
+import AdminPopups from "./pages/admin/AdminPopups";
+import AdminImageQueue from "./pages/admin/AdminImageQueue";
 import Checkout from "./telegram/Checkout";
 
 const queryClient = new QueryClient();
@@ -98,6 +101,9 @@ const App = () => (
               <Route path="products" element={<AdminProducts />} />
               <Route path="categories" element={<AdminCategories />} />
               <Route path="deals" element={<AdminDeals />} />
+              <Route path="promo-slides" element={<AdminPromoSlides />} />
+              <Route path="popups" element={<AdminPopups />} />
+              <Route path="image-queue" element={<AdminImageQueue />} />
               <Route path="orders" element={<AdminOrders />} />
               <Route path="rfqs" element={<AdminRFQs />} />
               <Route path="payments" element={<AdminPayments />} />
