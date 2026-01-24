@@ -44,9 +44,9 @@ const defaultContent: SiteContent = {
   featuredCategories: { enabled: true, title: 'Browse Categories', itemCount: 8 },
   featuredSuppliers: { enabled: true, title: 'Featured Suppliers', itemCount: 6 },
   trendingProducts: { enabled: true, title: 'Trending Now', itemCount: 8 },
-  rfqBanner: { 
-    enabled: true, 
-    title: 'Post a Buying Request', 
+  rfqBanner: {
+    enabled: true,
+    title: 'Post a Buying Request',
     description: 'Tell us what you need and get quotes from verified suppliers'
   },
   actionCards: { enabled: true },
@@ -66,12 +66,12 @@ export function useSiteContent() {
       .from('site_settings')
       .select('value')
       .eq('key', 'site_content')
-      .single();
+      .maybeSingle();
 
     if (data?.value) {
       try {
-        const savedContent = typeof data.value === 'string' 
-          ? JSON.parse(data.value) 
+        const savedContent = typeof data.value === 'string'
+          ? JSON.parse(data.value)
           : data.value;
         setContent({ ...defaultContent, ...savedContent });
       } catch {

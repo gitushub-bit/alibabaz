@@ -118,7 +118,7 @@ export const Footer = () => {
       try {
         const {
           data
-        } = await supabase.from("site_settings").select("value").eq("key", "footer_settings").single();
+        } = await supabase.from("site_settings").select("value").eq("key", "footer_settings").maybeSingle();
         if (data?.value && typeof data.value === 'object' && 'sections' in data.value) {
           setSettings(data.value as unknown as FooterSettings);
         }
@@ -129,66 +129,66 @@ export const Footer = () => {
   }, []);
   if (loading) {
     return <footer className="border-t bg-muted/50 py-12">
-        <Skeleton className="h-24 w-full" />
-      </footer>;
+      <Skeleton className="h-24 w-full" />
+    </footer>;
   }
   return <footer className="border-t bg-muted/50">
-      {/* MAIN LINKS */}
-      <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
-          {settings.sections.map(section => <div key={section.id}>
-              <h3 className="font-semibold mb-4">{section.title}</h3>
-              <ul className="space-y-2">
-                {section.links.map(l => <li key={l.label}>
-                    <Link to={l.href} className="text-sm text-muted-foreground hover:text-foreground">
-                      {l.label}
-                    </Link>
-                  </li>)}
-              </ul>
+    {/* MAIN LINKS */}
+    <div className="container mx-auto px-4 py-12">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
+        {settings.sections.map(section => <div key={section.id}>
+          <h3 className="font-semibold mb-4">{section.title}</h3>
+          <ul className="space-y-2">
+            {section.links.map(l => <li key={l.label}>
+              <Link to={l.href} className="text-sm text-muted-foreground hover:text-foreground">
+                {l.label}
+              </Link>
+            </li>)}
+          </ul>
 
-              {section.id === "know" && <div className="mt-6 flex gap-4 text-muted-foreground">
-                  <Facebook size={18} />
-                  <Twitter size={18} />
-                  <Instagram size={18} />
-                  <Linkedin size={18} />
-                  <Youtube size={18} />
-                </div>}
-            </div>)}
+          {section.id === "know" && <div className="mt-6 flex gap-4 text-muted-foreground">
+            <Facebook size={18} />
+            <Twitter size={18} />
+            <Instagram size={18} />
+            <Linkedin size={18} />
+            <Youtube size={18} />
+          </div>}
+        </div>)}
+      </div>
+    </div>
+
+    {/* PAYMENT ICONS */}
+    <div className="border-t">
+      <div className="container mx-auto px-4 py-4">
+        <div className="flex justify-center items-center gap-1 sm:gap-2 shadow-none">
+          {paymentIcons.map((src, i) => <img key={i} src={src} alt="payment" className="h-4 sm:h-5 md:h-6 lg:h-7 object-contain" />)}
         </div>
       </div>
+    </div>
 
-      {/* PAYMENT ICONS */}
-      <div className="border-t">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-center items-center gap-1 sm:gap-2 shadow-none">
-            {paymentIcons.map((src, i) => <img key={i} src={src} alt="payment" className="h-4 sm:h-5 md:h-6 lg:h-7 object-contain" />)}
-          </div>
+    {/* ECOSYSTEM + POLICIES */}
+    <div className="border-t">
+      <div className="container mx-auto px-4 py-8 text-center text-sm text-muted-foreground space-y-4">
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+          {ecosystemLinks.map(l => <Link key={l} to="/" className="hover:text-foreground">
+            {l}
+          </Link>)}
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+          {policyLinks.map(l => <Link key={l} to="/" className="hover:text-foreground">
+            {l}
+          </Link>)}
+        </div>
+
+        {/* LEGAL */}
+        <div className="text-xs leading-relaxed">
+          © 1999-2026 Alibaba.com。版权所有：杭州阿里巴巴海外信息技术有限公司<br />
+          增值电信业务经营许可证：浙B2-20241358<br />
+          Business license verification icon | GSXT verification icon<br />
+          浙公网安备33010002000366 | 浙ICP备2024067534号-3
         </div>
       </div>
-
-      {/* ECOSYSTEM + POLICIES */}
-      <div className="border-t">
-        <div className="container mx-auto px-4 py-8 text-center text-sm text-muted-foreground space-y-4">
-          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-            {ecosystemLinks.map(l => <Link key={l} to="/" className="hover:text-foreground">
-                {l}
-              </Link>)}
-          </div>
-
-          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-            {policyLinks.map(l => <Link key={l} to="/" className="hover:text-foreground">
-                {l}
-              </Link>)}
-          </div>
-
-          {/* LEGAL */}
-          <div className="text-xs leading-relaxed">
-            © 1999-2026 Alibaba.com。版权所有：杭州阿里巴巴海外信息技术有限公司<br />
-            增值电信业务经营许可证：浙B2-20241358<br />
-            Business license verification icon | GSXT verification icon<br />
-            浙公网安备33010002000366 | 浙ICP备2024067534号-3
-          </div>
-        </div>
-      </div>
-    </footer>;
+    </div>
+  </footer>;
 };

@@ -173,14 +173,14 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
   // Fetch real exchange rates from edge function or database
   const fetchExchangeRates = useCallback(async () => {
     setIsLoadingRates(true);
-    
+
     try {
       // First try to get cached rates from database (faster)
       const { data: cachedRates, error: dbError } = await supabase
         .from('site_settings')
         .select('value, updated_at')
         .eq('key', 'exchange_rates')
-        .single();
+        .maybeSingle();
 
       if (cachedRates && !dbError) {
         const rates = cachedRates.value as Record<string, number>;

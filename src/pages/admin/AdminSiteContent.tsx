@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
-import { 
+import {
   Save,
   Layout,
   Image,
@@ -62,9 +62,9 @@ const defaultContent: SiteContent = {
   featuredCategories: { enabled: true, title: 'Featured Categories', itemCount: 8 },
   featuredSuppliers: { enabled: true, title: 'Featured Suppliers', itemCount: 6 },
   trendingProducts: { enabled: true, title: 'Trending Now', itemCount: 8 },
-  rfqBanner: { 
-    enabled: true, 
-    title: 'Request for Quotation', 
+  rfqBanner: {
+    enabled: true,
+    title: 'Request for Quotation',
     description: 'Tell suppliers what you need and get quotes from verified sellers'
   },
   actionCards: { enabled: true },
@@ -85,12 +85,12 @@ export default function AdminSiteContent() {
       .from('site_settings')
       .select('key, value')
       .eq('key', 'site_content')
-      .single();
+      .maybeSingle();
 
     if (data?.value) {
       try {
-        const savedContent = typeof data.value === 'string' 
-          ? JSON.parse(data.value) 
+        const savedContent = typeof data.value === 'string'
+          ? JSON.parse(data.value)
           : data.value;
         setContent({ ...defaultContent, ...savedContent });
       } catch {
@@ -122,8 +122,8 @@ export default function AdminSiteContent() {
   };
 
   const updateSection = (
-    section: keyof SiteContent, 
-    field: string, 
+    section: keyof SiteContent,
+    field: string,
     value: string | boolean | number
   ) => {
     setContent({
