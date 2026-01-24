@@ -22,7 +22,7 @@ serve(async (req) => {
     .select("*")
     .eq("status", "pending")
     .lt("attempts", 3)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false }) // process newest first
     .limit(10);
 
   if (fetchError) {
@@ -136,9 +136,14 @@ serve(async (req) => {
 
     } catch (error: any) {
       console.error(`Failed to process ${item.source_url}:`, error.message);
-      
+
       const attempts = (item.attempts || 0) + 1;
-      const newStatus = attempts >= 3 ? "failed" : "pending";
+
+      // FAIL immediately on 404 or invalid image
+      let newStatus = attempts >= 3 ? "failed" : "pending";
+      if (error.message.includes("HTTP 404") || error.message.includes("Not an image")) {
+        newStatus = "failed";
+      }
 
       await supabase
         .from("image_queue")
