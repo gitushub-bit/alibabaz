@@ -49,8 +49,7 @@ import {
 import { CSVImport } from '@/components/admin/CSVImport';
 
 // NEW COMPONENTS
-import AdminImageReview from '@/pages/admin/AdminImageReview';
-import ProductForm from '@/pages/admin/ProductForm';
+import AdminProductForm from '@/pages/admin/AdminProductForm';
 
 
 interface Product {
@@ -74,6 +73,17 @@ const normalizeSlug = (text: string) => {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+};
+
+const makeSlugUnique = (baseSlug: string, existingSlugs: Set<string>): string => {
+  let slug = baseSlug;
+  let counter = 1;
+  while (existingSlugs.has(slug)) {
+    slug = `${baseSlug}-${counter}`;
+    counter++;
+  }
+  existingSlugs.add(slug);
+  return slug;
 };
 
 const uploadImagesFromUrls = async (urls: string[], productSlug: string) => {
@@ -345,19 +355,8 @@ export default function AdminProducts() {
         </div>
       </div>
 
-      {/* ========================= */}
-      {/* NEW: ADMIN IMAGE REVIEW */}
-      {/* Only products without images */}
-      {/* ========================= */}
-      <AdminImageReview
-        products={productsMissingImages}
-        onRefresh={fetchProducts}
-      />
-
-      {/* ========================= */}
-      {/* NEW: PRODUCT FORM */}
-      {/* ========================= */}
-      <ProductForm onComplete={fetchProducts} />
+      {/* Add Product Button */}
+      <AdminProductForm onComplete={fetchProducts} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
