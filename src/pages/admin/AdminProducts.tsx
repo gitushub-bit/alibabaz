@@ -61,14 +61,10 @@ export default function AdminProducts() {
   const fetchProducts = async () => {
     setLoading(true);
 
-    // If admin, load all products
-    // If not admin, only load published products
-    const query = supabase
+    const { data, error } = await supabase
       .from('products')
       .select('*')
       .order('created_at', { ascending: false });
-
-    const { data, error } = await query;
 
     if (error) {
       toast({
@@ -250,7 +246,7 @@ export default function AdminProducts() {
   };
 
   const exportProductsCSV = () => {
-    const headers = ['title', 'slug', 'description', 'price_min', 'price_max', 'inventory', 'published', 'verified', 'image_url'];
+    const headers = ['title', 'slug', 'description', 'price_min', 'price_max', 'inventory', 'published', 'verified'];
     const csvContent = [
       headers.join(','),
       ...products.map(p => [
@@ -261,8 +257,7 @@ export default function AdminProducts() {
         p.price_max || '',
         p.inventory || '',
         p.published,
-        p.verified,
-        p.images?.[0] || ''
+        p.verified
       ].join(','))
     ].join('\n');
 
@@ -323,18 +318,22 @@ export default function AdminProducts() {
 
           const productId = insertedData![0].id;
 
-          // THIS IS THE FIX
-          await supabase.from('image_queue').insert({
+          // ⚠️ FIXED: insert correct column name "source_url"
+          const { error: imgErr } = await supabase.from('image_queue').insert({
             product_id: productId,
             source_url: row.image_url || '',
             status: 'pending'
           });
 
-          await supabase.from('ai_generation_queue').insert({
+          if (imgErr) throw imgErr;
+
+          const { error: aiErr } = await supabase.from('ai_generation_queue').insert({
             product_id: productId,
             status: 'pending',
             prompt: `Generate product description for ${row.title}`
           });
+
+          if (aiErr) throw aiErr;
 
           success++;
         }
