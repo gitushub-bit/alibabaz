@@ -24,6 +24,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { Download, Upload, Package } from 'lucide-react';
 import { format } from 'date-fns';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Product {
   id: string;
@@ -121,7 +123,6 @@ export default function AdminProducts() {
   };
 
   const generateAI = async (product: Product) => {
-    // Insert into AI queue
     const { error } = await supabase.from('ai_generation_queue').insert({
       product_id: product.id,
       status: 'pending',
@@ -315,16 +316,16 @@ export default function AdminProducts() {
 
           if (error) throw error;
 
-          // Add to image queue
+          const productId = insertedData![0].id;
+
           await supabase.from('image_queue').insert({
-            product_id: insertedData![0].id,
+            product_id: productId,
             image_url: row.image_url || '',
             status: 'pending'
           });
 
-          // Add to AI queue
           await supabase.from('ai_generation_queue').insert({
-            product_id: insertedData![0].id,
+            product_id: productId,
             status: 'pending',
             prompt: `Generate product description for ${row.title}`
           });
@@ -363,23 +364,48 @@ export default function AdminProducts() {
         </div>
       </div>
 
-      <AdminProductForm onComplete={fetchProducts} />
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex gap-2">
+          <Input
+            placeholder="Search products..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
 
-      <div className="flex gap-2">
-        <Button onClick={bulkPublish} disabled={selectedIds.length === 0}>
-          Bulk Publish
-        </Button>
-        <Button onClick={bulkUnpublish} disabled={selectedIds.length === 0}>
-          Bulk Unpublish
-        </Button>
-        <Button
-          variant="destructive"
-          onClick={bulkDelete}
-          disabled={selectedIds.length === 0}
-        >
-          Bulk Delete
-        </Button>
+          <Select
+            value={statusFilter}
+            onValueChange={(val) => setStatusFilter(val)}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filter Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="published">Published</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="verified">Verified</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex gap-2">
+          <Button onClick={bulkPublish} disabled={selectedIds.length === 0}>
+            Bulk Publish
+          </Button>
+          <Button onClick={bulkUnpublish} disabled={selectedIds.length === 0}>
+            Bulk Unpublish
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={bulkDelete}
+            disabled={selectedIds.length === 0}
+          >
+            Bulk Delete
+          </Button>
+        </div>
       </div>
+
+      <AdminProductForm onComplete={fetchProducts} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
