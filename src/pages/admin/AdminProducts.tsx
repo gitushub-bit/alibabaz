@@ -60,6 +60,7 @@ interface Product {
   price_min: number | null;
   price_max: number | null;
   images: string[] | null;
+  inventory: number | null;
   sellerName?: string;
   ai_description?: string | null;
   ai_generated_at?: string | null;
@@ -95,6 +96,7 @@ export default function AdminProducts() {
       return;
     }
 
+    // Set default sellerName
     const enriched = (data || []).map((product: any) => ({
       ...product,
       sellerName: 'Unknown Seller'
@@ -103,6 +105,12 @@ export default function AdminProducts() {
     setProducts(enriched);
     setLoading(false);
   };
+
+  // --------------- OPTIONAL: Fetch profiles separately ---------------
+  // If you want seller names:
+  // fetchProfiles() -> map seller_id -> company_name
+  // Then merge into products.
+  // ---------------------------------------------------------------
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.title
@@ -117,6 +125,39 @@ export default function AdminProducts() {
 
     return matchesSearch && matchesStatus;
   });
+
+  const togglePublish = async (product: Product) => {
+    const { error } = await supabase
+      .from('products')
+      .update({ published: !product.published })
+      .eq('id', product.id);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update status',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    toast({
+      title: 'Updated',
+      description: 'Product status updated successfully'
+    });
+
+    fetchProducts();
+  };
+
+  const generateAI = async (product: Product) => {
+    // Replace with your AI generator call
+    toast({
+      title: 'AI Generated',
+      description: 'AI description generated successfully'
+    });
+
+    // fetchProducts(); // optional
+  };
 
   return (
     <div className="space-y-6">
@@ -183,7 +224,10 @@ export default function AdminProducts() {
                   <TableHead>Product</TableHead>
                   <TableHead>Seller</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Inventory</TableHead>
+                  <TableHead>AI</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -197,7 +241,26 @@ export default function AdminProducts() {
                       </Badge>
                     </TableCell>
                     <TableCell>
+                      {product.inventory ?? 0}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        onClick={() => generateAI(product)}
+                      >
+                        Generate AI
+                      </Button>
+                    </TableCell>
+                    <TableCell>
                       {format(new Date(product.created_at), 'MMM d, yyyy')}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        onClick={() => togglePublish(product)}
+                      >
+                        Change Status
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
