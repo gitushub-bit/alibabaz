@@ -82,12 +82,7 @@ export default function AdminProducts() {
 
     const { data, error } = await supabase
       .from('products')
-      .select(`
-        *,
-        profiles (
-          company_name
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -102,7 +97,7 @@ export default function AdminProducts() {
 
     const enriched = (data || []).map((product: any) => ({
       ...product,
-      sellerName: product.profiles?.company_name || 'Unknown Seller'
+      sellerName: 'Unknown Seller'
     }));
 
     setProducts(enriched);
