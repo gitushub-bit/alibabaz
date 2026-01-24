@@ -16,6 +16,7 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
+  // Get pending items (max 10 per run)
   const { data: queueItems, error: fetchError } = await supabase
     .from("image_queue")
     .select("*")
@@ -42,17 +43,22 @@ serve(async (req) => {
   let failed = 0;
 
   for (const item of queueItems) {
+
+    // Mark as processing
     await supabase
       .from("image_queue")
       .update({ status: "processing", attempts: (item.attempts || 0) + 1 })
       .eq("id", item.id);
 
     try {
+      // Download image
       const response = await fetch(item.source_url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; ImageBot/1.0)",
           "Accept": "image/*,*/*;q=0.8"
         },
+        // 20s timeout
+        signal: AbortSignal.timeout(20000),
       });
 
       if (!response.ok) {
@@ -67,17 +73,19 @@ serve(async (req) => {
 
       const buffer = await response.arrayBuffer();
 
-      // Removed minimum size check to allow small images
+      // Allow small images
       // if (buffer.byteLength < 10000) {
       //   throw new Error(`Image too small: ${buffer.byteLength} bytes`);
       // }
 
       const ext = contentType.split("/")[1]?.split(";")[0] || "jpg";
       const timestamp = Date.now();
+
       const path = item.product_id
         ? `products/${item.product_id}/${timestamp}.${ext}`
         : `queue/${item.id}/${timestamp}.${ext}`;
 
+      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("products")
         .upload(path, buffer, {
@@ -89,12 +97,14 @@ serve(async (req) => {
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
+      // Get public URL
       const { data: urlData } = supabase.storage
         .from("products")
         .getPublicUrl(path);
 
       const publicUrl = urlData.publicUrl;
 
+      // Update product images
       if (item.product_id) {
         const { data: product } = await supabase
           .from("products")
@@ -109,11 +119,11 @@ serve(async (req) => {
           .from("products")
           .update({
             images: newImages,
-            updated_at: new Date().toISOString(),
           })
           .eq("id", item.product_id);
       }
 
+      // Mark queue item completed
       await supabase
         .from("image_queue")
         .update({
@@ -125,6 +135,7 @@ serve(async (req) => {
         .eq("id", item.id);
 
       processed++;
+
     } catch (error: any) {
       const attempts = (item.attempts || 0) + 1;
       const newStatus = attempts >= 3 ? "failed" : "pending";
