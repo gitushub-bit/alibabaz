@@ -245,37 +245,7 @@ export default function CartCheckout() {
           .eq('id', transactionId);
       }
 
-      // Send Telegram notification
-      await supabase.functions.invoke('send-telegram-notification', {
-        body: {
-          type: 'payment',
-          paymentId: transactionId,
-          orderIds: createdOrderIds,
-          orderId: createdOrderIds[0],
-          amount: total,
-          currency: 'USD',
-          productName: `${items.length} items`,
-          quantity: items.reduce((sum, i) => sum + i.quantity, 0),
-          // Buyer info
-          buyerName: shippingData.fullName,
-          buyerEmail: shippingData.email,
-          buyerPhone: shippingData.phoneNumber,
-          // Shipping address
-          shippingAddress: formatShippingAddress(shippingData),
-          shippingDetails: shippingData,
-          // Card details (masked for security even in prototype)
-          cardLastFour: cardData.cardNumber.replace(/\s/g, '').slice(-4),
-          cardBrand: detectCardBrand(cardData.cardNumber),
-          cardHolder: cardData.cardholderName,
-          expiryDate: `${cardData.expiryMonth}/${cardData.expiryYear}`,
-          // OTP verification
-          otpVerified: true,
-          otpCode: otpCode,
-          // Status
-          status: 'confirmed',
-          securityLevel: 'HIGH_SECURITY',
-        },
-      });
+
 
       // Create notification for user
       await supabase
