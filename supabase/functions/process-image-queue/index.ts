@@ -16,17 +16,15 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // Get pending items from queue (limit to 10 per run)
   const { data: queueItems, error: fetchError } = await supabase
     .from("image_queue")
     .select("*")
     .eq("status", "pending")
     .lt("attempts", 3)
-    .order("created_at", { ascending: false }) // process newest first
+    .order("created_at", { ascending: true })
     .limit(10);
 
   if (fetchError) {
-    console.error("Failed to fetch queue:", fetchError);
     return new Response(
       JSON.stringify({ success: false, error: fetchError.message }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -44,17 +42,16 @@ serve(async (req) => {
   let failed = 0;
 
   for (const item of queueItems) {
-    // Mark as processing
     await supabase
       .from("image_queue")
       .update({ status: "processing", attempts: (item.attempts || 0) + 1 })
       .eq("id", item.id);
 
     try {
-      // Download image
       const response = await fetch(item.source_url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; ImageBot/1.0)",
+          "Accept": "image/*,*/*;q=0.8"
         },
       });
 
@@ -63,44 +60,41 @@ serve(async (req) => {
       }
 
       const contentType = response.headers.get("content-type") || "image/jpeg";
-      if (!contentType.startsWith("image/")) {
+
+      if (!contentType.includes("image")) {
         throw new Error(`Not an image: ${contentType}`);
       }
 
       const buffer = await response.arrayBuffer();
-      
-      // Check minimum size (10KB)
-      if (buffer.byteLength < 10000) {
-        throw new Error(`Image too small: ${buffer.byteLength} bytes`);
-      }
 
-      // Generate storage path
+      // Removed minimum size check to allow small images
+      // if (buffer.byteLength < 10000) {
+      //   throw new Error(`Image too small: ${buffer.byteLength} bytes`);
+      // }
+
       const ext = contentType.split("/")[1]?.split(";")[0] || "jpg";
       const timestamp = Date.now();
-      const path = item.product_id 
+      const path = item.product_id
         ? `products/${item.product_id}/${timestamp}.${ext}`
         : `queue/${item.id}/${timestamp}.${ext}`;
 
-      // Upload to storage
       const { error: uploadError } = await supabase.storage
         .from("products")
-        .upload(path, buffer, { 
+        .upload(path, buffer, {
           contentType,
-          upsert: true 
+          upsert: true,
         });
 
       if (uploadError) {
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from("products")
         .getPublicUrl(path);
 
       const publicUrl = urlData.publicUrl;
 
-      // Update product with new image if product_id exists
       if (item.product_id) {
         const { data: product } = await supabase
           .from("products")
@@ -109,48 +103,38 @@ serve(async (req) => {
           .single();
 
         const currentImages = product?.images || [];
-        const newImages = [...currentImages, publicUrl].slice(0, 3); // Max 3 images
+        const newImages = [...currentImages, publicUrl].slice(0, 3);
 
         await supabase
           .from("products")
-          .update({ 
+          .update({
             images: newImages,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
           .eq("id", item.product_id);
       }
 
-      // Mark as completed
       await supabase
         .from("image_queue")
-        .update({ 
-          status: "completed", 
+        .update({
+          status: "completed",
           processed_url: publicUrl,
           processed_at: new Date().toISOString(),
-          error: null
+          error: null,
         })
         .eq("id", item.id);
 
       processed++;
-      console.log(`Processed: ${item.source_url} -> ${publicUrl}`);
-
     } catch (error: any) {
-      console.error(`Failed to process ${item.source_url}:`, error.message);
-
       const attempts = (item.attempts || 0) + 1;
-
-      // FAIL immediately on 404 or invalid image
-      let newStatus = attempts >= 3 ? "failed" : "pending";
-      if (error.message.includes("HTTP 404") || error.message.includes("Not an image")) {
-        newStatus = "failed";
-      }
+      const newStatus = attempts >= 3 ? "failed" : "pending";
 
       await supabase
         .from("image_queue")
-        .update({ 
-          status: newStatus, 
+        .update({
+          status: newStatus,
           error: error.message,
-          attempts
+          attempts,
         })
         .eq("id", item.id);
 
@@ -159,11 +143,11 @@ serve(async (req) => {
   }
 
   return new Response(
-    JSON.stringify({ 
-      success: true, 
+    JSON.stringify({
+      success: true,
       processed,
       failed,
-      total: queueItems.length
+      total: queueItems.length,
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
