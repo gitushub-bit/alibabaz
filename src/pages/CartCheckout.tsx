@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Package, Store } from 'lucide-react';
+import { ArrowLeft, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useCart, CartItem } from '@/hooks/useCart';
+import { useCart } from '@/hooks/useCart';
 import { usePaymentSettings } from '@/hooks/usePaymentSettings';
 import { useCurrency } from '@/hooks/useCurrency';
 import { toast } from '@/hooks/use-toast';
@@ -20,21 +20,18 @@ import OrderReview from '@/components/checkout/OrderReview';
 import OrderConfirmation from '@/components/checkout/OrderConfirmation';
 import PaymentProcessingScreen from '@/components/checkout/PaymentProcessingScreen';
 
-interface SellerGroup {
-  sellerId: string;
-  sellerName: string;
-  items: CartItem[];
-  subtotal: number;
-}
+type ProcessingPhase = 'card' | 'otp' | null;
 
 export default function CartCheckout() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { items, clearCart, total } = useCart();
   const { formatPriceOnly } = useCurrency();
-  const { settings: paymentSettings, loading: settingsLoading } = usePaymentSettings();
+  const { loading: settingsLoading } = usePaymentSettings();
 
   const [step, setStep] = useState<CheckoutStep>('shipping');
+  const [processingPhase, setProcessingPhase] = useState<ProcessingPhase>(null);
+
   const [shippingData, setShippingData] = useState<ShippingFormData | null>(null);
   const [cardData, setCardData] = useState<CardFormData | null>(null);
   const [cardBrand, setCardBrand] = useState('Card');
@@ -50,23 +47,6 @@ export default function CartCheckout() {
       navigate('/cart');
     }
   }, [user, authLoading, items.length, step, navigate]);
-
-  // Group cart items by seller
-  const sellerGroups: SellerGroup[] = items.reduce((groups: SellerGroup[], item) => {
-    const group = groups.find(g => g.sellerId === item.seller_id);
-    if (group) {
-      group.items.push(item);
-      group.subtotal += item.price * item.quantity;
-    } else {
-      groups.push({
-        sellerId: item.seller_id,
-        sellerName: item.seller_name,
-        items: [item],
-        subtotal: item.price * item.quantity,
-      });
-    }
-    return groups;
-  }, []);
 
   const handleShippingSubmit = (data: ShippingFormData) => {
     setShippingData(data);
@@ -99,9 +79,10 @@ export default function CartCheckout() {
         .single();
 
       if (error) throw error;
-      setTransactionId(tx.id);
 
-      setStep(is3DS ? 'processingPayment' : 'review');
+      setTransactionId(tx.id);
+      setProcessingPhase('card');
+      setStep('processing');
     } catch (e: any) {
       toast({ title: 'Payment error', description: e.message, variant: 'destructive' });
     } finally {
@@ -109,19 +90,30 @@ export default function CartCheckout() {
     }
   };
 
-  // FIRST processing screen → OTP
-  const handlePaymentProcessingComplete = () => {
-    setStep('otp');
+  const handleProcessingComplete = () => {
+    if (processingPhase === 'card') {
+      toast({ title: 'OTP Sent', description: 'Enter the code sent to your phone.' });
+      setProcessingPhase(null);
+      setStep('otp');
+      return;
+    }
+
+    if (processingPhase === 'otp') {
+      setProcessingPhase(null);
+      setStep('review');
+    }
   };
 
-  // OTP → SECOND processing screen
-  const handleOTPVerified = async () => {
-    setStep('processingOtp');
-  };
+  const handleOTPVerified = async (code: string) => {
+    if (!transactionId) return;
 
-  // SECOND processing → Review
-  const handleOTPProcessingComplete = () => {
-    setStep('review');
+    await supabase
+      .from('payment_transactions')
+      .update({ status: 'otp_verified', otp_verified: true })
+      .eq('id', transactionId);
+
+    setProcessingPhase('otp');
+    setStep('processing');
   };
 
   const handleConfirmOrder = async () => {
@@ -141,9 +133,6 @@ export default function CartCheckout() {
             quantity: item.quantity,
             total_price: item.price * item.quantity,
             status: 'paid',
-            tracking_info: {
-              shipping_address: shippingData,
-            },
           })
           .select()
           .single();
@@ -170,9 +159,7 @@ export default function CartCheckout() {
     return 'Card';
   };
 
-  if (authLoading || settingsLoading) {
-    return null;
-  }
+  if (authLoading || settingsLoading) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -182,24 +169,16 @@ export default function CartCheckout() {
 
         <div className="grid lg:grid-cols-3 gap-8 mt-6">
           <div className="lg:col-span-2">
-
-            {step === 'shipping' && (
-              <ShippingAddressForm onSubmit={handleShippingSubmit} />
-            )}
+            {step === 'shipping' && <ShippingAddressForm onSubmit={handleShippingSubmit} />}
 
             {step === 'payment' && (
-              <PaymentDetailsForm
-                amount={total}
-                currency="USD"
-                onSubmit={handlePaymentSubmit}
-              />
+              <PaymentDetailsForm amount={total} currency="USD" onSubmit={handlePaymentSubmit} />
             )}
 
-            {step === 'processingPayment' && cardData && (
+            {step === 'processing' && (
               <PaymentProcessingScreen
-                title="Processing Payment"
-                description="Verifying card details…"
-                onComplete={handlePaymentProcessingComplete}
+                phase={processingPhase}
+                onComplete={handleProcessingComplete}
               />
             )}
 
@@ -208,14 +187,6 @@ export default function CartCheckout() {
                 cardLastFour={cardData.cardNumber.slice(-4)}
                 onVerified={handleOTPVerified}
                 onResend={() => toast({ title: 'OTP resent' })}
-              />
-            )}
-
-            {step === 'processingOtp' && (
-              <PaymentProcessingScreen
-                title="Verifying OTP"
-                description="Finalizing verification…"
-                onComplete={handleOTPProcessingComplete}
               />
             )}
 
@@ -251,10 +222,14 @@ export default function CartCheckout() {
             <div className="lg:col-span-1">
               <Card>
                 <CardHeader>
-                  <CardTitle>Order Summary</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Order Summary
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex justify-between font-bold">
+                  <Separator />
+                  <div className="flex justify-between text-lg font-bold mt-4">
                     <span>Total</span>
                     <span>{formatPriceOnly(total)}</span>
                   </div>
