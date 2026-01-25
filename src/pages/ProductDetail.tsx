@@ -198,13 +198,9 @@ const fetchReviews = async (productId: string) => {
       rating,
       comment,
       created_at,
-      orders (
-        product_id,
-        buyer_id
-      ),
-      profiles!orders_buyer_id_fkey ( full_name )
+      profiles!reviews_buyer_id_fkey (full_name)
     `)
-    .eq('orders.product_id', productId);
+    .eq('product_id', productId); // Filter by product_id directly
 
   if (error) {
     console.log(error);
@@ -214,6 +210,7 @@ const fetchReviews = async (productId: string) => {
 
   setReviews(data || []);
 };
+
 
 
   // Note: Submit review is disabled - reviews need to be linked to orders
