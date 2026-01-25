@@ -191,24 +191,42 @@ export default function ProductDetail() {
   // Note: Reviews are tied to orders, not products directly
   // For now, we'll skip product reviews as the schema links reviews to orders
 const fetchReviews = async (productId: string) => {
-  const { data, error } = await supabase
-    .from('reviews')
-    .select(`
-      id,
-      rating,
-      comment,
-      created_at,
-      profiles!reviews_buyer_id_fkey (full_name)
-    `)
-    .eq('product_id', productId); // Filter by product_id directly
+  try {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select(`
+        id,
+        rating,
+        comment,
+        created_at,
+        buyer_id,
+        profiles!reviews_buyer_id_profiles_fkey (
+          full_name
+        )
+      `)
+      .eq('product_id', productId)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.log(error);
+    if (error) {
+      console.error('Error fetching reviews:', error);
+      setReviews([]);
+      return;
+    }
+
+    const formattedReviews = (data || []).map(review => ({
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment || '',
+      created_at: review.created_at,
+      profile: review.profiles ? { full_name: review.profiles.full_name } : undefined
+    }));
+
+    console.log(`Loaded ${formattedReviews.length} reviews for product ${productId}`);
+    setReviews(formattedReviews);
+  } catch (err) {
+    console.error('Unexpected error:', err);
     setReviews([]);
-    return;
   }
-
-  setReviews(data || []);
 };
 
 
