@@ -18,7 +18,7 @@ const steps: { key: CheckoutStep; label: string }[] = [
   { key: 'shipping', label: 'Shipping' },
   { key: 'payment', label: 'Payment' },
   { key: 'processingPayment', label: 'Processing payment…' },
-  { key: 'otp', label: 'Verify' },
+  { key: 'otp', label: 'Verify OTP' },
   { key: 'processingOtp', label: 'Verifying OTP…' },
   { key: 'review', label: 'Review' },
   { key: 'confirmation', label: 'Done' },
@@ -35,7 +35,11 @@ export default function CheckoutStepper({ currentStep }: CheckoutStepperProps) {
           const isCurrent = index === currentIndex;
 
           return (
-            <div key={step.key} className="relative flex flex-1 flex-col items-center">
+            <div
+              key={step.key}
+              className="relative flex flex-1 flex-col items-center"
+            >
+              {/* Connector */}
               {index > 0 && (
                 <div
                   className={cn(
@@ -45,9 +49,10 @@ export default function CheckoutStepper({ currentStep }: CheckoutStepperProps) {
                 />
               )}
 
+              {/* Step Circle */}
               <div
                 className={cn(
-                  'relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium',
+                  'relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-all',
                   isCompleted
                     ? 'bg-primary text-primary-foreground'
                     : isCurrent
@@ -58,9 +63,10 @@ export default function CheckoutStepper({ currentStep }: CheckoutStepperProps) {
                 {isCompleted ? <Check className="h-4 w-4" /> : index + 1}
               </div>
 
+              {/* Label */}
               <span
                 className={cn(
-                  'mt-2 text-xs font-medium text-center',
+                  'mt-2 text-center text-xs font-medium transition-colors',
                   isCurrent ? 'text-primary' : 'text-muted-foreground'
                 )}
               >
