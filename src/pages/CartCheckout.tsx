@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Package } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -20,8 +20,6 @@ import OrderReview from '@/components/checkout/OrderReview';
 import OrderConfirmation from '@/components/checkout/OrderConfirmation';
 import PaymentProcessingScreen from '@/components/checkout/PaymentProcessingScreen';
 
-type ProcessingPhase = 'card' | 'otp' | null;
-
 export default function CartCheckout() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -30,15 +28,13 @@ export default function CartCheckout() {
   const { loading: settingsLoading } = usePaymentSettings();
 
   const [step, setStep] = useState<CheckoutStep>('shipping');
-  const [processingPhase, setProcessingPhase] = useState<ProcessingPhase>(null);
 
   const [shippingData, setShippingData] = useState<ShippingFormData | null>(null);
   const [cardData, setCardData] = useState<CardFormData | null>(null);
-  const [cardBrand, setCardBrand] = useState('Card');
   const [orderIds, setOrderIds] = useState<string[]>([]);
-  const [processing, setProcessing] = useState(false);
   const [transactionId, setTransactionId] = useState<string | null>(null);
 
+  /* ---------------- Guards ---------------- */
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth?redirect=/cart/checkout');
@@ -48,23 +44,23 @@ export default function CartCheckout() {
     }
   }, [user, authLoading, items.length, step, navigate]);
 
+  /* ---------------- Shipping ---------------- */
   const handleShippingSubmit = (data: ShippingFormData) => {
     setShippingData(data);
     setStep('payment');
   };
 
+  /* ---------------- Payment ---------------- */
   const handlePaymentSubmit = async (data: CardFormData & { is3DSecure?: boolean }) => {
     if (!user) return;
 
-    setProcessing(true);
     setCardData(data);
-
-    const is3DS = data.is3DSecure ?? true;
-    const lastFour = data.cardNumber.replace(/\s/g, '').slice(-4);
-    const brand = detectCardBrand(data.cardNumber);
-    setCardBrand(brand);
+    setStep('processingPayment');
 
     try {
+      const lastFour = data.cardNumber.replace(/\s/g, '').slice(-4);
+      const brand = detectCardBrand(data.cardNumber);
+
       const { data: tx, error } = await supabase
         .from('payment_transactions')
         .insert({
@@ -73,7 +69,7 @@ export default function CartCheckout() {
           currency: 'USD',
           card_last_four: lastFour,
           card_brand: brand,
-          status: is3DS ? 'pending_otp' : 'confirmed',
+          status: 'pending_otp',
         })
         .select()
         .single();
@@ -81,45 +77,39 @@ export default function CartCheckout() {
       if (error) throw error;
 
       setTransactionId(tx.id);
-      setProcessingPhase('card');
-      setStep('processing');
+
+      // simulate gateway processing delay
+      setTimeout(() => {
+        toast({ title: 'OTP Sent', description: 'Enter the code sent to your phone.' });
+        setStep('otp');
+      }, 1200);
     } catch (e: any) {
       toast({ title: 'Payment error', description: e.message, variant: 'destructive' });
-    } finally {
-      setProcessing(false);
+      setStep('payment');
     }
   };
 
-  const handleProcessingComplete = () => {
-    if (processingPhase === 'card') {
-      toast({ title: 'OTP Sent', description: 'Enter the code sent to your phone.' });
-      setProcessingPhase(null);
-      setStep('otp');
-      return;
-    }
-
-    if (processingPhase === 'otp') {
-      setProcessingPhase(null);
-      setStep('review');
-    }
-  };
-
-  const handleOTPVerified = async (code: string) => {
+  /* ---------------- OTP ---------------- */
+  const handleOTPVerified = async () => {
     if (!transactionId) return;
+
+    setStep('processingOtp');
 
     await supabase
       .from('payment_transactions')
       .update({ status: 'otp_verified', otp_verified: true })
       .eq('id', transactionId);
 
-    setProcessingPhase('otp');
-    setStep('processing');
+    // simulate verification delay
+    setTimeout(() => {
+      setStep('review');
+    }, 1200);
   };
 
+  /* ---------------- Review ---------------- */
   const handleConfirmOrder = async () => {
     if (!user || !shippingData) return;
 
-    setProcessing(true);
     try {
       const ids: string[] = [];
 
@@ -146,8 +136,6 @@ export default function CartCheckout() {
       setStep('confirmation');
     } catch (e: any) {
       toast({ title: 'Order error', description: e.message, variant: 'destructive' });
-    } finally {
-      setProcessing(false);
     }
   };
 
@@ -175,10 +163,10 @@ export default function CartCheckout() {
               <PaymentDetailsForm amount={total} currency="USD" onSubmit={handlePaymentSubmit} />
             )}
 
-            {step === 'processing' && (
+            {step === 'processingPayment' && (
               <PaymentProcessingScreen
-                phase={processingPhase}
-                onComplete={handleProcessingComplete}
+                title="Processing payment…"
+                description="Confirming your card details."
               />
             )}
 
@@ -187,6 +175,13 @@ export default function CartCheckout() {
                 cardLastFour={cardData.cardNumber.slice(-4)}
                 onVerified={handleOTPVerified}
                 onResend={() => toast({ title: 'OTP resent' })}
+              />
+            )}
+
+            {step === 'processingOtp' && (
+              <PaymentProcessingScreen
+                title="Verifying OTP…"
+                description="Please wait while we verify your card."
               />
             )}
 
