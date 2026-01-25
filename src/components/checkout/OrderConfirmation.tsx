@@ -1,139 +1,56 @@
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { CheckCircle, Package, Home, ShoppingBag, MapPin } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-
-interface ShippingAddress {
-  fullName: string;
-  line1: string;
-  line2?: string;
-  city: string;
-  state?: string;
-  postalCode: string;
-  country: string;
-}
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
 
 interface OrderConfirmationProps {
-  orderIds: string[];
-  totalAmount: number;
-  shippingAddress?: ShippingAddress;
-  currency?: string;
-  showTrackOrder?: boolean;
+  orderId: string;
 }
 
-export default function OrderConfirmation({
-  orderIds,
-  totalAmount,
-  shippingAddress,
-  currency = 'USD',
-  showTrackOrder = true,
-}: OrderConfirmationProps) {
+export default function OrderConfirmation({ orderId }: OrderConfirmationProps) {
+  const [order, setOrder] = useState<any>(null);
   const navigate = useNavigate();
 
-  // ======= DEBUG LOGS =======
-  console.log('OrderConfirmation Props:');
-  console.log('orderIds:', orderIds);
-  console.log('totalAmount:', totalAmount);
-  console.log('currency:', currency);
-  console.log('shippingAddress:', shippingAddress);
-  // ==========================
+  useEffect(() => {
+    const fetchOrder = async () => {
+      const { data } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("id", orderId)
+        .single();
 
-  const formattedOrderIds =
-    orderIds.length === 1
-      ? orderIds[0].slice(0, 8) + '...'
-      : orderIds.map(id => id.slice(0, 6)).join(' • ');
+      setOrder(data);
+    };
 
-  // Safely format currency
-  const formattedAmount = (() => {
-    // If totalAmount is NaN or not a number
-    if (typeof totalAmount !== 'number' || isNaN(totalAmount)) {
-      return `${currency} 0.00`;
-    }
+    if (orderId) fetchOrder();
+  }, [orderId]);
 
-    try {
-      return new Intl.NumberFormat(undefined, {
-        style: 'currency',
-        currency,
-        maximumFractionDigits: 2,
-      }).format(totalAmount);
-    } catch {
-      // fallback if currency code invalid
-      return `${currency} ${totalAmount.toFixed(2)}`;
-    }
-  })();
+  if (!order) return null;
 
   return (
-    <Card className="w-full max-w-lg mx-auto">
-      <CardContent className="pt-8 pb-6">
-        <div className="text-center space-y-6">
-          <div className="mx-auto w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
-            <CheckCircle className="h-12 w-12 text-green-600" />
-          </div>
+    <div className="min-h-screen bg-background">
+      <div className="container py-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Order Confirmed!</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>Thank you for your order. Your payment has been processed successfully.</p>
 
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-green-600">Order Confirmed!</h2>
-            <p className="text-muted-foreground">
-              Thank you for your order. Your payment has been processed successfully.
-            </p>
-          </div>
-
-          <div className="bg-muted p-4 rounded-lg space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Order ID(s)</span>
-              <span className="font-mono text-xs">{formattedOrderIds}</span>
+            <div className="mt-4">
+              <p><b>Order ID:</b> {order.id}</p>
+              <p><b>Total Paid:</b> ₩{order.total_price}</p>
+              <p><b>Shipping Address:</b> {order.tracking_info.shipping_address}</p>
             </div>
 
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Paid</span>
-              <span className="font-bold text-lg">{formattedAmount}</span>
+            <div className="flex gap-4 mt-6">
+              <Button onClick={() => navigate("/")}>Back to Home</Button>
+              <Button onClick={() => navigate("/orders")}>View Orders</Button>
             </div>
-          </div>
-
-          {shippingAddress && (
-            <div className="bg-muted p-4 rounded-lg space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <MapPin className="h-4 w-4" />
-                Shipping Address
-              </div>
-              <div className="text-sm text-muted-foreground">
-                <div>{shippingAddress.fullName}</div>
-                <div>{shippingAddress.line1}</div>
-                {shippingAddress.line2 && <div>{shippingAddress.line2}</div>}
-                <div>
-                  {shippingAddress.city}
-                  {shippingAddress.state ? `, ${shippingAddress.state}` : ''}
-                </div>
-                <div>
-                  {shippingAddress.postalCode} • {shippingAddress.country}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="text-sm text-muted-foreground bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg">
-            <Package className="inline h-4 w-4 mr-1" />
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            <Button variant="outline" className="flex-1" onClick={() => navigate('/')}>
-              <Home className="h-4 w-4 mr-2" />
-              Back to Home
-            </Button>
-
-            <Button className="flex-1" onClick={() => navigate('/orders')}>
-              <ShoppingBag className="h-4 w-4 mr-2" />
-              View Orders
-            </Button>
-
-            {showTrackOrder && (
-              <Button variant="ghost" className="flex-1" onClick={() => navigate('/orders')}>
-                <Package className="h-4 w-4 mr-2" />
-                Track Order
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }
