@@ -30,6 +30,14 @@ export default function OrderConfirmation({
 }: OrderConfirmationProps) {
   const navigate = useNavigate();
 
+  // ======= DEBUG LOGS =======
+  console.log('OrderConfirmation Props:');
+  console.log('orderIds:', orderIds);
+  console.log('totalAmount:', totalAmount);
+  console.log('currency:', currency);
+  console.log('shippingAddress:', shippingAddress);
+  // ==========================
+
   const formattedOrderIds =
     orderIds.length === 1
       ? orderIds[0].slice(0, 8) + '...'
