@@ -187,11 +187,31 @@ export default function ProductDetail() {
 
   // Note: Reviews are tied to orders, not products directly
   // For now, we'll skip product reviews as the schema links reviews to orders
-  const fetchReviews = async (_productId: string) => {
-    // Reviews in this system are order-based, not product-based
-    // Setting empty array since we can't query by product_id
+const fetchReviews = async (productId: string) => {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select(`
+      id,
+      rating,
+      comment,
+      created_at,
+      orders (
+        product_id,
+        buyer_id
+      ),
+      profiles!orders_buyer_id_fkey ( full_name )
+    `)
+    .eq('orders.product_id', productId);
+
+  if (error) {
+    console.log(error);
     setReviews([]);
-  };
+    return;
+  }
+
+  setReviews(data || []);
+};
+
 
   // Note: Submit review is disabled - reviews need to be linked to orders
   const submitReview = async () => {
