@@ -316,49 +316,79 @@ export default function AdminDeals() {
     }
   };
 
-  const fetchProducts = async () => {
-    try {
-      setProductsLoading(true);
-      
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id,
-          title,
-          images,
-          price_min,
-          price_max,
-          moq,
-          seller_id,
-          suppliers!products_seller_id_fkey (
-            id,
-            company_name,
-            verified
-          )
-        `)
-        .eq('published', true)
-        .limit(50)
-        .order('created_at', { ascending: false });
+ const fetchProducts = async () => {
+  try {
+    setProductsLoading(true);
+    
+    // First, fetch products (this works as shown in your AdminProducts)
+    const { data: productsData, error: productsError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('published', true)
+      .limit(numberOfProducts)
+      .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching products:', error);
-        toast({
-          title: 'Error loading products',
-          description: 'Cannot fetch products for auto-population',
-          variant: 'destructive'
-        });
-        return [];
-      }
-
-      console.log('Fetched products:', data);
-      return data || [];
-    } catch (error) {
-      console.error('Error:', error);
+    if (productsError) {
+      console.error('Error fetching products:', productsError);
+      toast({
+        title: 'Error loading products',
+        description: 'Cannot fetch products for auto-population',
+        variant: 'destructive'
+      });
       return [];
-    } finally {
-      setProductsLoading(false);
     }
-  };
+
+    if (!productsData || productsData.length === 0) {
+      console.log('No published products found');
+      return [];
+    }
+
+    // Get unique seller IDs
+    const sellerIds = [...new Set(productsData.map(p => p.seller_id).filter(Boolean))];
+    
+    // Fetch suppliers separately
+    let suppliersData = [];
+    if (sellerIds.length > 0) {
+      const { data: suppliers, error: suppliersError } = await supabase
+        .from('suppliers')
+        .select('id, company_name, verified')
+        .in('id', sellerIds);
+      
+      if (suppliersError) {
+        console.error('Error fetching suppliers:', suppliersError);
+      } else {
+        suppliersData = suppliers || [];
+      }
+    }
+
+    // Create a map for quick lookup
+    const supplierMap = suppliersData.reduce((map, supplier) => {
+      map[supplier.id] = supplier;
+      return map;
+    }, {});
+
+    // Combine the data
+    const combinedData = productsData.map(product => ({
+      id: product.id,
+      title: product.title,
+      images: product.images,
+      price_min: product.price_min,
+      price_max: product.price_max,
+      moq: product.moq,
+      seller_id: product.seller_id,
+      suppliers: product.seller_id ? supplierMap[product.seller_id] || null : null
+    }));
+
+    console.log('Combined products data:', combinedData);
+    return combinedData;
+    
+  } catch (error) {
+    console.error('Error:', error);
+    return [];
+  } finally {
+    setProductsLoading(false);
+  }
+};
 
   const createSampleDeals = async () => {
     try {
