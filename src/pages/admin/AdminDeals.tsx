@@ -316,79 +316,89 @@ export default function AdminDeals() {
     }
   };
 
- const fetchProducts = async () => {
-  try {
-    setProductsLoading(true);
-    
-    // First, fetch products (this works as shown in your AdminProducts)
-    const { data: productsData, error: productsError } = await supabase
-      .from('products')
-      .select('*')
-      .eq('published', true)
-      .limit(numberOfProducts)
-      .order('created_at', { ascending: false });
-
-    if (productsError) {
-      console.error('Error fetching products:', productsError);
-      toast({
-        title: 'Error loading products',
-        description: 'Cannot fetch products for auto-population',
-        variant: 'destructive'
-      });
-      return [];
-    }
-
-    if (!productsData || productsData.length === 0) {
-      console.log('No published products found');
-      return [];
-    }
-
-    // Get unique seller IDs
-    const sellerIds = [...new Set(productsData.map(p => p.seller_id).filter(Boolean))];
-    
-    // Fetch suppliers separately
-    let suppliersData = [];
-    if (sellerIds.length > 0) {
-      const { data: suppliers, error: suppliersError } = await supabase
-        .from('suppliers')
-        .select('id, company_name, verified')
-        .in('id', sellerIds);
+  const fetchProducts = async () => {
+    try {
+      setProductsLoading(true);
+      console.log('Fetching products for deals...');
       
-      if (suppliersError) {
-        console.error('Error fetching suppliers:', suppliersError);
-      } else {
-        suppliersData = suppliers || [];
+      // Fetch products (using the same query that works in AdminProducts)
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('published', true)
+        .limit(numberOfProducts)
+        .order('created_at', { ascending: false });
+
+      if (productsError) {
+        console.error('Error fetching products:', productsError);
+        toast({
+          title: 'Error loading products',
+          description: 'Cannot fetch products for auto-population',
+          variant: 'destructive'
+        });
+        return [];
       }
+
+      if (!productsData || productsData.length === 0) {
+        console.log('No published products found');
+        toast({
+          title: 'No products found',
+          description: 'No published products available',
+          variant: 'default'
+        });
+        return [];
+      }
+
+      console.log(`Found ${productsData.length} published products`);
+      
+      // Get unique seller IDs
+      const sellerIds = [...new Set(productsData.map(p => p.seller_id).filter(Boolean))];
+      console.log('Seller IDs:', sellerIds);
+      
+      // Fetch suppliers separately
+      let suppliersData = [];
+      if (sellerIds.length > 0) {
+        const { data: suppliers, error: suppliersError } = await supabase
+          .from('suppliers')
+          .select('id, company_name, verified')
+          .in('id', sellerIds);
+        
+        if (suppliersError) {
+          console.error('Error fetching suppliers:', suppliersError);
+        } else {
+          suppliersData = suppliers || [];
+          console.log('Fetched suppliers:', suppliersData);
+        }
+      }
+
+      // Create a map for quick lookup
+      const supplierMap = suppliersData.reduce((map, supplier) => {
+        map[supplier.id] = supplier;
+        return map;
+      }, {});
+
+      // Combine the data
+      const combinedData = productsData.map(product => ({
+        id: product.id,
+        title: product.title,
+        images: product.images,
+        price_min: product.price_min,
+        price_max: product.price_max,
+        moq: product.moq,
+        seller_id: product.seller_id,
+        suppliers: product.seller_id ? supplierMap[product.seller_id] || null : null
+      }));
+
+      console.log('Combined products data:', combinedData);
+      return combinedData;
+      
+    } catch (error) {
+      console.error('Error:', error);
+      return [];
+    } finally {
+      setProductsLoading(false);
     }
-
-    // Create a map for quick lookup
-    const supplierMap = suppliersData.reduce((map, supplier) => {
-      map[supplier.id] = supplier;
-      return map;
-    }, {});
-
-    // Combine the data
-    const combinedData = productsData.map(product => ({
-      id: product.id,
-      title: product.title,
-      images: product.images,
-      price_min: product.price_min,
-      price_max: product.price_max,
-      moq: product.moq,
-      seller_id: product.seller_id,
-      suppliers: product.seller_id ? supplierMap[product.seller_id] || null : null
-    }));
-
-    console.log('Combined products data:', combinedData);
-    return combinedData;
-    
-  } catch (error) {
-    console.error('Error:', error);
-    return [];
-  } finally {
-    setProductsLoading(false);
-  }
-};
+  };
 
   const createSampleDeals = async () => {
     try {
@@ -471,54 +481,65 @@ export default function AdminDeals() {
       // Fetch products from database
       const productsData = await fetchProducts();
       
+      console.log('Products data for deal creation:', productsData);
+      
       if (productsData.length === 0) {
         toast({
           title: 'No products found',
-          description: 'Cannot create deals from empty product list',
+          description: 'Please check if you have published products',
           variant: 'destructive'
         });
         return;
       }
 
-      // Try to clear existing deals if table exists
-      if (tableExists) {
-        await supabase
-          .from('deals')
-          .delete()
-          .neq('id', '00000000-0000-0000-0000-000000000000')
-          .catch(() => {});
-      }
-
+      // Don't clear existing deals - let's append instead
+      const currentDealCount = deals.length;
+      
       // Prepare deals from products
       const dealsToInsert = productsData.slice(0, numberOfProducts).map((product, index) => {
         // Get the first image from the array or use default
-        const firstImage = product.images && product.images.length > 0 
+        const firstImage = product.images && product.images.length > 0 && product.images[0] 
           ? product.images[0] 
           : 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop&auto=format';
         
-        // Use price_min or calculate average if both exist
-        const productPrice = product.price_min || 
-          (product.price_min && product.price_max ? (product.price_min + product.price_max) / 2 : 49.99);
+        // Calculate price - use price_min or average
+        let productPrice = 49.99; // default
+        if (product.price_min) {
+          productPrice = product.price_min;
+        } else if (product.price_min && product.price_max) {
+          productPrice = (product.price_min + product.price_max) / 2;
+        }
         
-        const originalPrice = productPrice * 2;
+        const originalPrice = productPrice * 1.5; // 33% discount
         const discount = Math.round(((originalPrice - productPrice) / originalPrice) * 100);
+        
+        // Get supplier info
+        let supplierName = 'Verified Supplier';
+        let isVerified = true;
+        
+        if (product.suppliers) {
+          supplierName = product.suppliers.company_name || supplierName;
+          isVerified = product.suppliers.verified !== false;
+        }
         
         return {
           title: product.title,
           image: firstImage,
           price: productPrice,
           original_price: originalPrice,
-          discount: Math.min(discount, 70), // Cap at 70% discount
-          moq: product.moq || 50,
-          supplier: product.suppliers?.company_name || 'Verified Supplier',
-          is_verified: product.suppliers?.verified || true,
-          is_flash_deal: index % 3 === 0, // Make every 3rd product a flash deal
+          discount: Math.min(discount, 50), // Cap at 50% discount
+          moq: product.moq || 10,
+          supplier: supplierName,
+          is_verified: isVerified,
+          is_flash_deal: index % 4 === 0, // Make every 4th product a flash deal
           is_active: true,
-          sort_order: index,
-          ends_at: index % 3 === 0 ? new Date(Date.now() + (index + 1) * 24 * 60 * 60 * 1000).toISOString() : null,
-          product_id: product.id, // Link to the actual product
+          sort_order: currentDealCount + index,
+          ends_at: index % 4 === 0 ? new Date(Date.now() + (index + 2) * 24 * 60 * 60 * 1000).toISOString() : null,
+          product_id: product.id,
         };
       });
+
+      console.log('Deals to insert:', dealsToInsert);
 
       // Try to save to database if table exists
       if (tableExists) {
@@ -528,21 +549,23 @@ export default function AdminDeals() {
 
         if (error) {
           console.error('Database insert failed:', error);
-          throw new Error('Database insert failed');
+          throw new Error(`Database insert failed: ${error.message}`);
         }
       }
 
       // Update local state
-      setDeals(dealsToInsert.map((deal, index) => ({
-        id: tableExists ? `db-${Date.now()}-${index}` : `product-${index}`,
+      const newDeals = dealsToInsert.map((deal, index) => ({
+        id: tableExists ? `db-${Date.now()}-${index}` : `product-${Date.now()}-${index}`,
         ...deal,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      })));
+      }));
+      
+      setDeals(prev => [...prev, ...newDeals]);
 
       toast({
         title: `✅ Created ${dealsToInsert.length} deals from products!`,
-        description: tableExists ? 'Saved to database' : 'Using local data'
+        description: tableExists ? 'Saved to database' : 'Added to local deals'
       });
 
       setAutoFromProductsDialogOpen(false);
@@ -550,7 +573,7 @@ export default function AdminDeals() {
       console.error('Error creating deals from products:', error);
       toast({
         title: 'Error creating deals from products',
-        description: error.message || 'Please try again',
+        description: error.message || 'Please check console for details',
         variant: 'destructive'
       });
     } finally {
@@ -751,10 +774,10 @@ export default function AdminDeals() {
     try {
       toast({ title: 'Testing product connection...' });
       
-      // Test 1: Simple select
+      // Test 1: Simple select (same as AdminProducts)
       const { data: simpleData, error: simpleError } = await supabase
         .from('products')
-        .select('id, title')
+        .select('id, title, published')
         .limit(5);
         
       console.log('Simple query result:', { simpleData, simpleError });
@@ -768,17 +791,18 @@ export default function AdminDeals() {
         return;
       }
       
-      // Test 2: Check if suppliers table exists
-      const { data: suppliersData, error: suppliersError } = await supabase
-        .from('suppliers')
-        .select('id, company_name')
+      // Test 2: Published products
+      const { data: publishedData, error: publishedError } = await supabase
+        .from('products')
+        .select('id, title')
+        .eq('published', true)
         .limit(5);
         
-      console.log('Suppliers query result:', { suppliersData, suppliersError });
+      console.log('Published products:', { publishedData, publishedError });
       
       toast({ 
         title: 'Connection test complete', 
-        description: `Found ${simpleData?.length || 0} products, ${suppliersData?.length || 0} suppliers` 
+        description: `Found ${simpleData?.length || 0} total products, ${publishedData?.length || 0} published` 
       });
       
     } catch (error: any) {
