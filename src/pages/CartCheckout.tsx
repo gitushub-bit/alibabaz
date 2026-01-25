@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
 import { usePaymentSettings } from '@/hooks/usePaymentSettings';
-import { useCurrency as useAppCurrency } from '@/hooks/useCurrency';
+import { useCurrency } from '@/hooks/useCurrency';
 import { toast } from '@/hooks/use-toast';
 import { Header } from '@/components/layout/Header';
 
@@ -17,22 +17,22 @@ import ShippingAddressForm, { ShippingFormData } from '@/components/checkout/Shi
 import PaymentDetailsForm, { CardFormData } from '@/components/checkout/PaymentDetailsForm';
 import CardOTPVerification from '@/components/checkout/CardOTPVerification';
 import OrderReview from '@/components/checkout/OrderReview';
-import OrderConfirmationSuccess from '@/components/checkout/OrderConfirmationSuccess';
+import OrderConfirmationSuccess from '@/components/checkout/OrderConfirmationSuccess'; // ← CHANGE HERE
 import PaymentProcessingScreen from '@/components/checkout/PaymentProcessingScreen';
 
 export default function CartCheckout() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { items, clearCart, total } = useCart();
-  const { formatPriceOnly } = useAppCurrency();
+  const { formatPriceOnly } = useCurrency();
   const { loading: settingsLoading } = usePaymentSettings();
 
   const [step, setStep] = useState<CheckoutStep>('shipping');
-
   const [shippingData, setShippingData] = useState<ShippingFormData | null>(null);
   const [cardData, setCardData] = useState<CardFormData | null>(null);
   const [orderIds, setOrderIds] = useState<string[]>([]);
   const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [confirmedTotal, setConfirmedTotal] = useState<number>(0); // ← ADD THIS
 
   /* ---------------- Guards ---------------- */
   useEffect(() => {
@@ -77,8 +77,6 @@ export default function CartCheckout() {
       if (error) throw error;
 
       setTransactionId(tx.id);
-
-      // this is now handled by onDone in processing screen
     } catch (e: any) {
       toast({ title: 'Payment error', description: e.message, variant: 'destructive' });
       setStep('payment');
@@ -95,16 +93,15 @@ export default function CartCheckout() {
       .from('payment_transactions')
       .update({ status: 'otp_verified', otp_verified: true })
       .eq('id', transactionId);
-
-    // this is now handled by onDone in processing screen
   };
 
   /* ---------------- Review ---------------- */
   const handleConfirmOrder = async () => {
-    if (!user || !shippingData) return;
+    if (!user || !shippingData || !cardData) return;
 
     try {
       const ids: string[] = [];
+      setConfirmedTotal(total); // ← SAVE TOTAL BEFORE CLEARING
 
       for (const item of items) {
         const { data, error } = await supabase
@@ -125,7 +122,7 @@ export default function CartCheckout() {
       }
 
       setOrderIds(ids);
-      clearCart();
+      clearCart(); // ← This will set useCart().total to 0
       setStep('confirmation');
     } catch (e: any) {
       toast({ title: 'Order error', description: e.message, variant: 'destructive' });
@@ -153,17 +150,13 @@ export default function CartCheckout() {
             {step === 'shipping' && <ShippingAddressForm onSubmit={handleShippingSubmit} />}
 
             {step === 'payment' && (
-              <PaymentDetailsForm
-                amount={total}
-                currency="USD"
-                onSubmit={handlePaymentSubmit}
-                onBack={() => setStep('shipping')}
-              />
+              <PaymentDetailsForm amount={total} currency="USD" onSubmit={handlePaymentSubmit} />
             )}
 
             {step === 'processingPayment' && (
               <PaymentProcessingScreen
-                mode="processingPayment"
+                title="Processing payment…"
+                description="Confirming your card details."
                 onDone={() => {
                   toast({ title: 'OTP Sent', description: 'Enter the code sent to your phone.' });
                   setStep('otp');
@@ -181,7 +174,8 @@ export default function CartCheckout() {
 
             {step === 'processingOtp' && (
               <PaymentProcessingScreen
-                mode="processingOtp"
+                title="Verifying OTP…"
+                description="Please wait while we verify your card."
                 onDone={() => setStep('review')}
               />
             )}
@@ -191,7 +185,7 @@ export default function CartCheckout() {
                 items={items}
                 shippingData={shippingData}
                 cardData={cardData}
-                totalAmount={total}
+                totalAmount={total} // ← This shows correct total BEFORE clearing
                 currency="USD"
                 onConfirm={handleConfirmOrder}
                 onEditShipping={() => setStep('shipping')}
@@ -200,9 +194,9 @@ export default function CartCheckout() {
             )}
 
             {step === 'confirmation' && shippingData && (
-              <OrderConfirmationSuccess
+              <OrderConfirmationSuccess // ← CHANGE HERE
                 orderIds={orderIds}
-                totalAmount={total}
+                totalAmount={confirmedTotal} // ← Use saved total, NOT useCart().total
                 currency="USD"
               />
             )}
@@ -218,6 +212,14 @@ export default function CartCheckout() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
+                  <div className="space-y-2 mb-4">
+                    {items.map((item) => (
+                      <div key={item.id} className="flex justify-between text-sm">
+                        <span className="truncate max-w-[120px]">{item.title}</span>
+                        <span>{formatPriceOnly(item.price * item.quantity)}</span>
+                      </div>
+                    ))}
+                  </div>
                   <Separator />
                   <div className="flex justify-between text-lg font-bold mt-4">
                     <span>Total</span>
