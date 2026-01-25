@@ -9,10 +9,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { Header } from '@/components/layout/Header';
 import PaymentForm from '@/components/payment/PaymentForm';
-import CardOTPVerification from '@/components/payment/CardOTPVerification';
-import OrderReview from '@/components/payment/OrderReview';
-import OrderConfirmation from '@/components/payment/OrderConfirmation';
-import PaymentProcessingScreen from '@/components/payment/PaymentProcessingScreen';
+import CardOTPVerification from '@/components/checkout/CardOTPVerification';
+import OrderReview from '@/components/checkout/OrderReview';
+import OrderConfirmationSuccess from '@/components/checkout/OrderConfirmationSuccess';
+import PaymentProcessingScreen from '@/components/checkout/PaymentProcessingScreen';
 import CheckoutStepper from '@/components/checkout/CheckoutStepper';
 
 interface Product {
@@ -31,10 +31,11 @@ interface SellerProfile {
 }
 
 type CheckoutStep =
-  | 'details'
+  | 'shipping'
   | 'payment'
-  | 'processing'
+  | 'processingPayment'
   | 'otp'
+  | 'processingOtp'
   | 'review'
   | 'confirmation';
 
@@ -50,7 +51,7 @@ export default function Checkout() {
   const [loading, setLoading] = useState(true);
 
   // NEW: FULL FLOW
-  const [step, setStep] = useState<CheckoutStep>('details');
+  const [step, setStep] = useState<CheckoutStep>('shipping');
   const [processingContext, setProcessingContext] = useState<ProcessingContext | null>(null);
 
   const [quantity, setQuantity] = useState(1);
@@ -58,6 +59,7 @@ export default function Checkout() {
   const [notes, setNotes] = useState('');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [paymentData, setPaymentData] = useState<any>(null);
 
   const [orderTotal, setOrderTotal] = useState<number>(0);
 
@@ -157,7 +159,7 @@ export default function Checkout() {
     }).eq('id', orderId);
 
     setProcessingContext('payment');
-    setStep('processing');
+    setStep('processingPayment');
   };
 
   const handlePaymentProcessed = () => {
@@ -166,7 +168,7 @@ export default function Checkout() {
 
   const handleOtpVerified = () => {
     setProcessingContext('otp');
-    setStep('processing');
+    setStep('processingOtp');
   };
 
   const handleOtpProcessed = () => {
@@ -233,7 +235,7 @@ export default function Checkout() {
     email: user?.email || 'N/A',
   };
 
-  const cardData = {
+  const cardData = paymentData || {
     cardNumber: '0000 0000 0000 0000',
     expiryMonth: '01',
     expiryYear: '30',
@@ -244,12 +246,12 @@ export default function Checkout() {
     <div className="min-h-screen bg-background">
       <Header />
       <div className="container py-8">
-        <CheckoutStepper currentStep={step} processingContext={processingContext || undefined} />
+        <CheckoutStepper currentStep={step} />
 
         <Button
           variant="ghost"
           onClick={() => {
-            if (step === 'payment') return setStep('details');
+            if (step === 'payment') return setStep('shipping');
             if (step === 'otp') return setStep('payment');
             if (step === 'review') return setStep('otp');
             if (step === 'confirmation') return navigate('/orders');
@@ -264,7 +266,7 @@ export default function Checkout() {
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
 
-            {step === 'details' && (
+            {step === 'shipping' && (
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
@@ -292,14 +294,19 @@ export default function Checkout() {
                 productName={product.title}
                 quantity={quantity}
                 onSuccess={handlePaymentSuccess}
-                onCancel={() => setStep('details')}
+                onCancel={() => setStep('shipping')}
+                onPaymentDataCaptured={(data) => setPaymentData(data)}
+                shippingAddress={shippingAddress}
+                buyerName={userProfile?.full_name || user?.user_metadata?.full_name || 'Customer'}
+                buyerEmail={user?.email}
+                buyerPhone={userProfile?.phone}
               />
             )}
 
-            {step === 'processing' && (
+            {(step === 'processingPayment' || step === 'processingOtp') && (
               <PaymentProcessingScreen
-                mode={processingContext || 'payment'}
-                onComplete={
+                mode={processingContext === 'payment' ? 'processingPayment' : 'processingOtp'}
+                onDone={
                   processingContext === 'payment'
                     ? handlePaymentProcessed
                     : handleOtpProcessed
@@ -322,14 +329,14 @@ export default function Checkout() {
                 cardData={cardData}
                 totalAmount={orderTotal}
                 onConfirm={handleConfirmOrder}
-                onEditShipping={() => setStep('details')}
+                onEditShipping={() => setStep('shipping')}
                 onEditPayment={() => setStep('payment')}
                 isSubmitting={false}
               />
             )}
 
             {step === 'confirmation' && (
-              <OrderConfirmation
+              <OrderConfirmationSuccess
                 orderIds={[orderId || '']}
                 totalAmount={orderTotal}
                 currency="USD"
