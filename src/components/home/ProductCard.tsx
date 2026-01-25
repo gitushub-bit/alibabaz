@@ -1,3 +1,29 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { Flame, Star } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
+import { useCurrency } from '@/hooks/useCurrency';
+import { supabase } from '@/integrations/supabase/client';
+
+interface ProductCardProps {
+  image: string;
+  title: string;
+  price: string;
+  originalPrice?: string;
+  discount?: number;
+  moq?: number;
+  supplier?: string;
+  isVerified?: boolean;
+  isFlashDeal?: boolean;
+  slug?: string;
+  rating?: number;
+  orders?: number;
+  dealId?: string;
+  showConversion?: boolean;
+  openInNewTab?: boolean;
+}
+
 export const ProductCard = ({
   image,
   title,
@@ -22,6 +48,8 @@ export const ProductCard = ({
 
   useEffect(() => {
     const fetchReviews = async () => {
+      if (!slug) return;
+
       const { data, error } = await supabase
         .from("reviews")
         .select("rating")
@@ -31,9 +59,11 @@ export const ProductCard = ({
       if (error) {
         console.error("Error fetching reviews:", error);
       } else {
-        setReviews(data);
-        const totalRating = data.reduce((acc: number, review: any) => acc + review.rating, 0);
-        setAverageRating(totalRating / data.length || 0);
+        setReviews(data || []);
+        if (data && data.length > 0) {
+          const totalRating = data.reduce((acc: number, review: any) => acc + review.rating, 0);
+          setAverageRating(totalRating / data.length);
+        }
       }
     };
 
@@ -109,7 +139,7 @@ export const ProductCard = ({
 
         {/* FOOTER */}
         <div className="mt-3 flex flex-col gap-2">
-          {(averageRating || orders) && (
+          {(averageRating > 0 || orders) && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               {averageRating > 0 && (
                 <span className="flex items-center gap-1">
@@ -131,7 +161,6 @@ export const ProductCard = ({
                 <div key={review.id} className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Star className="w-3 h-3 text-yellow-400" />
                   <span>{review.rating}</span>
-                  <p className="text-sm">{review.comment}</p>
                 </div>
               ))}
             </div>
@@ -140,7 +169,7 @@ export const ProductCard = ({
           {/* SUPPLIER + VERIFIED */}
           {supplier && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {isVerified && <VerifiedBadge size="sm" />}
+              {isVerified && <VerifiedBadge />}
               <span className="truncate">{supplier}</span>
             </div>
           )}
