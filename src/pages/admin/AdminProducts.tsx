@@ -304,7 +304,8 @@ export default function AdminProducts() {
         product_id: product.id,
         status: 'pending',
         prompt: `Generate product description for ${product.title}`,
-        type: 'description'
+        type: 'description',
+        created_at: new Date().toISOString()
       });
 
       if (error) throw error;
@@ -478,6 +479,8 @@ export default function AdminProducts() {
             updated_at: new Date().toISOString()
           };
 
+          let productId: string;
+
           if (existingProductId) {
             const { error } = await supabase
               .from('products')
@@ -485,6 +488,8 @@ export default function AdminProducts() {
               .eq('id', existingProductId);
 
             if (error) throw error;
+            
+            productId = existingProductId;
             updated++;
           } else {
             const { data: insertedData, error } = await supabase
@@ -494,29 +499,66 @@ export default function AdminProducts() {
 
             if (error) throw error;
 
-            const productId = insertedData![0].id;
-
-            // Add to image queue if image_url provided
-            if (row.image_url) {
-              await supabase.from('image_queue').insert({
-                product_id: productId,
-                source_url: row.image_url,
-                status: 'pending'
-              });
-            }
-
-            // Add to AI generation queue
-            await supabase.from('ai_generation_queue').insert({
-              product_id: productId,
-              status: 'pending',
-              prompt: `Generate product description for ${row.title}`,
-              type: 'description'
-            });
-
+            productId = insertedData![0].id;
             success++;
           }
+
+          // Handle multiple image URLs (comma-separated) for NEW products only
+          if (row.image_url && !existingProductId) {
+            // Split by comma, semicolon, or newline and trim whitespace
+            const imageUrls = row.image_url
+              .split(/[,;\n]+/) // Split by comma, semicolon, or newline
+              .map(url => url.trim())
+              .filter(url => url.length > 0 && (url.startsWith('http') || url.startsWith('https')));
+
+            // Insert each image URL into the image_queue
+            for (const imageUrl of imageUrls) {
+              try {
+                const { error: imgError } = await supabase
+                  .from('image_queue')
+                  .insert({
+                    product_id: productId,
+                    source_url: imageUrl,
+                    status: 'pending',
+                    created_at: new Date().toISOString()
+                  });
+
+                if (imgError) {
+                  console.warn(`Failed to add image ${imageUrl} to queue:`, imgError.message);
+                  errors.push(`Row ${i + 2}: Failed to add image ${imageUrl} - ${imgError.message}`);
+                }
+              } catch (imgErr: any) {
+                console.warn(`Error processing image URL ${imageUrl}:`, imgErr.message);
+                errors.push(`Row ${i + 2}: Error processing image URL ${imageUrl} - ${imgErr.message}`);
+              }
+            }
+
+            if (imageUrls.length > 0) {
+              console.log(`Added ${imageUrls.length} images to queue for product ${productId}`);
+            }
+          }
+
+          // Add to AI generation queue for NEW products only
+          if (!existingProductId) {
+            const { error: aiError } = await supabase
+              .from('ai_generation_queue')
+              .insert({
+                product_id: productId,
+                status: 'pending',
+                prompt: `Generate product description for ${row.title}`,
+                type: 'description',
+                created_at: new Date().toISOString()
+              });
+
+            if (aiError) {
+              console.warn(`AI queue error for product ${productId}:`, aiError.message);
+              errors.push(`Row ${i + 2}: Failed to add to AI queue - ${aiError.message}`);
+            }
+          }
+
         } catch (err: any) {
           errors.push(`Row ${i + 2}: ${err.message || 'Unknown error'}`);
+          console.error(`Error processing row ${i + 2}:`, err);
         }
       }
 
@@ -524,15 +566,21 @@ export default function AdminProducts() {
         fetchProducts();
         toast({
           title: 'Import Complete',
-          description: `Successfully imported ${success} new products and updated ${updated} existing products`
+          description: `Successfully imported ${success} new products and updated ${updated} existing products${
+            errors.length > 0 ? ` (${errors.length} errors)` : ''
+          }`
         });
+      }
+
+      if (errors.length > 0) {
+        console.error('CSV Import Errors:', errors);
       }
 
       return { success: success + updated, errors };
     } catch (error: any) {
       toast({
         title: 'Import Error',
-        description: 'Failed to process CSV import',
+        description: 'Failed to process CSV import: ' + error.message,
         variant: 'destructive'
       });
       return { success: 0, errors: [error.message] };
@@ -1122,6 +1170,23 @@ export default function AdminProducts() {
           'category'
         ]}
         onImport={handleCSVImport}
+        helpText={{
+          image_url: 'Multiple image URLs can be separated by commas (e.g., "url1.jpg, url2.jpg, url3.jpg")'
+        }}
+        sampleData={[
+          {
+            title: 'Wireless Headphones',
+            slug: 'wireless-headphones',
+            description: 'High-quality wireless headphones with noise cancellation',
+            price_min: '79.99',
+            price_max: '129.99',
+            inventory: '150',
+            published: 'true',
+            verified: 'true',
+            image_url: 'https://example.com/headphone1.jpg, https://example.com/headphone2.jpg, https://example.com/headphone3.jpg',
+            category: 'Electronics'
+          }
+        ]}
       />
     </div>
   );
