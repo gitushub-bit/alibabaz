@@ -33,12 +33,14 @@ export default function CardOTPVerification({
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    if (timeLeft > 0 && !isBlocked) {
+    if (isBlocked) return;
+
+    if (timeLeft > 0) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
-    } else if (timeLeft === 0) {
-      setIsExpired(true);
     }
+
+    setIsExpired(true);
   }, [timeLeft, isBlocked]);
 
   const progressPercentage = (timeLeft / expirySeconds) * 100;
@@ -92,25 +94,21 @@ export default function CardOTPVerification({
     const newAttempts = attempts + 1;
     setAttempts(newAttempts);
 
-    // ✅ First attempt always fails
+    // ❌ Block only if max attempts exceeded
+    if (newAttempts >= maxAttempts) {
+      setIsBlocked(true);
+      setError(`Too many failed attempts (${maxAttempts}/${maxAttempts}). Checkout blocked.`);
+      return;
+    }
+
+    // ✅ Simulate failure on first attempt (demo)
     if (newAttempts === 1) {
       setError('Invalid OTP. Please try again.');
       return;
     }
 
-    // ✅ Second attempt always succeeds
-    if (newAttempts === 2) {
-      onVerified(code);
-      return;
-    }
-
-    // 🔥 After second attempt, enforce maxAttempts
-    if (newAttempts >= maxAttempts) {
-      setIsBlocked(true);
-      setError(`Too many failed attempts (${maxAttempts}/${maxAttempts}). Checkout blocked.`);
-    } else {
-      setError(`Invalid OTP. ${maxAttempts - newAttempts} attempts remaining.`);
-    }
+    // ✅ success from attempt 2 onwards
+    onVerified(code);
   };
 
   const handleResend = () => {
@@ -120,6 +118,7 @@ export default function CardOTPVerification({
     setIsExpired(false);
     setOtp(new Array(codeLength).fill(''));
     setError('');
+    setAttempts(0);  // reset attempts after resend
     onResend();
   };
 
@@ -176,7 +175,7 @@ export default function CardOTPVerification({
               onChange={(e) => handleChange(index, e.target.value)}
               onKeyDown={(e) => handleKeyDown(index, e)}
               className="w-12 h-14 text-center text-xl font-bold"
-              disabled={isBlocked || processing}
+              disabled={isBlocked || processing || isExpired}
             />
           ))}
         </div>
@@ -198,7 +197,7 @@ export default function CardOTPVerification({
                   <RefreshCw className="h-4 w-4" />
                   Request New Code
                 </Button>
-              ) : timeLeft <= 0 ? null : (
+              ) : (
                 <p className="text-xs">
                   Didn't receive code? Wait for timer to request again.
                 </p>
@@ -210,7 +209,7 @@ export default function CardOTPVerification({
         <Button 
           className="w-full" 
           onClick={handleVerify}
-          disabled={processing || isBlocked || otp.some(d => !d)}
+          disabled={processing || isBlocked || isExpired || otp.some(d => !d)}
         >
           {processing ? 'Verifying...' : 'Verify & Continue'}
         </Button>
