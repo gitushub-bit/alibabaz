@@ -3,58 +3,88 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, Package, ArrowRight } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client'; // ← USE EXISTING CLIENT!
 
 interface OrderConfirmationSuccessProps {
   orderIds: string[];
-  totalAmount: number;  // ← This is passed from CartCheckout!
+  totalAmount: number;
   currency?: string;
 }
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
-
 export default function OrderConfirmationSuccess({
   orderIds,
-  totalAmount: propTotalAmount,  // ← Rename for clarity
+  totalAmount: propTotalAmount,
   currency = 'USD',
 }: OrderConfirmationSuccessProps) {
   const navigate = useNavigate();
-  const [finalTotal, setFinalTotal] = useState<number>(propTotalAmount);  // ← Use prop as default
+  const [finalTotal, setFinalTotal] = useState<number>(propTotalAmount);
   const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // If prop total is already provided and > 0, use it
+    console.log('OrderConfirmationSuccess Mounted:', {
+      propTotalAmount,
+      orderIds,
+      hasPropTotal: propTotalAmount > 0
+    });
+
+    // If prop total is already provided and > 0, use it immediately
     if (propTotalAmount > 0) {
+      console.log('Using prop total:', propTotalAmount);
       setFinalTotal(propTotalAmount);
       return;
     }
     
     // Only fetch from DB if prop is 0 AND we have order IDs
-    if (!orderIds || orderIds.length === 0 || propTotalAmount > 0) return;
+    if (!orderIds || orderIds.length === 0) {
+      console.log('No order IDs to fetch');
+      return;
+    }
 
+    console.log('Fetching order totals from DB for IDs:', orderIds);
     const fetchTotal = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('orders')
-        .select('id, total_price')
-        .in('id', orderIds);
+      setError(null);
+      
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('orders')
+          .select('id, total_price')
+          .in('id', orderIds);
 
-      if (error) {
-        console.error('Error fetching order total:', error);
+        console.log('DB Fetch Response:', { data, fetchError });
+
+        if (fetchError) {
+          console.error('Error fetching order total:', fetchError);
+          setError(`Failed to fetch order details: ${fetchError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          console.log('No orders found in database');
+          setError('Order details not found in database');
+          setLoading(false);
+          return;
+        }
+
+        const total = data.reduce(
+          (sum: number, order: any) => {
+            const orderTotal = Number(order.total_price || 0);
+            console.log(`Order ${order.id}: $${orderTotal}`);
+            return sum + orderTotal;
+          },
+          0
+        );
+
+        console.log('Calculated total from DB:', total);
+        setFinalTotal(total);
+      } catch (err: any) {
+        console.error('Unexpected error:', err);
+        setError(`Unexpected error: ${err.message}`);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const total = (data || []).reduce(
-        (sum: number, order: any) => sum + Number(order.total_price || 0),
-        0
-      );
-
-      setFinalTotal(total);
-      setLoading(false);
     };
 
     fetchTotal();
@@ -62,13 +92,14 @@ export default function OrderConfirmationSuccess({
 
   // Debug log to see what's happening
   useEffect(() => {
-    console.log('OrderConfirmationSuccess:', {
+    console.log('OrderConfirmationSuccess State:', {
       propTotalAmount,
       finalTotal,
       orderIds,
-      loading
+      loading,
+      error
     });
-  }, [propTotalAmount, finalTotal, orderIds, loading]);
+  }, [propTotalAmount, finalTotal, orderIds, loading, error]);
 
   return (
     <Card className="w-full max-w-md mx-auto">
@@ -85,12 +116,32 @@ export default function OrderConfirmationSuccess({
             Your order has been successfully placed and confirmed.
           </p>
 
+          {error && (
+            <div className="p-3 bg-red-100 text-red-700 rounded text-sm">
+              <p className="font-medium">Note:</p>
+              <p>{error}</p>
+              <p className="mt-1">Showing amount from order summary.</p>
+            </div>
+          )}
+
           {loading ? (
-            <p className="text-2xl font-bold">Calculating amount...</p>
+            <div className="space-y-2">
+              <p className="text-2xl font-bold">Calculating amount...</p>
+              <p className="text-sm text-muted-foreground">
+                Fetching latest order details
+              </p>
+            </div>
           ) : (
-            <p className="text-2xl font-bold">
-              Amount Paid: {currency} {finalTotal.toFixed(2)}
-            </p>
+            <div className="space-y-2">
+              <p className="text-2xl font-bold">
+                Amount Paid: {currency} {finalTotal.toFixed(2)}
+              </p>
+              {propTotalAmount > 0 && finalTotal !== propTotalAmount && (
+                <p className="text-sm text-muted-foreground">
+                  (Based on order summary)
+                </p>
+              )}
+            </div>
           )}
         </div>
 
