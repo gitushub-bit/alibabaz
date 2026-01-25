@@ -4,43 +4,28 @@ import { cn } from '@/lib/utils';
 export type CheckoutStep =
   | 'shipping'
   | 'payment'
-  | 'processing'
+  | 'processingPayment'
   | 'otp'
+  | 'processingOtp'
   | 'review'
   | 'confirmation';
 
-type ProcessingContext = 'payment' | 'otp';
-
 interface CheckoutStepperProps {
   currentStep: CheckoutStep;
-  processingContext?: ProcessingContext;
 }
 
 const steps: { key: CheckoutStep; label: string }[] = [
   { key: 'shipping', label: 'Shipping' },
   { key: 'payment', label: 'Payment' },
-  { key: 'processing', label: 'Processing' },
+  { key: 'processingPayment', label: 'Processing payment…' },
   { key: 'otp', label: 'Verify' },
+  { key: 'processingOtp', label: 'Verifying OTP…' },
   { key: 'review', label: 'Review' },
   { key: 'confirmation', label: 'Done' },
 ];
 
-export default function CheckoutStepper({
-  currentStep,
-  processingContext,
-}: CheckoutStepperProps) {
+export default function CheckoutStepper({ currentStep }: CheckoutStepperProps) {
   const currentIndex = steps.findIndex(step => step.key === currentStep);
-
-  const getStepLabel = (stepKey: CheckoutStep, defaultLabel: string) => {
-    if (stepKey !== 'processing') return defaultLabel;
-
-    if (currentStep === 'processing') {
-      if (processingContext === 'payment') return 'Processing payment…';
-      if (processingContext === 'otp') return 'Verifying OTP…';
-    }
-
-    return defaultLabel;
-  };
 
   return (
     <div className="w-full py-4">
@@ -50,11 +35,7 @@ export default function CheckoutStepper({
           const isCurrent = index === currentIndex;
 
           return (
-            <div
-              key={step.key}
-              className="relative flex flex-1 flex-col items-center"
-            >
-              {/* Connector */}
+            <div key={step.key} className="relative flex flex-1 flex-col items-center">
               {index > 0 && (
                 <div
                   className={cn(
@@ -64,10 +45,9 @@ export default function CheckoutStepper({
                 />
               )}
 
-              {/* Step Circle */}
               <div
                 className={cn(
-                  'relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-all',
+                  'relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium',
                   isCompleted
                     ? 'bg-primary text-primary-foreground'
                     : isCurrent
@@ -78,14 +58,13 @@ export default function CheckoutStepper({
                 {isCompleted ? <Check className="h-4 w-4" /> : index + 1}
               </div>
 
-              {/* Label */}
               <span
                 className={cn(
-                  'mt-2 text-center text-xs font-medium transition-colors',
+                  'mt-2 text-xs font-medium text-center',
                   isCurrent ? 'text-primary' : 'text-muted-foreground'
                 )}
               >
-                {getStepLabel(step.key, step.label)}
+                {step.label}
               </span>
             </div>
           );
