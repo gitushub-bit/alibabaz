@@ -13,6 +13,7 @@ import CardOTPVerification from '@/components/payment/CardOTPVerification';
 import OrderReview from '@/components/payment/OrderReview';
 import OrderConfirmation from '@/components/payment/OrderConfirmation';
 import PaymentProcessingScreen from '@/components/payment/PaymentProcessingScreen';
+import CheckoutStepper from '@/components/checkout/CheckoutStepper';
 
 interface Product {
   id: string;
@@ -29,6 +30,16 @@ interface SellerProfile {
   company_name: string | null;
 }
 
+type CheckoutStep =
+  | 'details'
+  | 'payment'
+  | 'processing'
+  | 'otp'
+  | 'review'
+  | 'confirmation';
+
+type ProcessingContext = 'payment' | 'otp';
+
 export default function Checkout() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -39,9 +50,8 @@ export default function Checkout() {
   const [loading, setLoading] = useState(true);
 
   // NEW: FULL FLOW
-  const [step, setStep] = useState<
-    'details' | 'payment' | 'processingPayment' | 'otp' | 'processingOtp' | 'review' | 'confirmation'
-  >('details');
+  const [step, setStep] = useState<CheckoutStep>('details');
+  const [processingContext, setProcessingContext] = useState<ProcessingContext | null>(null);
 
   const [quantity, setQuantity] = useState(1);
   const [shippingAddress, setShippingAddress] = useState('');
@@ -132,7 +142,6 @@ export default function Checkout() {
       if (error) throw error;
 
       setOrderId(order.id);
-
       setStep('payment');
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -147,7 +156,8 @@ export default function Checkout() {
       transaction_id: transactionId,
     }).eq('id', orderId);
 
-    setStep('processingPayment'); // <-- FIRST processing screen
+    setProcessingContext('payment');
+    setStep('processing');
   };
 
   const handlePaymentProcessed = () => {
@@ -155,7 +165,8 @@ export default function Checkout() {
   };
 
   const handleOtpVerified = () => {
-    setStep('processingOtp'); // <-- SECOND processing screen
+    setProcessingContext('otp');
+    setStep('processing');
   };
 
   const handleOtpProcessed = () => {
@@ -233,6 +244,8 @@ export default function Checkout() {
     <div className="min-h-screen bg-background">
       <Header />
       <div className="container py-8">
+        <CheckoutStepper currentStep={step} processingContext={processingContext || undefined} />
+
         <Button
           variant="ghost"
           onClick={() => {
@@ -283,11 +296,14 @@ export default function Checkout() {
               />
             )}
 
-            {step === 'processingPayment' && (
+            {step === 'processing' && (
               <PaymentProcessingScreen
-                title="Processing Payment..."
-                description="We are confirming your payment. Please wait."
-                onDone={handlePaymentProcessed}
+                mode={processingContext || 'payment'}
+                onComplete={
+                  processingContext === 'payment'
+                    ? handlePaymentProcessed
+                    : handleOtpProcessed
+                }
               />
             )}
 
@@ -296,14 +312,6 @@ export default function Checkout() {
                 cardLastFour="1234"
                 onVerified={handleOtpVerified}
                 onResend={() => toast({ title: 'OTP resent!' })}
-              />
-            )}
-
-            {step === 'processingOtp' && (
-              <PaymentProcessingScreen
-                title="Verifying OTP..."
-                description="We are verifying your OTP. Please wait."
-                onDone={handleOtpProcessed}
               />
             )}
 
