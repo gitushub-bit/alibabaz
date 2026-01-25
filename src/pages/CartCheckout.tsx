@@ -78,11 +78,7 @@ export default function CartCheckout() {
 
       setTransactionId(tx.id);
 
-      // simulate gateway processing delay
-      setTimeout(() => {
-        toast({ title: 'OTP Sent', description: 'Enter the code sent to your phone.' });
-        setStep('otp');
-      }, 1200);
+      // this is now handled by onDone in processing screen
     } catch (e: any) {
       toast({ title: 'Payment error', description: e.message, variant: 'destructive' });
       setStep('payment');
@@ -100,10 +96,7 @@ export default function CartCheckout() {
       .update({ status: 'otp_verified', otp_verified: true })
       .eq('id', transactionId);
 
-    // simulate verification delay
-    setTimeout(() => {
-      setStep('review');
-    }, 1200);
+    // this is now handled by onDone in processing screen
   };
 
   /* ---------------- Review ---------------- */
@@ -167,6 +160,10 @@ export default function CartCheckout() {
               <PaymentProcessingScreen
                 title="Processing payment…"
                 description="Confirming your card details."
+                onDone={() => {
+                  toast({ title: 'OTP Sent', description: 'Enter the code sent to your phone.' });
+                  setStep('otp');
+                }}
               />
             )}
 
@@ -182,6 +179,7 @@ export default function CartCheckout() {
               <PaymentProcessingScreen
                 title="Verifying OTP…"
                 description="Please wait while we verify your card."
+                onDone={() => setStep('review')}
               />
             )}
 
