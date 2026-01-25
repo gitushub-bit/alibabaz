@@ -24,6 +24,9 @@ export default function OrderConfirmationSuccess({
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    // If orderIds are not ready, skip fetching
+    if (!orderIds || orderIds.length === 0) return;
+
     const fetchTotal = async () => {
       setLoading(true);
 
@@ -47,7 +50,7 @@ export default function OrderConfirmationSuccess({
       setLoading(false);
     };
 
-    if (orderIds.length > 0) fetchTotal();
+    fetchTotal();
   }, [orderIds]);
 
   return (
