@@ -198,9 +198,13 @@ const fetchReviews = async (productId: string) => {
       rating,
       comment,
       created_at,
-      profiles!reviews_buyer_id_fkey (full_name)
+      orders (
+        product_id,
+        buyer_id
+      ),
+      profiles!orders_buyer_id_fkey ( full_name )
     `)
-    .eq('product_id', productId); // Filter by product_id directly
+    .eq('orders.product_id', productId);
 
   if (error) {
     console.log(error);
@@ -210,6 +214,7 @@ const fetchReviews = async (productId: string) => {
 
   setReviews(data || []);
 };
+
 
 
 
