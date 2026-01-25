@@ -31,7 +31,9 @@ import {
   AlertCircle,
   Clock,
   Database,
-  RefreshCw
+  RefreshCw,
+  Download,
+  Upload
 } from 'lucide-react';
 import {
   Dialog,
@@ -45,7 +47,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Deal {
   id: string;
-  product_id: string | null;  // Added to match database
+  product_id: string | null;
   title: string;
   image: string | null;
   price: number | null;
@@ -60,6 +62,19 @@ interface Deal {
   ends_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  image_url: string | null;
+  price: number | null;
+  min_order_quantity: number | null;
+  supplier_id: string | null;
+  suppliers?: {
+    company_name: string | null;
+    is_verified: boolean | null;
+  } | null;
 }
 
 const emptyDeal: Partial<Deal> = {
@@ -77,7 +92,6 @@ const emptyDeal: Partial<Deal> = {
   ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
 };
 
-// GUARANTEED sample deals that will always work
 const GUARANTEED_SAMPLE_DEALS = [
   {
     title: "Premium Wireless Earbuds",
@@ -188,9 +202,13 @@ export default function AdminDeals() {
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [autoPopulateDialogOpen, setAutoPopulateDialogOpen] = useState(false);
+  const [autoFromProductsDialogOpen, setAutoFromProductsDialogOpen] = useState(false);
   const [numberOfDeals, setNumberOfDeals] = useState(8);
+  const [numberOfProducts, setNumberOfProducts] = useState(8);
   const [editingDeal, setEditingDeal] = useState<Partial<Deal> | null>(null);
   const [tableExists, setTableExists] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
 
   useEffect(() => {
     checkTableAndFetch();
@@ -198,7 +216,6 @@ export default function AdminDeals() {
 
   const checkTableAndFetch = async () => {
     try {
-      // First, check if table exists
       const { error } = await supabase
         .from('deals')
         .select('id')
@@ -206,14 +223,12 @@ export default function AdminDeals() {
         .maybeSingle();
 
       if (error && error.code === '42P01') {
-        // Table doesn't exist
         setTableExists(false);
         toast({
           title: 'Deals table not found',
           description: 'Creating sample deals instead',
           variant: 'destructive'
         });
-        // Use sample deals immediately
         setDeals(GUARANTEED_SAMPLE_DEALS.map((deal, index) => ({
           id: `sample-${index}`,
           product_id: null,
@@ -224,13 +239,11 @@ export default function AdminDeals() {
           updated_at: new Date().toISOString(),
         })));
       } else {
-        // Table exists, fetch deals
         setTableExists(true);
         fetchDeals();
       }
     } catch (error) {
       console.error('Error checking table:', error);
-      // On any error, use sample deals
       setDeals(GUARANTEED_SAMPLE_DEALS.map((deal, index) => ({
         id: `sample-${index}`,
         product_id: null,
@@ -259,7 +272,6 @@ export default function AdminDeals() {
           description: 'Using sample data instead',
           variant: 'destructive'
         });
-        // Fall back to sample deals
         setDeals(GUARANTEED_SAMPLE_DEALS.map((deal, index) => ({
           id: `sample-${index}`,
           product_id: null,
@@ -275,7 +287,6 @@ export default function AdminDeals() {
       if (data && data.length > 0) {
         setDeals(data);
       } else {
-        // No deals in database, show sample
         toast({
           title: 'No deals found',
           description: 'Showing sample deals',
@@ -292,7 +303,6 @@ export default function AdminDeals() {
       }
     } catch (error) {
       console.error('Error:', error);
-      // Ultimate fallback
       setDeals(GUARANTEED_SAMPLE_DEALS.map((deal, index) => ({
         id: `sample-${index}`,
         product_id: null,
@@ -305,23 +315,58 @@ export default function AdminDeals() {
     }
   };
 
+  const fetchProducts = async () => {
+    try {
+      setProductsLoading(true);
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          id,
+          name,
+          image_url,
+          price,
+          min_order_quantity,
+          supplier_id,
+          suppliers (
+            company_name,
+            is_verified
+          )
+        `)
+        .limit(50)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching products:', error);
+        toast({
+          title: 'Error loading products',
+          description: 'Cannot fetch products for auto-population',
+          variant: 'destructive'
+        });
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error:', error);
+      return [];
+    } finally {
+      setProductsLoading(false);
+    }
+  };
+
   const createSampleDeals = async () => {
     try {
       setSaving(true);
       toast({ title: 'Creating sample deals...' });
 
-      // Try to clear existing deals if table exists
       if (tableExists) {
         await supabase
           .from('deals')
           .delete()
           .neq('id', '00000000-0000-0000-0000-000000000000')
-          .catch(() => {
-            // Ignore delete errors
-          });
+          .catch(() => {});
       }
 
-      // Prepare deals to insert
       const dealsToInsert = GUARANTEED_SAMPLE_DEALS.slice(0, numberOfDeals).map((deal, index) => ({
         title: deal.title,
         image: deal.image,
@@ -335,11 +380,8 @@ export default function AdminDeals() {
         is_active: deal.is_active ?? true,
         sort_order: index,
         ends_at: deal.ends_at,
-        // product_id is null for sample deals
-        // created_at and updated_at will be set by database defaults
       }));
 
-      // Try to save to database if table exists
       if (tableExists) {
         const { error } = await supabase
           .from('deals')
@@ -351,7 +393,6 @@ export default function AdminDeals() {
         }
       }
 
-      // Update local state regardless
       setDeals(dealsToInsert.map((deal, index) => ({
         id: tableExists ? `db-${Date.now()}-${index}` : `sample-${index}`,
         product_id: null,
@@ -368,7 +409,6 @@ export default function AdminDeals() {
       setAutoPopulateDialogOpen(false);
     } catch (error: any) {
       console.error('Error creating sample deals:', error);
-      // Even if database fails, show sample deals locally
       setDeals(GUARANTEED_SAMPLE_DEALS.slice(0, numberOfDeals).map((deal, index) => ({
         id: `local-${index}`,
         product_id: null,
@@ -387,6 +427,93 @@ export default function AdminDeals() {
     }
   };
 
+  const createDealsFromProducts = async () => {
+    try {
+      setSaving(true);
+      toast({ title: 'Fetching products and creating deals...' });
+
+      // Fetch products from database
+      const productsData = await fetchProducts();
+      
+      if (productsData.length === 0) {
+        toast({
+          title: 'No products found',
+          description: 'Cannot create deals from empty product list',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Try to clear existing deals if table exists
+      if (tableExists) {
+        await supabase
+          .from('deals')
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000')
+          .catch(() => {});
+      }
+
+      // Prepare deals from products
+      const dealsToInsert = productsData.slice(0, numberOfProducts).map((product, index) => {
+        const originalPrice = product.price ? product.price * 2 : 99.99;
+        const salePrice = product.price || 49.99;
+        const discount = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+        
+        return {
+          title: product.name,
+          image: product.image_url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop&auto=format',
+          price: salePrice,
+          original_price: originalPrice,
+          discount: Math.min(discount, 70), // Cap at 70% discount
+          moq: product.min_order_quantity || 50,
+          supplier: product.suppliers?.company_name || 'Verified Supplier',
+          is_verified: product.suppliers?.is_verified || true,
+          is_flash_deal: index % 3 === 0, // Make every 3rd product a flash deal
+          is_active: true,
+          sort_order: index,
+          ends_at: index % 3 === 0 ? new Date(Date.now() + (index + 1) * 24 * 60 * 60 * 1000).toISOString() : null,
+          product_id: product.id, // Link to the actual product
+        };
+      });
+
+      // Try to save to database if table exists
+      if (tableExists) {
+        const { error } = await supabase
+          .from('deals')
+          .insert(dealsToInsert);
+
+        if (error) {
+          console.error('Database insert failed:', error);
+          throw new Error('Database insert failed');
+        }
+      }
+
+      // Update local state
+      setDeals(dealsToInsert.map((deal, index) => ({
+        id: tableExists ? `db-${Date.now()}-${index}` : `product-${index}`,
+        ...deal,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })));
+
+      toast({
+        title: `✅ Created ${dealsToInsert.length} deals from products!`,
+        description: tableExists ? 'Saved to database' : 'Using local data'
+      });
+
+      setAutoFromProductsDialogOpen(false);
+    } catch (error: any) {
+      console.error('Error creating deals from products:', error);
+      toast({
+        title: 'Error creating deals from products',
+        description: 'Please try again',
+        variant: 'destructive'
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!editingDeal?.title) {
       toast({ title: 'Title is required', variant: 'destructive' });
@@ -397,7 +524,6 @@ export default function AdminDeals() {
 
     try {
       if (editingDeal.id && editingDeal.id.startsWith('sample-')) {
-        // Update local sample deal
         setDeals(deals.map(d => 
           d.id === editingDeal.id 
             ? { ...d, ...editingDeal } as Deal 
@@ -405,9 +531,7 @@ export default function AdminDeals() {
         ));
         toast({ title: 'Deal updated locally' });
       } else if (tableExists) {
-        // Try database operation
         if (editingDeal.id) {
-          // Update
           const { error } = await supabase
             .from('deals')
             .update({
@@ -423,7 +547,7 @@ export default function AdminDeals() {
               is_active: editingDeal.is_active,
               sort_order: editingDeal.sort_order,
               ends_at: editingDeal.ends_at,
-              // product_id can be added if needed
+              product_id: editingDeal.product_id,
               updated_at: new Date().toISOString(),
             })
             .eq('id', editingDeal.id);
@@ -431,7 +555,6 @@ export default function AdminDeals() {
           if (error) throw error;
           toast({ title: 'Deal updated in database' });
         } else {
-          // Create
           const { error } = await supabase
             .from('deals')
             .insert([{
@@ -447,7 +570,7 @@ export default function AdminDeals() {
               is_active: editingDeal.is_active,
               sort_order: editingDeal.sort_order || deals.length,
               ends_at: editingDeal.ends_at,
-              // created_at and updated_at will be set by database defaults
+              product_id: editingDeal.product_id,
             }]);
 
           if (error) throw error;
@@ -455,9 +578,7 @@ export default function AdminDeals() {
         }
         fetchDeals();
       } else {
-        // Local only operation
         if (editingDeal.id) {
-          // Update local
           setDeals(deals.map(d => 
             d.id === editingDeal.id 
               ? { 
@@ -468,10 +589,9 @@ export default function AdminDeals() {
               : d
           ));
         } else {
-          // Create local
           const newDeal: Deal = {
             id: `local-${Date.now()}`,
-            product_id: null,
+            product_id: editingDeal.product_id || null,
             title: editingDeal.title!,
             image: editingDeal.image,
             price: editingDeal.price,
@@ -508,11 +628,9 @@ export default function AdminDeals() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this deal?')) return;
 
-    // Always remove from local state
     setDeals(deals.filter(d => d.id !== id));
 
-    // Try to delete from database if table exists
-    if (tableExists && !id.startsWith('sample-') && !id.startsWith('local-')) {
+    if (tableExists && !id.startsWith('sample-') && !id.startsWith('local-') && !id.startsWith('product-')) {
       const { error } = await supabase
         .from('deals')
         .delete()
@@ -529,10 +647,8 @@ export default function AdminDeals() {
   const deleteAllDeals = async () => {
     if (!confirm('Are you sure you want to delete ALL deals? This cannot be undone.')) return;
 
-    // Clear local state
     setDeals([]);
 
-    // Try to clear database if table exists
     if (tableExists) {
       const { error } = await supabase
         .from('deals')
@@ -548,7 +664,6 @@ export default function AdminDeals() {
   };
 
   const toggleActive = (deal: Deal) => {
-    // Update local state
     setDeals(deals.map(d => 
       d.id === deal.id ? { 
         ...d, 
@@ -557,8 +672,7 @@ export default function AdminDeals() {
       } : d
     ));
 
-    // Try to update database if table exists
-    if (tableExists && !deal.id.startsWith('sample-') && !deal.id.startsWith('local-')) {
+    if (tableExists && !deal.id.startsWith('sample-') && !deal.id.startsWith('local-') && !deal.id.startsWith('product-')) {
       supabase
         .from('deals')
         .update({ 
@@ -615,6 +729,14 @@ export default function AdminDeals() {
               Local Mode
             </Badge>
           )}
+          <Button 
+            variant="outline" 
+            onClick={() => setAutoFromProductsDialogOpen(true)}
+            className="border-blue-600 text-blue-700 hover:bg-blue-50"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Auto from Products
+          </Button>
           <Button 
             variant="outline" 
             onClick={() => setAutoPopulateDialogOpen(true)}
@@ -706,15 +828,22 @@ export default function AdminDeals() {
               <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">No deals yet</h3>
               <p className="text-muted-foreground mb-6">
-                Create sample deals to get started instantly
+                Create deals to get started instantly
               </p>
-              <div className="flex items-center justify-center gap-4">
+              <div className="flex items-center justify-center gap-4 flex-wrap">
                 <Button 
                   variant="outline"
                   onClick={() => { setEditingDeal(emptyDeal); setDialogOpen(true); }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Create Manual Deal
+                </Button>
+                <Button 
+                  onClick={() => setAutoFromProductsDialogOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Auto from Products
                 </Button>
                 <Button 
                   onClick={() => setAutoPopulateDialogOpen(true)}
@@ -752,9 +881,20 @@ export default function AdminDeals() {
                           <div>
                             <p className="font-medium line-clamp-1">{deal.title}</p>
                             <p className="text-xs text-muted-foreground">MOQ: {deal.moq}</p>
+                            {deal.product_id && (
+                              <Badge variant="outline" className="mt-1 text-xs bg-blue-50 text-blue-700">
+                                <Tag className="h-2 w-2 mr-1" />
+                                Linked
+                              </Badge>
+                            )}
                             {(deal.id.startsWith('sample-') || deal.id.startsWith('local-')) && (
                               <Badge variant="outline" className="mt-1 text-xs">
                                 Sample
+                              </Badge>
+                            )}
+                            {deal.id.startsWith('product-') && (
+                              <Badge variant="outline" className="mt-1 text-xs bg-green-50 text-green-700">
+                                From Product
                               </Badge>
                             )}
                           </div>
@@ -991,7 +1131,77 @@ export default function AdminDeals() {
         </DialogContent>
       </Dialog>
 
-      {/* Auto-populate Dialog */}
+      {/* Auto-populate from Products Dialog */}
+      <Dialog open={autoFromProductsDialogOpen} onOpenChange={setAutoFromProductsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5 text-blue-600" />
+              Create Deals from Products
+            </DialogTitle>
+            <DialogDescription>
+              Automatically create deals from your existing products database
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="numberOfProducts">Number of products to convert</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="numberOfProducts"
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={numberOfProducts}
+                  onChange={(e) => setNumberOfProducts(Math.min(50, Math.max(1, parseInt(e.target.value) || 8)))}
+                />
+                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                  (1-50)
+                </span>
+              </div>
+            </div>
+
+            <Alert className="bg-blue-50 border-blue-200">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-sm">
+                This will:
+                <ul className="list-disc list-inside mt-1 ml-2">
+                  <li>Fetch latest products from your database</li>
+                  <li>Convert them into attractive deals with discounts</li>
+                  <li>Link deals to original products</li>
+                  <li>Auto-calculate prices and MOQ from product data</li>
+                  <li>Set realistic supplier information</li>
+                </ul>
+              </AlertDescription>
+            </Alert>
+
+            {productsLoading && (
+              <div className="flex items-center gap-2 text-sm text-blue-600">
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Loading products from database...
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAutoFromProductsDialogOpen(false)}>
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+            <Button 
+              onClick={createDealsFromProducts} 
+              disabled={saving || productsLoading}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {saving ? 'Creating deals...' : `Create ${numberOfProducts} deals from products`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-populate Sample Deals Dialog */}
       <Dialog open={autoPopulateDialogOpen} onOpenChange={setAutoPopulateDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1048,7 +1258,7 @@ export default function AdminDeals() {
               className="bg-green-600 hover:bg-green-700"
             >
               <Wand2 className="h-4 w-4 mr-2" />
-              {saving ? 'Creating deals...' : `Create ${numberOfDeals} deals`}
+              {saving ? 'Creating deals...' : `Create ${numberOfDeals} sample deals`}
             </Button>
           </DialogFooter>
         </DialogContent>
