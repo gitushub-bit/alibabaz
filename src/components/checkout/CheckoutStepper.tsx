@@ -9,16 +9,13 @@ export type CheckoutStep =
   | 'review'
   | 'confirmation';
 
+type ProcessingContext = 'payment' | 'otp';
+
 interface CheckoutStepperProps {
   currentStep: CheckoutStep;
+  processingContext?: ProcessingContext;
 }
 
-/**
- * NOTE:
- * - "processing" appears ONCE in the stepper
- * - It is entered twice in the flow (after card, after OTP)
- * - This is intentional and correct
- */
 const steps: { key: CheckoutStep; label: string }[] = [
   { key: 'shipping', label: 'Shipping' },
   { key: 'payment', label: 'Payment' },
@@ -28,8 +25,22 @@ const steps: { key: CheckoutStep; label: string }[] = [
   { key: 'confirmation', label: 'Done' },
 ];
 
-export default function CheckoutStepper({ currentStep }: CheckoutStepperProps) {
+export default function CheckoutStepper({
+  currentStep,
+  processingContext,
+}: CheckoutStepperProps) {
   const currentIndex = steps.findIndex(step => step.key === currentStep);
+
+  const getStepLabel = (stepKey: CheckoutStep, defaultLabel: string) => {
+    if (stepKey !== 'processing') return defaultLabel;
+
+    if (currentStep === 'processing') {
+      if (processingContext === 'payment') return 'Processing payment…';
+      if (processingContext === 'otp') return 'Verifying OTP…';
+    }
+
+    return defaultLabel;
+  };
 
   return (
     <div className="w-full py-4">
@@ -53,7 +64,7 @@ export default function CheckoutStepper({ currentStep }: CheckoutStepperProps) {
                 />
               )}
 
-              {/* Circle */}
+              {/* Step Circle */}
               <div
                 className={cn(
                   'relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-all',
@@ -70,11 +81,11 @@ export default function CheckoutStepper({ currentStep }: CheckoutStepperProps) {
               {/* Label */}
               <span
                 className={cn(
-                  'mt-2 text-xs font-medium',
+                  'mt-2 text-center text-xs font-medium transition-colors',
                   isCurrent ? 'text-primary' : 'text-muted-foreground'
                 )}
               >
-                {step.label}
+                {getStepLabel(step.key, step.label)}
               </span>
             </div>
           );
