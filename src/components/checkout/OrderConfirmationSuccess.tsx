@@ -22,30 +22,28 @@ export default function OrderConfirmationSuccess({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('OrderConfirmationSuccess Mounted:', {
+    console.log('OrderConfirmationSuccess Mounted/Updated:', {
       propTotalAmount,
       orderIds,
-      hasPropTotal: propTotalAmount > 0
+      hasPropTotal: propTotalAmount > 0,
     });
 
-    // If prop total is already provided and > 0, use it immediately
+    // If a prop total exists, show it immediately while we verify against the DB.
     if (propTotalAmount > 0) {
-      console.log('Using prop total:', propTotalAmount);
       setFinalTotal(propTotalAmount);
-      return;
     }
-    
-    // Only fetch from DB if prop is 0 AND we have order IDs
+
+    // If no order IDs provided, nothing to verify.
     if (!orderIds || orderIds.length === 0) {
       console.log('No order IDs to fetch');
       return;
     }
 
-    console.log('Fetching order totals from DB for IDs:', orderIds);
+    console.log('Fetching order totals from DB for IDs (verify):', orderIds);
     const fetchTotal = async () => {
       setLoading(true);
       setError(null);
-      
+
       try {
         const { data, error: fetchError } = await supabase
           .from('orders')
@@ -57,31 +55,35 @@ export default function OrderConfirmationSuccess({
         if (fetchError) {
           console.error('Error fetching order total:', fetchError);
           setError(`Failed to fetch order details: ${fetchError.message}`);
-          setLoading(false);
-          return;
+          return; // keep the propTotalAmount as fallback
         }
 
         if (!data || data.length === 0) {
           console.log('No orders found in database');
           setError('Order details not found in database');
-          setLoading(false);
           return;
         }
 
-        const total = data.reduce(
-          (sum: number, order: any) => {
-            const orderTotal = Number(order.total_price || 0);
-            console.log(`Order ${order.id}: $${orderTotal}`);
-            return sum + orderTotal;
-          },
-          0
-        );
+        const total = data.reduce((sum: number, order: any) => {
+          const orderTotal = Number(order.total_price || 0);
+          console.log(`Order ${order.id}: $${orderTotal}`);
+          return sum + orderTotal;
+        }, 0);
 
         console.log('Calculated total from DB:', total);
-        setFinalTotal(total);
+
+        // If DB total differs from provided prop (beyond tiny rounding), prefer DB total.
+        const difference = Math.abs((propTotalAmount || 0) - total);
+        if (difference > 0.009) {
+          console.log('Reconciling totals, using DB total due to difference:', difference);
+          setFinalTotal(total);
+        } else {
+          console.log('Prop total matches DB (within rounding). Keeping prop total.');
+          setFinalTotal(propTotalAmount || total);
+        }
       } catch (err: any) {
         console.error('Unexpected error:', err);
-        setError(`Unexpected error: ${err.message}`);
+        setError(`Unexpected error: ${err?.message || String(err)}`);
       } finally {
         setLoading(false);
       }
