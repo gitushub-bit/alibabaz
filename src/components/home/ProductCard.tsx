@@ -1,27 +1,3 @@
-import { Badge } from "@/components/ui/badge";
-import { Star, Flame } from "lucide-react";
-import { Link } from "react-router-dom";
-import { useCurrency } from "@/hooks/useCurrency";
-import { VerifiedBadge } from "@/components/ui/VerifiedBadge";
-
-interface ProductCardProps {
-  image: string;
-  title: string;
-  price: string;
-  originalPrice?: string;
-  discount?: number;
-  moq?: number;
-  supplier?: string;
-  isVerified?: boolean;
-  isFlashDeal?: boolean;
-  slug?: string;
-  rating?: number;
-  orders?: number;
-  dealId?: string;
-  showConversion?: boolean;
-  openInNewTab?: boolean;
-}
-
 export const ProductCard = ({
   image,
   title,
@@ -40,15 +16,36 @@ export const ProductCard = ({
   openInNewTab = false,
 }: ProductCardProps) => {
   const { formatPriceOnly, currency } = useCurrency();
-  
-  // Parse price as number - check if it's already formatted or raw number
+
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [averageRating, setAverageRating] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchReviews = async () => {
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("rating")
+        .eq("product_id", slug)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching reviews:", error);
+      } else {
+        setReviews(data);
+        const totalRating = data.reduce((acc: number, review: any) => acc + review.rating, 0);
+        setAverageRating(totalRating / data.length || 0);
+      }
+    };
+
+    fetchReviews();
+  }, [slug]);
+
   const parsePrice = (p: string | undefined) => {
     if (!p) return 0;
-    // Remove currency symbols and parse
     const cleaned = p.replace(/[^0-9.]/g, '');
     return parseFloat(cleaned) || 0;
   };
-  
+
   const priceNum = parsePrice(price);
   const originalPriceNum = originalPrice ? parsePrice(originalPrice) : undefined;
 
@@ -63,7 +60,6 @@ export const ProductCard = ({
           loading="lazy"
         />
 
-        {/* FLASH DEAL */}
         {isFlashDeal && (
           <Badge className="absolute top-2 left-2 bg-destructive text-destructive-foreground gap-1">
             <Flame className="w-3 h-3" />
@@ -71,7 +67,6 @@ export const ProductCard = ({
           </Badge>
         )}
 
-        {/* DISCOUNT */}
         {discount && discount > 0 && (
           <Badge className="absolute top-2 right-2 bg-primary text-primary-foreground">
             -{discount}%
@@ -80,14 +75,10 @@ export const ProductCard = ({
       </div>
 
       {/* CONTENT */}
-      <div className="p-3 flex-1 flex flex-col justify-between">
+      <div className="p-3 flex-1 flex-col justify-between">
         <div>
-          {/* TITLE */}
-          <h3 className="text-sm font-medium line-clamp-2 text-foreground">
-            {title}
-          </h3>
+          <h3 className="text-sm font-medium line-clamp-2 text-foreground">{title}</h3>
 
-          {/* PRICE */}
           <div className="flex flex-col mt-2">
             <div className="flex items-baseline gap-2">
               <span className="text-lg font-bold text-primary">
@@ -106,7 +97,6 @@ export const ProductCard = ({
             )}
           </div>
 
-          {/* MOQ */}
           {moq && (
             <p className="text-xs text-muted-foreground mt-2">
               Min. order:{" "}
@@ -119,13 +109,12 @@ export const ProductCard = ({
 
         {/* FOOTER */}
         <div className="mt-3 flex flex-col gap-2">
-          {/* RATINGS */}
-          {(rating || orders) && (
+          {(averageRating || orders) && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {rating && (
+              {averageRating > 0 && (
                 <span className="flex items-center gap-1">
                   <Star className="w-3 h-3 text-yellow-400" />
-                  {rating.toFixed(1)}
+                  {averageRating.toFixed(1)} ({reviews.length} Reviews)
                 </span>
               )}
               {orders && (
@@ -134,12 +123,24 @@ export const ProductCard = ({
             </div>
           )}
 
+          {/* LATEST REVIEWS */}
+          {reviews.length > 0 && (
+            <div className="mt-2">
+              <h4 className="text-sm font-medium text-foreground">Latest Reviews</h4>
+              {reviews.slice(0, 3).map((review) => (
+                <div key={review.id} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Star className="w-3 h-3 text-yellow-400" />
+                  <span>{review.rating}</span>
+                  <p className="text-sm">{review.comment}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* SUPPLIER + VERIFIED */}
           {supplier && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {isVerified && (
-                <VerifiedBadge size="sm" />
-              )}
+              {isVerified && <VerifiedBadge size="sm" />}
               <span className="truncate">{supplier}</span>
             </div>
           )}
@@ -169,9 +170,5 @@ export const ProductCard = ({
     );
   }
 
-  return (
-    <div className={cardClass}>
-      <CardContent />
-    </div>
-  );
+  return <div className={cardClass}><CardContent /></div>;
 };
