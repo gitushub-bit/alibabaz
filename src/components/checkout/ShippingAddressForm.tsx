@@ -117,7 +117,7 @@ export default function ShippingAddressForm({
           <div className="space-y-2">
             <Label htmlFor="country">Country *</Label>
             <Select
-              value={selectedCountry}
+              value={selectedCountry || ''}
               onValueChange={(value) => setValue('country', value)}
             >
               <SelectTrigger className="rounded-xl border-2 border-muted/40">

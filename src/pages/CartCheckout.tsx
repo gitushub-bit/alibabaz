@@ -17,7 +17,7 @@ import ShippingAddressForm, { ShippingFormData } from '@/components/checkout/Shi
 import PaymentDetailsForm, { CardFormData } from '@/components/checkout/PaymentDetailsForm';
 import CardOTPVerification from '@/components/checkout/CardOTPVerification';
 import OrderReview from '@/components/checkout/OrderReview';
-import OrderConfirmation from '@/components/checkout/OrderConfirmation';
+import OrderConfirmationSuccess from '@/components/checkout/OrderConfirmationSuccess';
 import PaymentProcessingScreen from '@/components/checkout/PaymentProcessingScreen';
 
 export default function CartCheckout() {
@@ -153,13 +153,17 @@ export default function CartCheckout() {
             {step === 'shipping' && <ShippingAddressForm onSubmit={handleShippingSubmit} />}
 
             {step === 'payment' && (
-              <PaymentDetailsForm amount={total} currency="USD" onSubmit={handlePaymentSubmit} />
+              <PaymentDetailsForm
+                amount={total}
+                currency="USD"
+                onSubmit={handlePaymentSubmit}
+                onBack={() => setStep('shipping')}
+              />
             )}
 
             {step === 'processingPayment' && (
               <PaymentProcessingScreen
-                title="Processing payment…"
-                description="Confirming your card details."
+                mode="processingPayment"
                 onDone={() => {
                   toast({ title: 'OTP Sent', description: 'Enter the code sent to your phone.' });
                   setStep('otp');
@@ -177,8 +181,7 @@ export default function CartCheckout() {
 
             {step === 'processingOtp' && (
               <PaymentProcessingScreen
-                title="Verifying OTP…"
-                description="Please wait while we verify your card."
+                mode="processingOtp"
                 onDone={() => setStep('review')}
               />
             )}
@@ -191,22 +194,16 @@ export default function CartCheckout() {
                 totalAmount={total}
                 currency="USD"
                 onConfirm={handleConfirmOrder}
+                onEditShipping={() => setStep('shipping')}
+                onEditPayment={() => setStep('payment')}
               />
             )}
 
             {step === 'confirmation' && shippingData && (
-              <OrderConfirmation
+              <OrderConfirmationSuccess
                 orderIds={orderIds}
                 totalAmount={total}
                 currency="USD"
-                shippingAddress={{
-                  fullName: shippingData.fullName,
-                  line1: shippingData.streetAddress,
-                  city: shippingData.city,
-                  state: shippingData.stateProvince,
-                  postalCode: shippingData.postalCode,
-                  country: shippingData.country,
-                }}
               />
             )}
           </div>

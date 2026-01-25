@@ -3,11 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { 
-  CheckCircle, 
-  MapPin, 
-  CreditCard, 
-  Shield, 
+import {
+  CheckCircle,
+  MapPin,
+  CreditCard,
+  Shield,
   Package
 } from 'lucide-react';
 import { ShippingFormData } from './ShippingAddressForm';
@@ -45,7 +45,9 @@ function detectCardBrand(cardNumber: string): string {
   return 'Card';
 }
 
-function isCardValid(cardData: CardFormData) {
+function isCardValid(cardData: CardFormData | null | undefined) {
+  if (!cardData || !cardData.cardNumber) return false;
+
   const digits = cardData.cardNumber.replace(/\s/g, '');
 
   if (digits.length <= 11) return false;
@@ -76,12 +78,13 @@ export default function OrderReview({
   onUpdate,
   otpVerified = false,  // <-- ADDED
 }: OrderReviewProps) {
-  const cardLastFour = cardData.cardNumber.replace(/\s/g, '').slice(-4);
-  const cardBrand = detectCardBrand(cardData.cardNumber);
-  const validCard = isCardValid(cardData);
+  // Safety checks for cardData
+  const cardLastFour = cardData?.cardNumber?.replace(/\s/g, '').slice(-4) || '0000';
+  const cardBrand = cardData?.cardNumber ? detectCardBrand(cardData.cardNumber) : 'Card';
+  const validCard = cardData ? isCardValid(cardData) : false;
 
   useEffect(() => {
-    if (onUpdate) {
+    if (onUpdate && cardData) {
       onUpdate(cardData);
     }
   }, [cardData, onUpdate]); // <-- FIXED
@@ -124,9 +127,9 @@ export default function OrderReview({
 
       {/* ... REST OF UI ... */}
 
-      <Button 
-        className="w-full" 
-        size="lg" 
+      <Button
+        className="w-full"
+        size="lg"
         onClick={() => {
           if (!validCard) return;
           onConfirm();

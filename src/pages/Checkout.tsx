@@ -236,6 +236,7 @@ export default function Checkout() {
   };
 
   const cardData = paymentData || {
+    cardholderName: 'N/A',
     cardNumber: '0000 0000 0000 0000',
     expiryMonth: '01',
     expiryYear: '30',
