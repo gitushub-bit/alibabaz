@@ -15,7 +15,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 
-type ProcessingMode = 'payment' | 'otp';
+type ProcessingMode = 'processingPayment' | 'processingOtp';
 
 interface PaymentProcessingScreenProps {
   mode: ProcessingMode;
@@ -28,17 +28,17 @@ interface PaymentProcessingScreenProps {
 /* -------------------- STEP DEFINITIONS -------------------- */
 
 const PAYMENT_STEPS = [
-  { icon: CreditCard, text: 'Validating card details...' },
-  { icon: Lock, text: 'Encrypting transaction...' },
-  { icon: Shield, text: 'Initiating 3D Secure verification...' },
-  { icon: Smartphone, text: 'Sending OTP to your device...' },
+  { icon: CreditCard, text: 'Validating card details…' },
+  { icon: Lock, text: 'Encrypting transaction…' },
+  { icon: Shield, text: 'Initiating 3D Secure verification…' },
+  { icon: Smartphone, text: 'Sending OTP to your device…' },
 ];
 
 const OTP_STEPS = [
-  { icon: Smartphone, text: 'Verifying OTP code...' },
-  { icon: Shield, text: 'Confirming bank authorization...' },
-  { icon: Lock, text: 'Finalizing secure transaction...' },
-  { icon: CheckCircle2, text: 'Payment authorized successfully...' },
+  { icon: Smartphone, text: 'Verifying OTP code…' },
+  { icon: Shield, text: 'Confirming bank authorization…' },
+  { icon: Lock, text: 'Finalizing secure transaction…' },
+  { icon: CheckCircle2, text: 'Payment authorized successfully…' },
 ];
 
 /* -------------------- COMPONENT -------------------- */
@@ -50,7 +50,7 @@ export default function PaymentProcessingScreen({
   duration = 20,
   onComplete,
 }: PaymentProcessingScreenProps) {
-  const steps = mode === 'payment' ? PAYMENT_STEPS : OTP_STEPS;
+  const steps = mode === 'processingPayment' ? PAYMENT_STEPS : OTP_STEPS;
 
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
@@ -61,19 +61,19 @@ export default function PaymentProcessingScreen({
       setElapsedTime(prev => {
         const next = prev + 0.1;
 
-        const newProgress = Math.min((next / duration) * 100, 100);
-        setProgress(newProgress);
+        const percent = Math.min((next / duration) * 100, 100);
+        setProgress(percent);
 
         const stepDuration = duration / steps.length;
-        const newStep = Math.min(
+        const stepIndex = Math.min(
           Math.floor(next / stepDuration),
           steps.length - 1
         );
-        setCurrentStep(newStep);
+        setCurrentStep(stepIndex);
 
         if (next >= duration) {
           clearInterval(interval);
-          setTimeout(onComplete, 500);
+          setTimeout(onComplete, 400);
         }
 
         return next;
@@ -98,13 +98,15 @@ export default function PaymentProcessingScreen({
         </div>
 
         <CardTitle>
-          {mode === 'payment' ? 'Securing Your Payment' : 'Verifying OTP'}
+          {mode === 'processingPayment'
+            ? 'Securing Your Payment'
+            : 'Verifying OTP'}
         </CardTitle>
 
         <CardDescription>
-          {mode === 'payment' ? (
+          {mode === 'processingPayment' ? (
             <>
-              Verifying {cardBrand} card ending in {cardLastFour}
+              Verifying {cardBrand ?? 'card'} ending in {cardLastFour ?? '••••'}
             </>
           ) : (
             'Confirming your bank authorization'
@@ -118,7 +120,9 @@ export default function PaymentProcessingScreen({
           <Progress value={progress} className="h-3" />
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>{Math.round(progress)}% complete</span>
-            <span>{Math.max(0, Math.ceil(duration - elapsedTime))}s remaining</span>
+            <span>
+              {Math.max(0, Math.ceil(duration - elapsedTime))}s remaining
+            </span>
           </div>
         </div>
 
