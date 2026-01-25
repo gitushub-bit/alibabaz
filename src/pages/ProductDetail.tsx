@@ -69,15 +69,18 @@ interface Profile {
 
 interface Review {
   id: string;
-  user_id: string;
-  product_id: string;
   rating: number;
   comment: string;
   created_at: string;
+  orders?: {
+    product_id: string;
+    buyer_id: string;
+  };
   profile?: {
     full_name: string | null;
   };
 }
+
 
 export default function ProductDetail() {
   const { slug } = useParams();
