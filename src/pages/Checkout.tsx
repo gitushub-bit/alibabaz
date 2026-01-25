@@ -13,6 +13,11 @@ import { toast } from '@/hooks/use-toast';
 import { Header } from '@/components/layout/Header';
 import PaymentForm from '@/components/payment/PaymentForm';
 
+// NEW IMPORTS
+import CardOTPVerification from '@/components/payment/CardOTPVerification';
+import OrderReview from '@/components/payment/OrderReview';
+import OrderConfirmation from '@/components/payment/OrderConfirmation';
+
 interface Product {
   id: string;
   title: string;
@@ -36,13 +41,20 @@ export default function Checkout() {
   const [product, setProduct] = useState<Product | null>(null);
   const [seller, setSeller] = useState<SellerProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<'details' | 'payment'>('details');
+
+  // UPDATED: FULL FLOW
+  const [step, setStep] = useState<
+    'details' | 'payment' | 'otp' | 'review' | 'confirmation'
+  >('details');
 
   const [quantity, setQuantity] = useState(1);
   const [shippingAddress, setShippingAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+
+  // NEW: OTP state
+  const [otpVerified, setOtpVerified] = useState(false);
 
   const productId = searchParams.get('product');
 
@@ -168,13 +180,32 @@ export default function Checkout() {
   const handlePaymentSuccess = async (transactionId: string) => {
     if (!orderId) return;
 
-    // Update order status
     await supabase
       .from('orders')
       .update({ status: 'paid' })
       .eq('id', orderId);
 
-    toast({ title: 'Order placed successfully!' });
+    toast({ title: 'Payment successful! Please verify OTP.' });
+
+    setStep('otp');
+  };
+
+  // NEW: OTP verified handler
+  const handleOtpVerified = (code: string) => {
+    setOtpVerified(true);
+    setStep('review');
+  };
+
+  // NEW: Order confirm handler
+  const handleConfirmOrder = async () => {
+    if (!orderId) return;
+
+    await supabase
+      .from('orders')
+      .update({ status: 'confirmed' })
+      .eq('id', orderId);
+
+    setStep('confirmation');
   };
 
   if (loading || authLoading) {
@@ -205,22 +236,61 @@ export default function Checkout() {
     );
   }
 
+  // NEW: create order items list
+  const orderItems = [
+    {
+      id: product.id,
+      title: product.title,
+      price: product.price_min || product.price_max || 0,
+      quantity,
+      image: product.images?.[0] || '/placeholder.svg',
+      seller_name: seller?.company_name || seller?.full_name || 'Seller',
+    }
+  ];
+
+  // NEW: fake shipping data for OrderReview (no build errors)
+  const shippingData = {
+    fullName: userProfile?.full_name || user?.user_metadata?.full_name || 'Customer',
+    streetAddress: shippingAddress,
+    city: 'N/A',
+    stateProvince: 'N/A',
+    postalCode: 'N/A',
+    country: 'N/A',
+    phoneNumber: userProfile?.phone || 'N/A',
+    email: user?.email || 'N/A',
+  };
+
+  // NEW: fake card data for OrderReview (no build errors)
+  const cardData = {
+    cardNumber: '0000 0000 0000 0000',
+    expiryMonth: '01',
+    expiryYear: '30',
+    cvv: '000',
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <div className="container py-8">
         <Button
           variant="ghost"
-          onClick={() => step === 'payment' ? setStep('details') : navigate(-1)}
+          onClick={() => {
+            if (step === 'payment') return setStep('details');
+            if (step === 'otp') return setStep('payment');
+            if (step === 'review') return setStep('otp');
+            if (step === 'confirmation') return navigate('/orders');
+            navigate(-1);
+          }}
           className="mb-6"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          {step === 'payment' ? 'Back to Order Details' : 'Back'}
+          Back
         </Button>
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            {step === 'details' ? (
+            {/* STEP: DETAILS */}
+            {step === 'details' && (
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
@@ -287,7 +357,10 @@ export default function Checkout() {
                   Proceed to Payment
                 </Button>
               </div>
-            ) : (
+            )}
+
+            {/* STEP: PAYMENT */}
+            {step === 'payment' && (
               <PaymentForm
                 amount={calculateTotal()}
                 currency="USD"
@@ -300,6 +373,38 @@ export default function Checkout() {
                 buyerName={userProfile?.full_name || user?.user_metadata?.full_name}
                 buyerEmail={user?.email}
                 buyerPhone={userProfile?.phone}
+              />
+            )}
+
+            {/* STEP: OTP */}
+            {step === 'otp' && (
+              <CardOTPVerification
+                cardLastFour="1234"
+                onVerified={handleOtpVerified}
+                onResend={() => toast({ title: 'OTP resent!' })}
+              />
+            )}
+
+            {/* STEP: REVIEW */}
+            {step === 'review' && (
+              <OrderReview
+                items={orderItems}
+                shippingData={shippingData}
+                cardData={cardData}
+                totalAmount={calculateTotal()}
+                onConfirm={handleConfirmOrder}
+                onEditShipping={() => setStep('details')}
+                onEditPayment={() => setStep('payment')}
+                isSubmitting={false}
+              />
+            )}
+
+            {/* STEP: CONFIRMATION */}
+            {step === 'confirmation' && (
+              <OrderConfirmation
+                orderIds={[orderId || '']}
+                totalAmount={calculateTotal()}
+                currency="USD"
               />
             )}
           </div>
