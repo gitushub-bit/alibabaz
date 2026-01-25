@@ -26,7 +26,7 @@ export default function OrderConfirmation({
   totalAmount,
   shippingAddress,
   currency = 'USD',
-  showTrackOrder = true
+  showTrackOrder = true,
 }: OrderConfirmationProps) {
   const navigate = useNavigate();
 
@@ -35,15 +35,21 @@ export default function OrderConfirmation({
       ? orderIds[0].slice(0, 8) + '...'
       : orderIds.map(id => id.slice(0, 6)).join(' • ');
 
-  // Use Intl to format currency correctly
+  // Safely format currency
   const formattedAmount = (() => {
+    // If totalAmount is NaN or not a number
+    if (typeof totalAmount !== 'number' || isNaN(totalAmount)) {
+      return `${currency} 0.00`;
+    }
+
     try {
       return new Intl.NumberFormat(undefined, {
         style: 'currency',
-        currency: currency
+        currency,
+        maximumFractionDigits: 2,
       }).format(totalAmount);
     } catch {
-      // Fallback if currency code is invalid
+      // fallback if currency code invalid
       return `${currency} ${totalAmount.toFixed(2)}`;
     }
   })();
@@ -71,9 +77,7 @@ export default function OrderConfirmation({
 
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total Paid</span>
-              <span className="font-bold text-lg">
-                {formattedAmount}
-              </span>
+              <span className="font-bold text-lg">{formattedAmount}</span>
             </div>
           </div>
 
@@ -114,11 +118,7 @@ export default function OrderConfirmation({
             </Button>
 
             {showTrackOrder && (
-              <Button
-                variant="ghost"
-                className="flex-1"
-                onClick={() => navigate('/orders')}
-              >
+              <Button variant="ghost" className="flex-1" onClick={() => navigate('/orders')}>
                 <Package className="h-4 w-4 mr-2" />
                 Track Order
               </Button>
