@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 
 interface OrderConfirmationSuccessProps {
   orderIds: string[];
+  totalAmount: number;  // ← This is passed from CartCheckout!
   currency?: string;
 }
 
@@ -17,26 +18,32 @@ const supabase = createClient(
 
 export default function OrderConfirmationSuccess({
   orderIds,
+  totalAmount: propTotalAmount,  // ← Rename for clarity
   currency = 'USD',
 }: OrderConfirmationSuccessProps) {
   const navigate = useNavigate();
-  const [totalAmount, setTotalAmount] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [finalTotal, setFinalTotal] = useState<number>(propTotalAmount);  // ← Use prop as default
+  const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    // If orderIds are not ready, skip fetching
-    if (!orderIds || orderIds.length === 0) return;
+    // If prop total is already provided and > 0, use it
+    if (propTotalAmount > 0) {
+      setFinalTotal(propTotalAmount);
+      return;
+    }
+    
+    // Only fetch from DB if prop is 0 AND we have order IDs
+    if (!orderIds || orderIds.length === 0 || propTotalAmount > 0) return;
 
     const fetchTotal = async () => {
       setLoading(true);
-
       const { data, error } = await supabase
         .from('orders')
         .select('id, total_price')
         .in('id', orderIds);
 
       if (error) {
-        console.error(error);
+        console.error('Error fetching order total:', error);
         setLoading(false);
         return;
       }
@@ -46,12 +53,22 @@ export default function OrderConfirmationSuccess({
         0
       );
 
-      setTotalAmount(total);
+      setFinalTotal(total);
       setLoading(false);
     };
 
     fetchTotal();
-  }, [orderIds]);
+  }, [orderIds, propTotalAmount]);
+
+  // Debug log to see what's happening
+  useEffect(() => {
+    console.log('OrderConfirmationSuccess:', {
+      propTotalAmount,
+      finalTotal,
+      orderIds,
+      loading
+    });
+  }, [propTotalAmount, finalTotal, orderIds, loading]);
 
   return (
     <Card className="w-full max-w-md mx-auto">
@@ -72,7 +89,7 @@ export default function OrderConfirmationSuccess({
             <p className="text-2xl font-bold">Calculating amount...</p>
           ) : (
             <p className="text-2xl font-bold">
-              Amount Paid: {currency} {totalAmount.toFixed(2)}
+              Amount Paid: {currency} {finalTotal.toFixed(2)}
             </p>
           )}
         </div>
