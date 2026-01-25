@@ -1,47 +1,76 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Shield, CreditCard, Lock, CheckCircle2 } from 'lucide-react';
+import {
+  Shield,
+  CreditCard,
+  Lock,
+  CheckCircle2,
+  Smartphone,
+} from 'lucide-react';
+
+type ProcessingMode = 'payment' | 'otp';
 
 interface PaymentProcessingScreenProps {
-  cardLastFour: string;
-  cardBrand: string;
-  duration?: number; // in seconds
+  mode: ProcessingMode;
+  cardLastFour?: string;
+  cardBrand?: string;
+  duration?: number;
   onComplete: () => void;
 }
 
-const processingSteps = [
-  { icon: CreditCard, text: 'Validating card details...', duration: 5 },
-  { icon: Lock, text: 'Encrypting transaction...', duration: 5 },
-  { icon: Shield, text: 'Initiating 3D Secure verification...', duration: 5 },
-  { icon: CheckCircle2, text: 'Sending OTP to your device...', duration: 5 },
+/* -------------------- STEP DEFINITIONS -------------------- */
+
+const PAYMENT_STEPS = [
+  { icon: CreditCard, text: 'Validating card details...' },
+  { icon: Lock, text: 'Encrypting transaction...' },
+  { icon: Shield, text: 'Initiating 3D Secure verification...' },
+  { icon: Smartphone, text: 'Sending OTP to your device...' },
 ];
 
+const OTP_STEPS = [
+  { icon: Smartphone, text: 'Verifying OTP code...' },
+  { icon: Shield, text: 'Confirming bank authorization...' },
+  { icon: Lock, text: 'Finalizing secure transaction...' },
+  { icon: CheckCircle2, text: 'Payment authorized successfully...' },
+];
+
+/* -------------------- COMPONENT -------------------- */
+
 export default function PaymentProcessingScreen({
+  mode,
   cardLastFour,
   cardBrand,
   duration = 20,
   onComplete,
 }: PaymentProcessingScreenProps) {
+  const steps = mode === 'payment' ? PAYMENT_STEPS : OTP_STEPS;
+
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setElapsedTime((prev) => {
+      setElapsedTime(prev => {
         const next = prev + 0.1;
-        
-        // Calculate progress (0-100)
+
         const newProgress = Math.min((next / duration) * 100, 100);
         setProgress(newProgress);
 
-        // Calculate current step
-        const stepDuration = duration / processingSteps.length;
-        const newStep = Math.min(Math.floor(next / stepDuration), processingSteps.length - 1);
+        const stepDuration = duration / steps.length;
+        const newStep = Math.min(
+          Math.floor(next / stepDuration),
+          steps.length - 1
+        );
         setCurrentStep(newStep);
 
-        // Complete when duration reached
         if (next >= duration) {
           clearInterval(interval);
           setTimeout(onComplete, 500);
@@ -52,30 +81,39 @@ export default function PaymentProcessingScreen({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [duration, onComplete]);
+  }, [duration, steps.length, onComplete]);
 
-  const CurrentIcon = processingSteps[currentStep]?.icon || Shield;
+  const CurrentIcon = steps[currentStep]?.icon || Shield;
 
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader className="text-center">
-        <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 relative">
+        <div className="relative mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
           <CurrentIcon className="h-8 w-8 text-primary animate-pulse" />
-          {/* Spinning ring */}
-          <div className="absolute inset-0 border-4 border-primary/20 rounded-full" />
-          <div 
-            className="absolute inset-0 border-4 border-transparent border-t-primary rounded-full animate-spin"
+          <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+          <div
+            className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-primary"
             style={{ animationDuration: '1.5s' }}
           />
         </div>
-        <CardTitle>Securing Your Payment</CardTitle>
+
+        <CardTitle>
+          {mode === 'payment' ? 'Securing Your Payment' : 'Verifying OTP'}
+        </CardTitle>
+
         <CardDescription>
-          Verifying {cardBrand} card ending in {cardLastFour}
+          {mode === 'payment' ? (
+            <>
+              Verifying {cardBrand} card ending in {cardLastFour}
+            </>
+          ) : (
+            'Confirming your bank authorization'
+          )}
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Main Progress Bar */}
+        {/* Progress */}
         <div className="space-y-2">
           <Progress value={progress} className="h-3" />
           <div className="flex justify-between text-xs text-muted-foreground">
@@ -84,9 +122,9 @@ export default function PaymentProcessingScreen({
           </div>
         </div>
 
-        {/* Processing Steps */}
+        {/* Steps */}
         <div className="space-y-3">
-          {processingSteps.map((step, index) => {
+          {steps.map((step, index) => {
             const StepIcon = step.icon;
             const isCompleted = index < currentStep;
             const isActive = index === currentStep;
@@ -94,16 +132,16 @@ export default function PaymentProcessingScreen({
             return (
               <div
                 key={index}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ${
+                className={`flex items-center gap-3 rounded-lg p-3 transition-all ${
                   isActive
-                    ? 'bg-primary/10 border border-primary/30'
+                    ? 'border border-primary/30 bg-primary/10'
                     : isCompleted
                     ? 'bg-muted/50'
                     : 'opacity-50'
                 }`}
               >
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  className={`flex h-8 w-8 items-center justify-center rounded-full ${
                     isCompleted
                       ? 'bg-green-500 text-white'
                       : isActive
@@ -114,12 +152,17 @@ export default function PaymentProcessingScreen({
                   {isCompleted ? (
                     <CheckCircle2 className="h-4 w-4" />
                   ) : (
-                    <StepIcon className={`h-4 w-4 ${isActive ? 'animate-pulse' : ''}`} />
+                    <StepIcon
+                      className={`h-4 w-4 ${isActive ? 'animate-pulse' : ''}`}
+                    />
                   )}
                 </div>
+
                 <span
                   className={`text-sm ${
-                    isActive ? 'font-medium text-foreground' : 'text-muted-foreground'
+                    isActive
+                      ? 'font-medium text-foreground'
+                      : 'text-muted-foreground'
                   }`}
                 >
                   {step.text}
@@ -130,10 +173,11 @@ export default function PaymentProcessingScreen({
         </div>
 
         {/* Security Notice */}
-        <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
           <Lock className="h-4 w-4 text-muted-foreground" />
           <p className="text-xs text-muted-foreground">
-            Your payment is protected by bank-level encryption. Do not close this window.
+            This transaction is protected with bank-level security. Do not close
+            this window.
           </p>
         </div>
       </CardContent>
