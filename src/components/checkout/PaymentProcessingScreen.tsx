@@ -22,7 +22,7 @@ interface PaymentProcessingScreenProps {
   cardLastFour?: string;
   cardBrand?: string;
   duration?: number;
-  onComplete: () => void;
+  onDone: () => void; // <-- updated
 }
 
 /* -------------------- STEP DEFINITIONS -------------------- */
@@ -48,7 +48,7 @@ export default function PaymentProcessingScreen({
   cardLastFour,
   cardBrand,
   duration = 20,
-  onComplete,
+  onDone, // <-- updated
 }: PaymentProcessingScreenProps) {
   const steps = mode === 'processingPayment' ? PAYMENT_STEPS : OTP_STEPS;
 
@@ -73,7 +73,7 @@ export default function PaymentProcessingScreen({
 
         if (next >= duration) {
           clearInterval(interval);
-          setTimeout(onComplete, 400);
+          setTimeout(onDone, 400); // <-- updated
         }
 
         return next;
@@ -81,7 +81,7 @@ export default function PaymentProcessingScreen({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [duration, steps.length, onComplete]);
+  }, [duration, steps.length, onDone]);
 
   const CurrentIcon = steps[currentStep]?.icon || Shield;
 
