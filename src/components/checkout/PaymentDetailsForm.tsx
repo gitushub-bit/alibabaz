@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CreditCard, Lock, Shield, AlertCircle } from 'lucide-react';
+import { CreditCard, Lock, AlertCircle } from 'lucide-react';
 
 const cardSchema = z.object({
   cardholderName: z.string().min(3, 'Cardholder name is required'),
@@ -233,31 +233,7 @@ export default function PaymentDetailsForm({
           )}
         </div>
 
-        {/* 3D Secure Indicator */}
-        {is3DS !== null && cardNumber.replace(/\s/g, '').length >= 8 && (
-          <div className={`mb-6 p-4 rounded-lg flex items-start gap-3 ${is3DS
-            ? 'bg-blue-50 border border-blue-200'
-            : 'bg-green-50 border border-green-200'
-            }`}>
-            <Shield className={`h-5 w-5 mt-0.5 ${is3DS ? 'text-blue-600' : 'text-green-600'}`} />
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={`font-medium ${is3DS ? 'text-blue-800' : 'text-green-800'}`}>
-                  {is3DS ? '3D Secure Enabled' : '2D Secure Transaction'}
-                </span>
-                <Badge variant={is3DS ? 'default' : 'secondary'} className="text-xs">
-                  {is3DS ? '3DS 2.0' : 'Standard'}
-                </Badge>
-              </div>
-              <p className={`text-sm mt-1 ${is3DS ? 'text-blue-700' : 'text-green-700'}`}>
-                {is3DS
-                  ? 'This card requires OTP verification for enhanced security. You will receive a one-time code.'
-                  : 'This card will be processed without additional verification steps.'
-                }
-              </p>
-            </div>
-          </div>
-        )}
+
 
         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
           <div className="space-y-2">
@@ -349,7 +325,7 @@ export default function PaymentDetailsForm({
               Back
             </Button>
             <Button type="submit" className="flex-1" disabled={isSubmitting}>
-              {isSubmitting ? 'Processing...' : is3DS ? 'Continue to OTP' : 'Review Order'}
+              {isSubmitting ? 'Processing...' : 'Continue to Verification'}
             </Button>
           </div>
         </form>
