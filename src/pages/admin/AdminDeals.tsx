@@ -45,6 +45,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Deal {
   id: string;
+  product_id: string | null;  // Added to match database
   title: string;
   image: string | null;
   price: number | null;
@@ -52,11 +53,13 @@ interface Deal {
   discount: number | null;
   moq: number | null;
   supplier: string | null;
-  is_verified: boolean | null;
-  is_flash_deal: boolean | null;
-  is_active: boolean | null;
-  sort_order: number | null;
-  ends_at?: string | null;
+  is_verified: boolean;
+  is_flash_deal: boolean;
+  is_active: boolean;
+  sort_order: number;
+  ends_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 const emptyDeal: Partial<Deal> = {
@@ -86,6 +89,7 @@ const GUARANTEED_SAMPLE_DEALS = [
     supplier: "Global Electronics Inc.",
     is_verified: true,
     is_flash_deal: true,
+    is_active: true,
     ends_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
   },
   {
@@ -98,6 +102,7 @@ const GUARANTEED_SAMPLE_DEALS = [
     supplier: "Eco Wear Fashion",
     is_verified: true,
     is_flash_deal: false,
+    is_active: true,
   },
   {
     title: "Stainless Steel Travel Mug",
@@ -109,6 +114,7 @@ const GUARANTEED_SAMPLE_DEALS = [
     supplier: "Premium Home Goods",
     is_verified: true,
     is_flash_deal: true,
+    is_active: true,
     ends_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
   },
   {
@@ -121,6 +127,7 @@ const GUARANTEED_SAMPLE_DEALS = [
     supplier: "Modern Lighting Co.",
     is_verified: true,
     is_flash_deal: false,
+    is_active: true,
   },
   {
     title: "Portable Solar Charger",
@@ -132,6 +139,7 @@ const GUARANTEED_SAMPLE_DEALS = [
     supplier: "Green Energy Tech",
     is_verified: true,
     is_flash_deal: true,
+    is_active: true,
     ends_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   },
   {
@@ -144,6 +152,7 @@ const GUARANTEED_SAMPLE_DEALS = [
     supplier: "Fitness Pro Gear",
     is_verified: true,
     is_flash_deal: false,
+    is_active: true,
   },
   {
     title: "Fast Wireless Charger",
@@ -155,6 +164,7 @@ const GUARANTEED_SAMPLE_DEALS = [
     supplier: "Tech Innovations Ltd.",
     is_verified: true,
     is_flash_deal: true,
+    is_active: true,
     ends_at: new Date(Date.now() + 96 * 60 * 60 * 1000).toISOString(),
   },
   {
@@ -167,6 +177,7 @@ const GUARANTEED_SAMPLE_DEALS = [
     supplier: "Sustainable Living Co.",
     is_verified: true,
     is_flash_deal: false,
+    is_active: true,
   },
 ];
 
@@ -205,9 +216,12 @@ export default function AdminDeals() {
         // Use sample deals immediately
         setDeals(GUARANTEED_SAMPLE_DEALS.map((deal, index) => ({
           id: `sample-${index}`,
+          product_id: null,
           ...deal,
           sort_order: index,
           is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })));
       } else {
         // Table exists, fetch deals
@@ -219,9 +233,12 @@ export default function AdminDeals() {
       // On any error, use sample deals
       setDeals(GUARANTEED_SAMPLE_DEALS.map((deal, index) => ({
         id: `sample-${index}`,
+        product_id: null,
         ...deal,
         sort_order: index,
         is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })));
     } finally {
       setLoading(false);
@@ -245,9 +262,12 @@ export default function AdminDeals() {
         // Fall back to sample deals
         setDeals(GUARANTEED_SAMPLE_DEALS.map((deal, index) => ({
           id: `sample-${index}`,
+          product_id: null,
           ...deal,
           sort_order: index,
           is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })));
         return;
       }
@@ -262,9 +282,12 @@ export default function AdminDeals() {
         });
         setDeals(GUARANTEED_SAMPLE_DEALS.map((deal, index) => ({
           id: `sample-${index}`,
+          product_id: null,
           ...deal,
           sort_order: index,
           is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })));
       }
     } catch (error) {
@@ -272,9 +295,12 @@ export default function AdminDeals() {
       // Ultimate fallback
       setDeals(GUARANTEED_SAMPLE_DEALS.map((deal, index) => ({
         id: `sample-${index}`,
+        product_id: null,
         ...deal,
         sort_order: index,
         is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })));
     }
   };
@@ -304,11 +330,13 @@ export default function AdminDeals() {
         discount: deal.discount,
         moq: deal.moq,
         supplier: deal.supplier,
-        is_verified: deal.is_verified,
-        is_flash_deal: deal.is_flash_deal,
-        is_active: true,
+        is_verified: deal.is_verified ?? false,
+        is_flash_deal: deal.is_flash_deal ?? false,
+        is_active: deal.is_active ?? true,
         sort_order: index,
         ends_at: deal.ends_at,
+        // product_id is null for sample deals
+        // created_at and updated_at will be set by database defaults
       }));
 
       // Try to save to database if table exists
@@ -326,7 +354,10 @@ export default function AdminDeals() {
       // Update local state regardless
       setDeals(dealsToInsert.map((deal, index) => ({
         id: tableExists ? `db-${Date.now()}-${index}` : `sample-${index}`,
+        product_id: null,
         ...deal,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })));
 
       toast({
@@ -340,9 +371,11 @@ export default function AdminDeals() {
       // Even if database fails, show sample deals locally
       setDeals(GUARANTEED_SAMPLE_DEALS.slice(0, numberOfDeals).map((deal, index) => ({
         id: `local-${index}`,
+        product_id: null,
         ...deal,
         sort_order: index,
-        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })));
       toast({
         title: 'Sample deals created locally',
@@ -390,6 +423,8 @@ export default function AdminDeals() {
               is_active: editingDeal.is_active,
               sort_order: editingDeal.sort_order,
               ends_at: editingDeal.ends_at,
+              // product_id can be added if needed
+              updated_at: new Date().toISOString(),
             })
             .eq('id', editingDeal.id);
 
@@ -410,8 +445,9 @@ export default function AdminDeals() {
               is_verified: editingDeal.is_verified,
               is_flash_deal: editingDeal.is_flash_deal,
               is_active: editingDeal.is_active,
-              sort_order: deals.length,
+              sort_order: editingDeal.sort_order || deals.length,
               ends_at: editingDeal.ends_at,
+              // created_at and updated_at will be set by database defaults
             }]);
 
           if (error) throw error;
@@ -424,13 +460,18 @@ export default function AdminDeals() {
           // Update local
           setDeals(deals.map(d => 
             d.id === editingDeal.id 
-              ? { ...d, ...editingDeal } as Deal 
+              ? { 
+                  ...d, 
+                  ...editingDeal,
+                  updated_at: new Date().toISOString()
+                } as Deal 
               : d
           ));
         } else {
           // Create local
           const newDeal: Deal = {
             id: `local-${Date.now()}`,
+            product_id: null,
             title: editingDeal.title!,
             image: editingDeal.image,
             price: editingDeal.price,
@@ -438,11 +479,13 @@ export default function AdminDeals() {
             discount: editingDeal.discount,
             moq: editingDeal.moq,
             supplier: editingDeal.supplier,
-            is_verified: editingDeal.is_verified,
-            is_flash_deal: editingDeal.is_flash_deal,
-            is_active: editingDeal.is_active,
-            sort_order: deals.length,
+            is_verified: editingDeal.is_verified || false,
+            is_flash_deal: editingDeal.is_flash_deal || false,
+            is_active: editingDeal.is_active !== undefined ? editingDeal.is_active : true,
+            sort_order: editingDeal.sort_order || deals.length,
             ends_at: editingDeal.ends_at,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
           setDeals([...deals, newDeal]);
         }
@@ -507,14 +550,21 @@ export default function AdminDeals() {
   const toggleActive = (deal: Deal) => {
     // Update local state
     setDeals(deals.map(d => 
-      d.id === deal.id ? { ...d, is_active: !d.is_active } : d
+      d.id === deal.id ? { 
+        ...d, 
+        is_active: !d.is_active,
+        updated_at: new Date().toISOString()
+      } : d
     ));
 
     // Try to update database if table exists
     if (tableExists && !deal.id.startsWith('sample-') && !deal.id.startsWith('local-')) {
       supabase
         .from('deals')
-        .update({ is_active: !deal.is_active })
+        .update({ 
+          is_active: !deal.is_active,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', deal.id)
         .catch(error => {
           console.error('Database update failed:', error);
@@ -744,7 +794,7 @@ export default function AdminDeals() {
                             </Badge>
                           )}
                           <Switch 
-                            checked={deal.is_active || false} 
+                            checked={deal.is_active} 
                             onCheckedChange={() => toggleActive(deal)}
                           />
                         </div>
@@ -818,12 +868,31 @@ export default function AdminDeals() {
               </div>
 
               <div className="space-y-2">
+                <Label>Product ID (optional)</Label>
+                <Input
+                  value={editingDeal?.product_id || ''}
+                  onChange={(e) => setEditingDeal({ ...editingDeal, product_id: e.target.value || null })}
+                  placeholder="Link to a product by UUID"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Sort Order</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editingDeal?.sort_order || 0}
+                  onChange={(e) => setEditingDeal({ ...editingDeal, sort_order: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label>Price ($) *</Label>
                 <Input
                   type="number"
                   step="0.01"
                   value={editingDeal?.price || 0}
-                  onChange={(e) => setEditingDeal({ ...editingDeal, price: parseFloat(e.target.value) })}
+                  onChange={(e) => setEditingDeal({ ...editingDeal, price: parseFloat(e.target.value) || 0 })}
                   required
                 />
               </div>
@@ -834,7 +903,7 @@ export default function AdminDeals() {
                   type="number"
                   step="0.01"
                   value={editingDeal?.original_price || 0}
-                  onChange={(e) => setEditingDeal({ ...editingDeal, original_price: parseFloat(e.target.value) })}
+                  onChange={(e) => setEditingDeal({ ...editingDeal, original_price: parseFloat(e.target.value) || 0 })}
                 />
               </div>
 
@@ -845,7 +914,7 @@ export default function AdminDeals() {
                   min="0"
                   max="100"
                   value={editingDeal?.discount || 0}
-                  onChange={(e) => setEditingDeal({ ...editingDeal, discount: parseInt(e.target.value) })}
+                  onChange={(e) => setEditingDeal({ ...editingDeal, discount: parseInt(e.target.value) || 0 })}
                 />
               </div>
 
@@ -855,7 +924,7 @@ export default function AdminDeals() {
                   type="number"
                   min="1"
                   value={editingDeal?.moq || 1}
-                  onChange={(e) => setEditingDeal({ ...editingDeal, moq: parseInt(e.target.value) })}
+                  onChange={(e) => setEditingDeal({ ...editingDeal, moq: parseInt(e.target.value) || 1 })}
                   required
                 />
               </div>
@@ -900,7 +969,7 @@ export default function AdminDeals() {
 
                 <div className="flex items-center gap-2">
                   <Switch
-                    checked={editingDeal?.is_active || false}
+                    checked={editingDeal?.is_active !== undefined ? editingDeal.is_active : true}
                     onCheckedChange={(checked) => setEditingDeal({ ...editingDeal, is_active: checked })}
                   />
                   <Label>Active (visible on homepage)</Label>
