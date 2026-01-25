@@ -94,20 +94,20 @@ export default function CardOTPVerification({
     const newAttempts = attempts + 1;
     setAttempts(newAttempts);
 
-    // ❌ Block only if max attempts exceeded
-    if (newAttempts >= maxAttempts) {
+    // BLOCK only after exceeding maxAttempts
+    if (newAttempts > maxAttempts) {
       setIsBlocked(true);
       setError(`Too many failed attempts (${maxAttempts}/${maxAttempts}). Checkout blocked.`);
       return;
     }
 
-    // ✅ Simulate failure on first attempt (demo)
+    // Simulated OTP failure on first attempt (demo)
     if (newAttempts === 1) {
       setError('Invalid OTP. Please try again.');
       return;
     }
 
-    // ✅ success from attempt 2 onwards
+    // SUCCESS
     onVerified(code);
   };
 
@@ -118,7 +118,7 @@ export default function CardOTPVerification({
     setIsExpired(false);
     setOtp(new Array(codeLength).fill(''));
     setError('');
-    setAttempts(0);  // reset attempts after resend
+    setAttempts(0);
     onResend();
   };
 
@@ -214,7 +214,6 @@ export default function CardOTPVerification({
           {processing ? 'Verifying...' : 'Verify & Continue'}
         </Button>
 
-        {/* Attempts indicator */}
         {attempts > 0 && !isBlocked && (
           <p className="text-center text-xs text-muted-foreground">
             Attempts: {attempts}/{maxAttempts}
