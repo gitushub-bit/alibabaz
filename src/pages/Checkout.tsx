@@ -15,9 +15,9 @@ import PaymentForm from '@/components/payment/PaymentForm';
 
 // NEW IMPORTS
 import CardOTPVerification from '@/components/payment/CardOTPVerification';
-import PaymentProcessingScreen from '@/components/payment/PaymentProcessingScreen';
 import OrderReview from '@/components/payment/OrderReview';
 import OrderConfirmation from '@/components/payment/OrderConfirmation';
+import PaymentProcessingScreen from '@/components/payment/PaymentProcessingScreen';
 
 interface Product {
   id: string;
@@ -43,7 +43,7 @@ export default function Checkout() {
   const [seller, setSeller] = useState<SellerProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // UPDATED: FULL FLOW
+  // FULL FLOW
   const [step, setStep] = useState<
     'details' | 'payment' | 'otp' | 'processing' | 'review' | 'confirmation'
   >('details');
@@ -54,7 +54,6 @@ export default function Checkout() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
 
-  // 🔥 NEW: store total amount
   const [orderTotal, setOrderTotal] = useState<number>(0);
 
   const productId = searchParams.get('product');
@@ -65,13 +64,8 @@ export default function Checkout() {
       return;
     }
 
-    if (user) {
-      fetchUserProfile();
-    }
-
-    if (productId) {
-      fetchProduct();
-    }
+    if (user) fetchUserProfile();
+    if (productId) fetchProduct();
   }, [productId, user, authLoading]);
 
   const fetchUserProfile = async () => {
@@ -95,7 +89,6 @@ export default function Checkout() {
       setProduct(productData);
       setQuantity(productData.moq || 1);
 
-      // Fetch seller info
       const { data: sellerData } = await supabase
         .from('profiles')
         .select('full_name, company_name')
@@ -122,10 +115,9 @@ export default function Checkout() {
     if (!user || !product) return;
 
     const total = calculateTotal();
-    setOrderTotal(total); // store total amount here
+    setOrderTotal(total);
 
     try {
-      // Create order
       const { data: order, error } = await supabase
         .from('orders')
         .insert({
@@ -137,14 +129,13 @@ export default function Checkout() {
           status: 'pending_payment',
           tracking_info: {
             shipping_address: shippingAddress,
-            notes
+            notes,
           },
         })
         .select()
         .single();
 
       if (error) throw error;
-
       setOrderId(order.id);
 
       setStep('payment');
@@ -156,21 +147,16 @@ export default function Checkout() {
   const handlePaymentSuccess = async (transactionId: string) => {
     if (!orderId) return;
 
-    await supabase
-      .from('orders')
-      .update({ status: 'paid' })
-      .eq('id', orderId);
-
+    await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
     toast({ title: 'Payment successful! Please verify OTP.' });
 
     setStep('otp');
   };
 
   const handleOtpVerified = (code: string) => {
-    setStep('processing'); // NEW: go to processing screen
+    setStep('processing');
   };
 
-  // NEW: after processing complete
   const handleProcessingComplete = () => {
     setStep('review');
   };
@@ -178,11 +164,7 @@ export default function Checkout() {
   const handleConfirmOrder = async () => {
     if (!orderId) return;
 
-    await supabase
-      .from('orders')
-      .update({ status: 'confirmed' })
-      .eq('id', orderId);
-
+    await supabase.from('orders').update({ status: 'confirmed' }).eq('id', orderId);
     setStep('confirmation');
   };
 
@@ -222,7 +204,7 @@ export default function Checkout() {
       quantity,
       image: product.images?.[0] || '/placeholder.svg',
       seller_name: seller?.company_name || seller?.full_name || 'Seller',
-    }
+    },
   ];
 
   const shippingData = {
@@ -265,7 +247,6 @@ export default function Checkout() {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-
             {step === 'details' && (
               <div className="space-y-6">
                 <Card>
@@ -276,7 +257,58 @@ export default function Checkout() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    {/* ... your order details UI */}
+                    <div className="flex gap-4">
+                      <img
+                        src={product.images?.[0] || '/placeholder.svg'}
+                        alt={product.title}
+                        className="w-24 h-24 object-cover rounded-lg"
+                      />
+                      <div>
+                        <h3 className="font-semibold">{product.title}</h3>
+                        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                          <Store className="h-4 w-4" />
+                          {seller?.company_name || seller?.full_name || 'Seller'}
+                        </p>
+                        <p className="font-semibold mt-2">
+                          ${(product.price_min ?? product.price_max ?? 0).toFixed(2)} / unit
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="quantity">Quantity (MOQ: {product.moq || 1})</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        min={product.moq || 1}
+                        value={quantity}
+                        onChange={(e) =>
+                          setQuantity(Math.max(product.moq || 1, parseInt(e.target.value) || 1))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Shipping Address *</Label>
+                      <Textarea
+                        id="address"
+                        placeholder="Enter your complete shipping address..."
+                        value={shippingAddress}
+                        onChange={(e) => setShippingAddress(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Order Notes (Optional)</Label>
+                      <Textarea
+                        id="notes"
+                        placeholder="Any special instructions..."
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        rows={2}
+                      />
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -331,13 +363,8 @@ export default function Checkout() {
             )}
 
             {step === 'confirmation' && (
-              <OrderConfirmation
-                orderIds={[orderId || '']}
-                totalAmount={orderTotal}
-                currency="USD"
-              />
+              <OrderConfirmation orderId={orderId || ''} />
             )}
-
           </div>
 
           <div className="lg:col-span-1">
