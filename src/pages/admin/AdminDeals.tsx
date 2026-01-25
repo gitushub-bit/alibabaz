@@ -26,11 +26,10 @@ import {
   Save,
   X,
   GripVertical,
-  RefreshCw,
-  AlertCircle,
-  Package,
   Wand2,
-  Filter
+  Package,
+  AlertCircle,
+  Clock
 } from 'lucide-react';
 import {
   Dialog,
@@ -44,7 +43,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Deal {
   id: string;
-  product_id: string;
+  product_id?: string;
   title: string;
   image: string | null;
   price: number | null;
@@ -60,7 +59,6 @@ interface Deal {
 }
 
 const emptyDeal: Partial<Deal> = {
-  product_id: '',
   title: '',
   image: '',
   price: 0,
@@ -75,6 +73,58 @@ const emptyDeal: Partial<Deal> = {
   ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
 };
 
+// Sample products for fallback
+const SAMPLE_PRODUCTS = [
+  {
+    title: "Wireless Bluetooth Headphones",
+    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop",
+    price: 29.99,
+    supplier: "Shenzhen Electronics Co.",
+  },
+  {
+    title: "Organic Cotton T-Shirts",
+    image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop",
+    price: 8.50,
+    supplier: "Guangzhou Textiles Ltd.",
+  },
+  {
+    title: "Stainless Steel Water Bottles",
+    image: "https://images.unsplash.com/photo-1523362628745-0c100150b504?w=400&h=400&fit=crop",
+    price: 6.80,
+    supplier: "Dongguan Manufacturing",
+  },
+  {
+    title: "LED Desk Lamp with USB",
+    image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=400&h=400&fit=crop",
+    price: 14.99,
+    supplier: "Foshan Lighting",
+  },
+  {
+    title: "Portable Power Bank 20000mAh",
+    image: "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=400&h=400&fit=crop",
+    price: 22.50,
+    supplier: "Shenzhen Tech Solutions",
+  },
+  {
+    title: "Yoga Mat Non-Slip",
+    image: "https://images.unsplash.com/photo-1599901860904-17e6ed7083a0?w=400&h=400&fit=crop",
+    price: 9.99,
+    supplier: "Hangzhou Sports Goods",
+  },
+  {
+    title: "Wireless Charging Pad",
+    image: "https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?w=400&h=400&fit=crop",
+    price: 12.80,
+    supplier: "Ningbo Electronics",
+  },
+  {
+    title: "Insulated Lunch Bag",
+    image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=400&fit=crop",
+    price: 4.99,
+    supplier: "Wenzhou Packaging",
+  },
+];
+
 export default function AdminDeals() {
   const { isSuperAdmin } = useAuth();
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -84,100 +134,167 @@ export default function AdminDeals() {
   const [autoPopulateDialogOpen, setAutoPopulateDialogOpen] = useState(false);
   const [numberOfDeals, setNumberOfDeals] = useState(20);
   const [editingDeal, setEditingDeal] = useState<Partial<Deal> | null>(null);
-  const [showSampleAlert, setShowSampleAlert] = useState(false);
+  const [usingFallback, setUsingFallback] = useState(false);
 
   useEffect(() => {
     fetchDeals();
   }, []);
 
   const fetchDeals = async () => {
-    const { data } = await supabase
-      .from('deals')
-      .select('*')
-      .order('sort_order', { ascending: true });
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('deals')
+        .select('*')
+        .order('sort_order', { ascending: true });
 
-    if (data) {
-      setDeals(data);
+      if (error) {
+        console.error('Error fetching deals:', error);
+        // If table doesn't exist, show empty state
+        setDeals([]);
+        return;
+      }
+
+      setDeals(data || []);
+    } catch (error) {
+      console.error('Error:', error);
+      setDeals([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const autoPopulateDeals = async () => {
     try {
       setSaving(true);
-      toast({ title: 'Auto-populating deals from products...' });
-
-      // First, clear all existing deals
-      await supabase.from('deals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-      // Fetch random products
-      const { data: products } = await supabase
+      setUsingFallback(false);
+      
+      // First check if we have any products in the database
+      const { data: products, error: productsError } = await supabase
         .from('products')
-        .select(`
-          id,
-          title,
-          images,
-          price_min,
-          price_max,
-          original_price,
-          discount,
-          moq,
-          seller_id,
-          categories!inner(name),
-          suppliers!inner(company_name, verified, response_rate)
-        `)
+        .select('id, title, images, price_min, discount, moq, seller_id')
         .eq('published', true)
-        .limit(numberOfDeals)
-        .order('RANDOM()');
+        .limit(numberOfDeals);
 
-      if (!products || products.length === 0) {
-        toast({ title: 'No products found to create deals from', variant: 'destructive' });
-        return;
+      let dealsToInsert;
+
+      if (productsError || !products || products.length === 0) {
+        // Use fallback sample products
+        setUsingFallback(true);
+        toast({ 
+          title: 'No products found, creating sample deals',
+          description: 'Create products first for more realistic deals'
+        });
+        
+        dealsToInsert = SAMPLE_PRODUCTS.map((product, index) => {
+          const randomDiscount = Math.floor(Math.random() * 50) + 10;
+          const isFlashDeal = Math.random() > 0.5;
+          
+          return {
+            title: product.title,
+            image: product.image,
+            price: product.price,
+            original_price: product.price * (1 + randomDiscount/100),
+            discount: randomDiscount,
+            moq: Math.floor(Math.random() * 100) + 1,
+            supplier: product.supplier,
+            is_verified: true,
+            is_flash_deal: isFlashDeal,
+            is_active: true,
+            sort_order: index,
+            ends_at: isFlashDeal 
+              ? new Date(Date.now() + (Math.floor(Math.random() * 7) + 1) * 24 * 60 * 60 * 1000).toISOString()
+              : null,
+          };
+        });
+      } else {
+        // Use real products from database
+        toast({ title: 'Creating deals from your products...' });
+        
+        dealsToInsert = await Promise.all(
+          products.map(async (product, index) => {
+            // Try to get supplier info
+            let supplierName = 'Verified Supplier';
+            let isVerified = false;
+            
+            try {
+              const { data: supplier } = await supabase
+                .from('suppliers')
+                .select('company_name, verified')
+                .eq('user_id', product.seller_id)
+                .single();
+              
+              if (supplier) {
+                supplierName = supplier.company_name || 'Verified Supplier';
+                isVerified = supplier.verified || false;
+              }
+            } catch (error) {
+              // Fallback to profile
+              try {
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('full_name, company_name')
+                  .eq('user_id', product.seller_id)
+                  .single();
+                
+                if (profile) {
+                  supplierName = profile.company_name || profile.full_name || 'Verified Supplier';
+                }
+              } catch (error) {
+                // Use default supplier name
+              }
+            }
+
+            const randomDiscount = Math.floor(Math.random() * 50) + 10;
+            const isFlashDeal = Math.random() > 0.5;
+            const basePrice = product.price_min || 10 + Math.random() * 100;
+            const originalPrice = basePrice * (1.2 + Math.random() * 0.3);
+            const dealPrice = basePrice * (1 - randomDiscount / 100);
+
+            return {
+              product_id: product.id,
+              title: product.title,
+              image: product.images?.[0] || SAMPLE_PRODUCTS[index % SAMPLE_PRODUCTS.length].image,
+              price: parseFloat(dealPrice.toFixed(2)),
+              original_price: parseFloat(originalPrice.toFixed(2)),
+              discount: randomDiscount,
+              moq: product.moq || Math.floor(Math.random() * 100) + 1,
+              supplier: supplierName,
+              is_verified: isVerified,
+              is_flash_deal: isFlashDeal,
+              is_active: true,
+              sort_order: index,
+              ends_at: isFlashDeal 
+                ? new Date(Date.now() + (Math.floor(Math.random() * 7) + 1) * 24 * 60 * 60 * 1000).toISOString()
+                : null,
+            };
+          })
+        );
       }
 
-      // Prepare deals to insert
-      const dealsToInsert = products.map((product, index) => {
-        const randomDiscount = Math.floor(Math.random() * 50) + 10; // 10-60% discount
-        const isFlashDeal = Math.random() > 0.5; // 50% chance of being flash deal
-        const endsAt = isFlashDeal 
-          ? new Date(Date.now() + (Math.floor(Math.random() * 7) + 1) * 24 * 60 * 60 * 1000).toISOString()
-          : null;
+      // First, delete all existing deals
+      await supabase.from('deals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-        // Calculate deal price (apply discount)
-        const basePrice = product.price_min || 0;
-        const originalPrice = product.original_price || basePrice * 1.3; // Add 30% if no original price
-        const dealPrice = basePrice * (1 - randomDiscount / 100);
-
-        return {
-          product_id: product.id,
-          title: product.title,
-          image: product.images?.[0] || null,
-          price: parseFloat(dealPrice.toFixed(2)),
-          original_price: parseFloat(originalPrice.toFixed(2)),
-          discount: randomDiscount,
-          moq: product.moq || Math.floor(Math.random() * 100) + 1,
-          supplier: product.suppliers?.company_name || 'Verified Supplier',
-          is_verified: product.suppliers?.verified || false,
-          is_flash_deal: isFlashDeal,
-          is_active: true,
-          sort_order: index,
-          ends_at: endsAt,
-        };
-      });
-
-      // Insert all deals
-      const { error } = await supabase
+      // Insert new deals
+      const { error: insertError } = await supabase
         .from('deals')
         .insert(dealsToInsert);
 
-      if (error) throw error;
+      if (insertError) throw insertError;
 
-      toast({ title: `Created ${dealsToInsert.length} deals from products!` });
+      toast({ 
+        title: `✅ Created ${dealsToInsert.length} deals!`,
+        description: usingFallback 
+          ? 'Sample deals created. Add real products for better results.'
+          : 'Deals created from your products.'
+      });
+
       fetchDeals();
       setAutoPopulateDialogOpen(false);
     } catch (error: any) {
+      console.error('Error auto-populating deals:', error);
       toast({ 
-        title: 'Error auto-populating deals', 
+        title: 'Error creating deals', 
         description: error.message,
         variant: 'destructive' 
       });
@@ -196,7 +313,7 @@ export default function AdminDeals() {
 
     try {
       if (editingDeal.id) {
-        // Update
+        // Update existing deal
         const { error } = await supabase
           .from('deals')
           .update({
@@ -211,13 +328,14 @@ export default function AdminDeals() {
             is_flash_deal: editingDeal.is_flash_deal,
             is_active: editingDeal.is_active,
             sort_order: editingDeal.sort_order,
+            ends_at: editingDeal.ends_at,
           })
           .eq('id', editingDeal.id);
 
         if (error) throw error;
         toast({ title: 'Deal updated successfully' });
       } else {
-        // Create
+        // Create new deal
         const { error } = await supabase
           .from('deals')
           .insert([{
@@ -232,6 +350,7 @@ export default function AdminDeals() {
             is_flash_deal: editingDeal.is_flash_deal,
             is_active: editingDeal.is_active,
             sort_order: deals.length,
+            ends_at: editingDeal.ends_at,
           }]);
 
         if (error) throw error;
@@ -260,22 +379,7 @@ export default function AdminDeals() {
       toast({ title: 'Error deleting deal', variant: 'destructive' });
     } else {
       setDeals(deals.filter(d => d.id !== id));
-      toast({ title: 'Deal deleted' });
-    }
-  };
-
-  const toggleActive = async (deal: Deal) => {
-    const { error } = await supabase
-      .from('deals')
-      .update({ is_active: !deal.is_active })
-      .eq('id', deal.id);
-
-    if (error) {
-      toast({ title: 'Error updating deal', variant: 'destructive' });
-    } else {
-      setDeals(deals.map(d => 
-        d.id === deal.id ? { ...d, is_active: !d.is_active } : d
-      ));
+      toast({ title: 'Deal deleted successfully' });
     }
   };
 
@@ -293,6 +397,35 @@ export default function AdminDeals() {
       setDeals([]);
       toast({ title: 'All deals deleted' });
     }
+  };
+
+  const toggleActive = async (deal: Deal) => {
+    const { error } = await supabase
+      .from('deals')
+      .update({ is_active: !deal.is_active })
+      .eq('id', deal.id);
+
+    if (error) {
+      toast({ title: 'Error updating deal', variant: 'destructive' });
+    } else {
+      setDeals(deals.map(d => 
+        d.id === deal.id ? { ...d, is_active: !d.is_active } : d
+      ));
+      toast({ title: `Deal ${!deal.is_active ? 'activated' : 'deactivated'}` });
+    }
+  };
+
+  const formatTimeLeft = (endsAt: string) => {
+    const endTime = new Date(endsAt).getTime();
+    const now = Date.now();
+    const diff = endTime - now;
+    
+    if (diff <= 0) return 'Ended';
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return `${hours}h ${minutes}m`;
   };
 
   if (loading) {
@@ -322,7 +455,7 @@ export default function AdminDeals() {
             className="border-green-600 text-green-700 hover:bg-green-50"
           >
             <Wand2 className="h-4 w-4 mr-2" />
-            Auto-populate from Products
+            Auto-populate Deals
           </Button>
           <Button onClick={() => { setEditingDeal(emptyDeal); setDialogOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" />
@@ -330,6 +463,15 @@ export default function AdminDeals() {
           </Button>
         </div>
       </div>
+
+      {usingFallback && deals.length > 0 && (
+        <Alert className="bg-amber-50 border-amber-200">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertDescription>
+            Showing sample deals. Add real products to create deals from your inventory.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -380,7 +522,7 @@ export default function AdminDeals() {
       <Card>
         <CardHeader>
           <CardTitle>All Deals</CardTitle>
-          <CardDescription>Drag to reorder, toggle visibility, or edit details</CardDescription>
+          <CardDescription>Toggle visibility, edit details, or delete</CardDescription>
         </CardHeader>
         <CardContent>
           {deals.length === 0 ? (
@@ -388,7 +530,7 @@ export default function AdminDeals() {
               <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">No deals yet</h3>
               <p className="text-muted-foreground mb-6">
-                Create deals manually or auto-populate from existing products
+                Create deals manually or auto-populate from products
               </p>
               <div className="flex items-center justify-center gap-4">
                 <Button 
@@ -403,7 +545,7 @@ export default function AdminDeals() {
                   className="bg-green-600 hover:bg-green-700"
                 >
                   <Wand2 className="h-4 w-4 mr-2" />
-                  Auto-populate from Products
+                  Auto-populate Deals
                 </Button>
               </div>
             </div>
@@ -412,21 +554,18 @@ export default function AdminDeals() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12"></TableHead>
                     <TableHead>Product</TableHead>
                     <TableHead>Price</TableHead>
                     <TableHead>Discount</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Time Left</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {deals.map((deal) => (
                     <TableRow key={deal.id} className={!deal.is_active ? 'opacity-50' : ''}>
-                      <TableCell>
-                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <img 
@@ -456,8 +595,10 @@ export default function AdminDeals() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {deal.discount && (
+                        {deal.discount && deal.discount > 0 ? (
                           <Badge variant="destructive">{deal.discount}% OFF</Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -481,6 +622,18 @@ export default function AdminDeals() {
                             onCheckedChange={() => toggleActive(deal)}
                           />
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {deal.ends_at ? (
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-orange-500" />
+                            <span className="text-sm font-medium">
+                              {formatTimeLeft(deal.ends_at)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -509,7 +662,7 @@ export default function AdminDeals() {
         </CardContent>
       </Card>
 
-      {/* Add Deal Dialog */}
+      {/* Add/Edit Deal Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -520,11 +673,12 @@ export default function AdminDeals() {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-2">
-                <Label>Title</Label>
+                <Label>Title *</Label>
                 <Input
                   value={editingDeal?.title || ''}
                   onChange={(e) => setEditingDeal({ ...editingDeal, title: e.target.value })}
                   placeholder="Product title"
+                  required
                 />
               </div>
 
@@ -533,16 +687,18 @@ export default function AdminDeals() {
                 <Input
                   value={editingDeal?.image || ''}
                   onChange={(e) => setEditingDeal({ ...editingDeal, image: e.target.value })}
-                  placeholder="https://..."
+                  placeholder="https://images.unsplash.com/..."
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Price ($)</Label>
+                <Label>Price ($) *</Label>
                 <Input
                   type="number"
+                  step="0.01"
                   value={editingDeal?.price || 0}
                   onChange={(e) => setEditingDeal({ ...editingDeal, price: parseFloat(e.target.value) })}
+                  required
                 />
               </div>
 
@@ -550,6 +706,7 @@ export default function AdminDeals() {
                 <Label>Original Price ($)</Label>
                 <Input
                   type="number"
+                  step="0.01"
                   value={editingDeal?.original_price || 0}
                   onChange={(e) => setEditingDeal({ ...editingDeal, original_price: parseFloat(e.target.value) })}
                 />
@@ -559,17 +716,21 @@ export default function AdminDeals() {
                 <Label>Discount (%)</Label>
                 <Input
                   type="number"
+                  min="0"
+                  max="100"
                   value={editingDeal?.discount || 0}
                   onChange={(e) => setEditingDeal({ ...editingDeal, discount: parseInt(e.target.value) })}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>MOQ</Label>
+                <Label>MOQ *</Label>
                 <Input
                   type="number"
+                  min="1"
                   value={editingDeal?.moq || 1}
                   onChange={(e) => setEditingDeal({ ...editingDeal, moq: parseInt(e.target.value) })}
+                  required
                 />
               </div>
 
@@ -582,7 +743,19 @@ export default function AdminDeals() {
                 />
               </div>
 
-              <div className="flex items-center gap-4">
+              <div className="space-y-2">
+                <Label>End Date (for flash deals)</Label>
+                <Input
+                  type="datetime-local"
+                  value={editingDeal?.ends_at ? new Date(editingDeal.ends_at).toISOString().slice(0, 16) : ''}
+                  onChange={(e) => setEditingDeal({ 
+                    ...editingDeal, 
+                    ends_at: e.target.value ? new Date(e.target.value).toISOString() : null 
+                  })}
+                />
+              </div>
+
+              <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={editingDeal?.is_verified || false}
@@ -590,9 +763,7 @@ export default function AdminDeals() {
                   />
                   <Label>Verified Supplier</Label>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={editingDeal?.is_flash_deal || false}
@@ -600,9 +771,7 @@ export default function AdminDeals() {
                   />
                   <Label>Flash Deal</Label>
                 </div>
-              </div>
 
-              <div className="col-span-2 flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={editingDeal?.is_active || false}
@@ -621,7 +790,7 @@ export default function AdminDeals() {
             </Button>
             <Button onClick={handleSave} disabled={saving}>
               <Save className="h-4 w-4 mr-2" />
-              {saving ? 'Saving...' : 'Save Deal'}
+              {saving ? 'Saving...' : editingDeal?.id ? 'Update Deal' : 'Create Deal'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -633,10 +802,10 @@ export default function AdminDeals() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wand2 className="h-5 w-5 text-green-600" />
-              Auto-populate Deals from Products
+              Auto-populate Deals
             </DialogTitle>
             <DialogDescription>
-              This will create deals from your existing products. Existing deals will be deleted.
+              Create multiple deals automatically from your products
             </DialogDescription>
           </DialogHeader>
 
@@ -648,20 +817,27 @@ export default function AdminDeals() {
                   id="numberOfDeals"
                   type="number"
                   min="1"
-                  max="100"
+                  max="50"
                   value={numberOfDeals}
-                  onChange={(e) => setNumberOfDeals(parseInt(e.target.value) || 20)}
+                  onChange={(e) => setNumberOfDeals(Math.min(50, Math.max(1, parseInt(e.target.value) || 20)))}
                 />
                 <span className="text-sm text-muted-foreground whitespace-nowrap">
-                  (max: 100)
+                  (1-50)
                 </span>
               </div>
             </div>
 
-            <Alert className="bg-amber-50 border-amber-200">
-              <AlertCircle className="h-4 w-4 text-amber-600" />
-              <AlertDescription>
-                This will delete all existing deals and create new ones from random products.
+            <Alert className="bg-blue-50 border-blue-200">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-sm">
+                This will: 
+                <ul className="list-disc list-inside mt-1 ml-2">
+                  <li>Delete all existing deals</li>
+                  <li>Try to use your real products first</li>
+                  <li>Fall back to sample deals if no products found</li>
+                  <li>Apply random discounts (10-60%)</li>
+                  <li>Randomly create flash deals with countdowns</li>
+                </ul>
               </AlertDescription>
             </Alert>
           </div>
