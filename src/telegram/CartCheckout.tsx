@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart, CartItem } from '@/hooks/useCart';
 import { usePaymentSettings } from '@/hooks/usePaymentSettings';
-import { useCurrency } from '@/hooks/useCurrency';
+import { useCurrency as useAppCurrency } from '@/hooks/useCurrency';
 import { toast } from '@/hooks/use-toast';
 import { Header } from '@/components/layout/Header';
 
@@ -33,7 +33,7 @@ export default function CartCheckout() {
   const { user, loading: authLoading } = useAuth();
   const { items, clearCart, total } = useCart();
   const { settings: paymentSettings, loading: settingsLoading } = usePaymentSettings();
-  const { currency, formatPriceOnly, convertFromUSD } = useCurrency();
+  const { currency, formatPriceOnly, convertFromUSD } = useAppCurrency();
 
   const [step, setStep] = useState<CheckoutStep>('shipping');
   const [shippingData, setShippingData] = useState<ShippingFormData | null>(null);

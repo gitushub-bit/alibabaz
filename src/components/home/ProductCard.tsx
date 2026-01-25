@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Flame, Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
-import { useCurrency } from '@/hooks/useCurrency';
+import { useCurrency as useAppCurrency } from '@/hooks/useCurrency';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ProductCardProps {
@@ -41,7 +41,7 @@ export const ProductCard = ({
   showConversion = false,
   openInNewTab = false,
 }: ProductCardProps) => {
-  const { formatPriceOnly, currency } = useCurrency();
+  const { formatPriceOnly, currency } = useAppCurrency();
 
   const [reviews, setReviews] = useState<any[]>([]);
   const [averageRating, setAverageRating] = useState<number>(0);
