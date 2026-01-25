@@ -69,8 +69,8 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/products" element={<Products />} />
                 <Route path="/product/:slug" element={<ProductDetail />} />
-                <Route path="/product-insights/:id" element={<ProductInsights />} />
-                <Route path="/product-insights/:type/:id" element={<ProductInsights />} />
+<Route path="/product-insights/:type/:id" element={<ProductInsights />} />
+  <Route path="/product-insights/:id" element={<ProductInsights />} />
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/messages/:conversationId" element={<Messages />} />
                 <Route path="/cart" element={<Cart />} />
