@@ -316,44 +316,49 @@ export default function AdminDeals() {
   };
 
   const fetchProducts = async () => {
-    try {
-      setProductsLoading(true);
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
+  try {
+    setProductsLoading(true);
+    
+    const { data, error } = await supabase
+      .from('products')
+      .select(`
+        id,
+        title,
+        images,
+        price_min,
+        price_max,
+        moq,
+        seller_id,
+        suppliers!products_seller_id_fkey (
           id,
-          name,
-          image_url,
-          price,
-          min_order_quantity,
-          supplier_id,
-          suppliers (
-            company_name,
-            is_verified
-          )
-        `)
-        .limit(50)
-        .order('created_at', { ascending: false });
+          company_name,
+          verified
+        )
+      `)
+      .eq('published', true)  // Only get published products
+      .limit(50)
+      .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching products:', error);
-        toast({
-          title: 'Error loading products',
-          description: 'Cannot fetch products for auto-population',
-          variant: 'destructive'
-        });
-        return [];
-      }
-
-      return data || [];
-    } catch (error) {
-      console.error('Error:', error);
+    if (error) {
+      console.error('Error fetching products:', error);
+      toast({
+        title: 'Error loading products',
+        description: 'Cannot fetch products for auto-population',
+        variant: 'destructive'
+      });
       return [];
-    } finally {
-      setProductsLoading(false);
     }
-  };
 
+    console.log('Fetched products:', data);
+    return data || [];
+  } catch (error) {
+    console.error('Error:', error);
+    return [];
+  } finally {
+    setProductsLoading(false);
+  }
+};
+  
   const createSampleDeals = async () => {
     try {
       setSaving(true);
@@ -427,31 +432,100 @@ export default function AdminDeals() {
     }
   };
 
-  const createDealsFromProducts = async () => {
-    try {
-      setSaving(true);
-      toast({ title: 'Fetching products and creating deals...' });
+ const createDealsFromProducts = async () => {
+  try {
+    setSaving(true);
+    toast({ title: 'Fetching products and creating deals...' });
 
-      // Fetch products from database
-      const productsData = await fetchProducts();
+    // Fetch products from database
+    const productsData = await fetchProducts();
+    
+    if (productsData.length === 0) {
+      toast({
+        title: 'No products found',
+        description: 'Cannot create deals from empty product list',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Try to clear existing deals if table exists
+    if (tableExists) {
+      await supabase
+        .from('deals')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000')
+        .catch(() => {});
+    }
+
+    // Prepare deals from products
+    const dealsToInsert = productsData.slice(0, numberOfProducts).map((product, index) => {
+      // Get the first image from the array or use default
+      const firstImage = product.images && product.images.length > 0 
+        ? product.images[0] 
+        : 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop&auto=format';
       
-      if (productsData.length === 0) {
-        toast({
-          title: 'No products found',
-          description: 'Cannot create deals from empty product list',
-          variant: 'destructive'
-        });
-        return;
-      }
+      // Use price_min or calculate average if both exist
+      const productPrice = product.price_min || 
+        (product.price_min && product.price_max ? (product.price_min + product.price_max) / 2 : 49.99);
+      
+      const originalPrice = productPrice * 2;
+      const discount = Math.round(((originalPrice - productPrice) / originalPrice) * 100);
+      
+      return {
+        title: product.title,
+        image: firstImage,
+        price: productPrice,
+        original_price: originalPrice,
+        discount: Math.min(discount, 70), // Cap at 70% discount
+        moq: product.moq || 50,
+        supplier: product.suppliers?.company_name || 'Verified Supplier',
+        is_verified: product.suppliers?.verified || true,
+        is_flash_deal: index % 3 === 0, // Make every 3rd product a flash deal
+        is_active: true,
+        sort_order: index,
+        ends_at: index % 3 === 0 ? new Date(Date.now() + (index + 1) * 24 * 60 * 60 * 1000).toISOString() : null,
+        product_id: product.id, // Link to the actual product
+      };
+    });
 
-      // Try to clear existing deals if table exists
-      if (tableExists) {
-        await supabase
-          .from('deals')
-          .delete()
-          .neq('id', '00000000-0000-0000-0000-000000000000')
-          .catch(() => {});
+    // Try to save to database if table exists
+    if (tableExists) {
+      const { error } = await supabase
+        .from('deals')
+        .insert(dealsToInsert);
+
+      if (error) {
+        console.error('Database insert failed:', error);
+        throw new Error('Database insert failed');
       }
+    }
+
+    // Update local state
+    setDeals(dealsToInsert.map((deal, index) => ({
+      id: tableExists ? `db-${Date.now()}-${index}` : `product-${index}`,
+      ...deal,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })));
+
+    toast({
+      title: `✅ Created ${dealsToInsert.length} deals from products!`,
+      description: tableExists ? 'Saved to database' : 'Using local data'
+    });
+
+    setAutoFromProductsDialogOpen(false);
+  } catch (error: any) {
+    console.error('Error creating deals from products:', error);
+    toast({
+      title: 'Error creating deals from products',
+      description: error.message || 'Please try again',
+      variant: 'destructive'
+    });
+  } finally {
+    setSaving(false);
+  }
+};
 
       // Prepare deals from products
       const dealsToInsert = productsData.slice(0, numberOfProducts).map((product, index) => {
