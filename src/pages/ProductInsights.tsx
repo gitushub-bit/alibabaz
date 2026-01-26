@@ -52,7 +52,7 @@ interface ProductData {
   country_flag?: string;
   category?: string;
   supplier?: string;
-  seller_id?: string;
+  seller_id: string; // Now required
   moq?: number;
   supply_ability?: string;
   lead_time?: string;
@@ -68,6 +68,8 @@ interface ProductData {
 }
 
 interface SupplierData {
+  id: string;
+  user_id: string;
   company_name: string;
   response_rate: number;
   verified: boolean;
@@ -83,6 +85,10 @@ interface SupplierData {
   gold_supplier: boolean;
   assessed_supplier: boolean;
   response_time?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  website?: string;
 }
 
 interface Review {
@@ -99,7 +105,7 @@ interface Review {
   product_attributes?: Record<string, string>;
 }
 
-// Fallback product data in case no product is found
+// Fallback product data
 const FALLBACK_PRODUCT_ID = 'f79d4b6c-4a7d-4e5a-b8c3-2e8d9b7f1a2e';
 
 export default function ProductInsights() {
@@ -121,6 +127,77 @@ export default function ProductInsights() {
 
   const imagesRef = useRef<HTMLDivElement>(null);
 
+  // Fetch a random verified seller from database or create fallback
+  const fetchRandomSeller = async () => {
+    try {
+      // Try to get any verified seller from database
+      const { data: sellers, error } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('verified', true)
+        .limit(1)
+        .single();
+
+      if (error || !sellers) {
+        console.log('No verified sellers found, creating fallback seller');
+        return createFallbackSeller();
+      }
+
+      return {
+        id: sellers.id,
+        user_id: sellers.user_id || `seller-${Date.now()}`,
+        company_name: sellers.company_name || 'Verified Supplier',
+        response_rate: sellers.response_rate || 85,
+        verified: sellers.verified || true,
+        business_type: sellers.business_type || 'Manufacturer',
+        year_established: sellers.year_established || 2015,
+        employees: sellers.employees || '51-200',
+        main_markets: sellers.main_markets || ['Global', 'North America', 'Europe'],
+        total_products: sellers.total_products || 128,
+        page_views: sellers.page_views || 2450,
+        inquiries: sellers.inquiries || 156,
+        online_status: sellers.online_status !== false,
+        trade_assurance: sellers.trade_assurance || true,
+        gold_supplier: sellers.gold_supplier || true,
+        assessed_supplier: sellers.assessed_supplier || true,
+        response_time: sellers.response_time || 'Within 24 hours',
+        email: sellers.email,
+        phone: sellers.phone,
+        address: sellers.address,
+        website: sellers.website,
+      };
+    } catch (error) {
+      console.error('Error fetching seller:', error);
+      return createFallbackSeller();
+    }
+  };
+
+  const createFallbackSeller = (): SupplierData => {
+    return {
+      id: 'fallback-seller-id',
+      user_id: user?.id || `fallback-user-${Date.now()}`,
+      company_name: 'Global Suppliers Inc.',
+      response_rate: 85,
+      verified: true,
+      business_type: 'Manufacturer & Exporter',
+      year_established: 2015,
+      employees: '51-200',
+      main_markets: ['Global', 'North America', 'Europe', 'Asia'],
+      total_products: 128,
+      page_views: 2450,
+      inquiries: 156,
+      online_status: true,
+      trade_assurance: true,
+      gold_supplier: true,
+      assessed_supplier: true,
+      response_time: 'Within 24 hours',
+      email: 'contact@globalsuppliers.com',
+      phone: '+1 (555) 123-4567',
+      address: '123 Trade Center, Shanghai, China',
+      website: 'https://globalsuppliers.com',
+    };
+  };
+
   useEffect(() => {
     if (id) {
       fetchProduct();
@@ -134,6 +211,10 @@ export default function ProductInsights() {
       const productType = type || 'product';
       let productData: any = null;
       let foundProduct = false;
+
+      // First, fetch or create a seller to ensure we have seller data
+      const sellerData = await fetchRandomSeller();
+      setSupplier(sellerData);
 
       // Strategy 1: Try based on the type parameter
       if (productType === 'deal') {
@@ -156,12 +237,12 @@ export default function ProductInsights() {
 
       if (productData) {
         foundProduct = true;
-        await processProductData(productData);
+        await processProductData(productData, sellerData);
       }
 
-      // Strategy 3: If still not found, use a fallback product
+      // Strategy 3: If still not found, create a product linked to the seller
       if (!foundProduct) {
-        console.log('No product found, using fallback...');
+        console.log('No product found, creating product with seller...');
         
         // Try to get any published product from the database
         const { data: fallbackProducts } = await supabase
@@ -174,12 +255,12 @@ export default function ProductInsights() {
         if (fallbackProducts) {
           productData = fallbackProducts;
           foundProduct = true;
-          await processProductData(productData);
+          await processProductData(productData, sellerData);
         } else {
-          // Last resort: create a mock product
-          productData = createMockProduct();
+          // Create a mock product linked to the seller
+          productData = createMockProduct(sellerData);
           foundProduct = true;
-          await processProductData(productData);
+          await processProductData(productData, sellerData);
           
           // Show toast message
           toast.info('Showing a sample product. Real products will load from your database.');
@@ -187,7 +268,7 @@ export default function ProductInsights() {
       }
 
       // Fetch related products
-      await fetchRelatedProducts();
+      await fetchRelatedProducts(sellerData);
 
     } catch (error) {
       console.error('Error fetching product:', error);
@@ -196,9 +277,10 @@ export default function ProductInsights() {
       if (retryCount < 2) {
         setRetryCount(prev => prev + 1);
       } else {
-        // After retries, create a mock product
-        const mockProduct = createMockProduct();
-        await processProductData(mockProduct);
+        // After retries, create a mock product with seller
+        const sellerData = await fetchRandomSeller();
+        const mockProduct = createMockProduct(sellerData);
+        await processProductData(mockProduct, sellerData);
         toast.error('Failed to load product. Showing sample product instead.');
       }
     } finally {
@@ -209,7 +291,7 @@ export default function ProductInsights() {
   const fetchFromProductsTable = async () => {
     const { data, error } = await supabase
       .from('products')
-      .select('*, category:categories(name)')
+      .select('*, category:categories(name), seller:profiles(*)')
       .eq('id', id)
       .eq('published', true)
       .maybeSingle();
@@ -224,7 +306,7 @@ export default function ProductInsights() {
   const fetchFromDealsTable = async () => {
     const { data, error } = await supabase
       .from('deals')
-      .select('*')
+      .select('*, seller:profiles(*)')
       .eq('id', id)
       .eq('is_active', true)
       .maybeSingle();
@@ -245,10 +327,10 @@ export default function ProductInsights() {
     const dealData = await fetchFromDealsTable();
     if (dealData) return { ...dealData, source: 'deals' };
 
-    // Try featured products (if you have such a table)
+    // Try featured products
     const { data: featuredData } = await supabase
       .from('featured_products')
-      .select('*')
+      .select('*, seller:profiles(*)')
       .eq('id', id)
       .maybeSingle();
     
@@ -257,131 +339,147 @@ export default function ProductInsights() {
     return null;
   };
 
-  const createMockProduct = () => {
+  const createMockProduct = (seller: SupplierData): any => {
     return {
       id: id || FALLBACK_PRODUCT_ID,
-      title: 'Sample Product - Add Your Products in Admin Panel',
+      title: 'Premium Wireless Headphones - Sample Product',
       description: 'This is a sample product. To see real products, please add products through the admin panel. You can manage products, set prices, upload images, and configure all product details.',
-      images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop'],
+      images: [
+        'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop',
+        'https://images.unsplash.com/photo-1484704849700-f032a568e944?w=800&h=800&fit=crop',
+        'https://images.unsplash.com/photo-1583394838336-acd977736f90?w-800&h=800&fit=crop'
+      ],
       price: '29.99',
       original_price: '49.99',
       min_price: '25.00',
       max_price: '35.00',
       country: 'China',
+      country_flag: '🇨🇳',
       category: 'Electronics',
-      supplier: 'Sample Supplier Co.',
-      seller_id: user?.id || '',
+      supplier: seller.company_name,
+      seller_id: seller.user_id, // Use the seller's user_id
       moq: 50,
       supply_ability: '5000 Piece/Pieces per Month',
       lead_time: '15-30 days',
-      payment_terms: ['T/T', 'PayPal', 'Credit Card'],
-      packaging_details: 'Standard export packaging',
+      payment_terms: ['T/T', 'PayPal', 'Credit Card', 'Western Union'],
+      packaging_details: 'Standard export packaging with protective foam',
       discount: 40,
       is_verified: true,
+      slug: 'premium-wireless-headphones',
       type: 'product' as const,
       specifications: {
-        'Material': 'Premium Plastic',
-        'Color': 'Black, White, Blue',
-        'Size': 'Standard',
-        'Weight': '150g',
-        'Warranty': '1 Year',
+        'Brand Name': 'AudioTech',
+        'Model Number': 'ATH-M50xBT',
+        'Material': 'Premium Plastic & Metal',
+        'Color': 'Black, White, Blue, Red',
+        'Connectivity': 'Bluetooth 5.0',
+        'Battery Life': '40 hours',
+        'Charging Time': '2 hours',
+        'Weight': '285g',
+        'Warranty': '2 Years',
+        'Certification': 'CE, FCC, RoHS'
       },
       features: [
-        'High quality materials',
-        'Durable construction',
-        'Easy to use',
-        'CE Certified',
+        'Premium sound quality with noise cancellation',
+        '40-hour battery life with quick charge',
+        'Comfortable over-ear design with memory foam',
+        'Built-in microphone for hands-free calls',
+        'Foldable design for easy portability',
+        'Multi-point connection (connect to 2 devices)'
       ],
-      certifications: ['CE', 'ROHS'],
+      certifications: ['CE', 'FCC', 'RoHS', 'REACH'],
     };
   };
 
-  const processProductData = async (data: any) => {
+  const processProductData = async (data: any, fallbackSeller: SupplierData) => {
+    // Extract seller info from data or use fallback
+    let sellerInfo = fallbackSeller;
+    let productSellerId = data.seller_id || data.seller?.id || fallbackSeller.user_id;
+    
+    // Try to get supplier data from profiles or suppliers table
+    if (data.seller || data.seller_id) {
+      try {
+        const { data: supplierData } = await supabase
+          .from('suppliers')
+          .select('*')
+          .eq('user_id', productSellerId)
+          .single();
+
+        if (supplierData) {
+          sellerInfo = {
+            id: supplierData.id,
+            user_id: supplierData.user_id,
+            company_name: supplierData.company_name || data.supplier || 'Verified Supplier',
+            response_rate: supplierData.response_rate || 85,
+            verified: supplierData.verified || false,
+            business_type: supplierData.business_type || 'Manufacturer',
+            year_established: supplierData.year_established || 2015,
+            employees: supplierData.employees || '51-200',
+            main_markets: supplierData.main_markets || ['Global', 'North America', 'Europe'],
+            total_products: supplierData.total_products || 128,
+            page_views: supplierData.page_views || 2450,
+            inquiries: supplierData.inquiries || 156,
+            online_status: supplierData.online_status !== false,
+            trade_assurance: supplierData.trade_assurance || true,
+            gold_supplier: supplierData.gold_supplier || true,
+            assessed_supplier: supplierData.assessed_supplier || true,
+            response_time: supplierData.response_time || 'Within 24 hours',
+            email: supplierData.email,
+            phone: supplierData.phone,
+            address: supplierData.address,
+            website: supplierData.website,
+          };
+        }
+      } catch (error) {
+        console.log('Using fallback seller data');
+      }
+    }
+
+    setSupplier(sellerInfo);
+
     // Transform data to match ProductData interface
     const transformedProduct: ProductData = {
       id: data.id,
-      title: data.title || 'Unnamed Product',
+      title: data.title || data.name || 'Unnamed Product',
       description: data.description || 'No description available.',
-      images: data.images || data.image ? [data.image] : ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop'],
+      images: data.images || data.image ? [data.image] : [
+        'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop',
+        'https://images.unsplash.com/photo-1484704849700-f032a568e944?w=800&h=800&fit=crop'
+      ],
       price: data.price?.toString() || data.price_min?.toString() || 'Contact for price',
       original_price: data.original_price?.toString(),
       min_price: data.min_price?.toString() || data.price_min?.toString(),
       max_price: data.max_price?.toString() || data.price_max?.toString(),
-      country: data.country || 'Global',
-      category: data.category?.name || data.category || 'General',
-      supplier: data.supplier || 'Verified Supplier',
-      seller_id: data.seller_id,
-      moq: data.moq || 1,
-      supply_ability: data.supply_ability || 'Contact supplier for details',
-      lead_time: data.lead_time || '15-30 days',
-      payment_terms: data.payment_terms || ['T/T', 'L/C', 'Western Union', 'PayPal'],
-      packaging_details: data.packaging_details || 'Standard export packaging',
-      discount: data.discount,
-      is_verified: data.is_verified || data.verified || false,
+      country: data.country || sellerInfo.address?.split(',').pop()?.trim() || 'Global',
+      country_flag: data.country_flag || '🌍',
+      category: data.category?.name || data.category || data.type || 'General',
+      supplier: data.supplier || sellerInfo.company_name,
+      seller_id: productSellerId, // Always ensure we have a seller_id
+      moq: data.moq || data.minimum_order || 1,
+      supply_ability: data.supply_ability || data.capacity || 'Contact supplier for details',
+      lead_time: data.lead_time || data.delivery_time || '15-30 days',
+      payment_terms: data.payment_terms || data.payment_methods || ['T/T', 'L/C', 'Western Union', 'PayPal'],
+      packaging_details: data.packaging_details || data.packaging || 'Standard export packaging',
+      discount: data.discount || data.discount_percentage,
+      is_verified: data.is_verified || data.verified || sellerInfo.verified || false,
       slug: data.slug,
       type: data.type || 'product',
-      specifications: data.specifications || {
+      specifications: data.specifications || data.attributes || {
         'Material': 'Various materials available',
         'Color': 'Customizable',
         'Size': 'Various sizes',
+        'MOQ': `${data.moq || 1} pieces`,
       },
-      features: data.features || [
+      features: data.features || data.key_features || [
         'High quality',
         'Competitive price',
         'Reliable supplier',
+        'Customizable options',
       ],
       certifications: data.certifications || [],
     };
 
     setProduct(transformedProduct);
-
-    // Fetch supplier data if seller_id exists
-    if (transformedProduct.seller_id) {
-      const { data: supplierData } = await supabase
-        .from('suppliers')
-        .select('*')
-        .eq('user_id', transformedProduct.seller_id)
-        .single();
-
-      if (supplierData) {
-        setSupplier({
-          company_name: supplierData.company_name || transformedProduct.supplier || 'Verified Supplier',
-          response_rate: supplierData.response_rate || 85,
-          verified: supplierData.verified || false,
-          business_type: supplierData.business_type || 'Manufacturer',
-          year_established: supplierData.year_established || 2015,
-          employees: supplierData.employees || '51-200',
-          main_markets: supplierData.main_markets || ['Global', 'North America', 'Europe'],
-          total_products: 128,
-          page_views: 2450,
-          inquiries: 156,
-          online_status: true,
-          trade_assurance: true,
-          gold_supplier: Math.random() > 0.5,
-          assessed_supplier: Math.random() > 0.3,
-          response_time: 'Within 24 hours',
-        });
-      }
-    } else {
-      // Create a mock supplier
-      setSupplier({
-        company_name: transformedProduct.supplier || 'Verified Supplier',
-        response_rate: 85,
-        verified: transformedProduct.is_verified || false,
-        business_type: 'Manufacturer',
-        year_established: 2015,
-        employees: '51-200',
-        main_markets: ['Global', 'North America', 'Europe'],
-        total_products: 128,
-        page_views: 2450,
-        inquiries: 156,
-        online_status: true,
-        trade_assurance: true,
-        gold_supplier: transformedProduct.is_verified || false,
-        assessed_supplier: transformedProduct.is_verified || false,
-        response_time: 'Within 24 hours',
-      });
-    }
 
     // Set mock reviews
     setReviews([
@@ -393,7 +491,7 @@ export default function ProductInsights() {
         date: '2024-01-15',
         verified_order: true,
         title: 'Excellent Quality',
-        content: 'The product exceeded my expectations. Packaging was perfect and shipping was fast.',
+        content: 'The product exceeded my expectations. Packaging was perfect and shipping was fast. Will order again!',
         helpful_count: 12,
         images: [],
         product_attributes: { color: 'Black', size: 'Medium' },
@@ -405,26 +503,69 @@ export default function ProductInsights() {
         rating: 4,
         date: '2024-01-10',
         verified_order: true,
-        title: 'Good Value',
-        content: 'Good quality for the price. Communication with supplier was excellent.',
+        title: 'Good Value for Money',
+        content: 'Good quality for the price. Communication with supplier was excellent and delivery was on time.',
         helpful_count: 8,
+        images: [],
+      },
+      {
+        id: '3',
+        user_name: 'Mike R.',
+        user_avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike',
+        rating: 5,
+        date: '2024-01-05',
+        verified_order: true,
+        title: 'Perfect for Business',
+        content: 'Ordered 500 pieces for my store. Quality is consistent and packaging is professional.',
+        helpful_count: 5,
         images: [],
       },
     ]);
   };
 
-  const fetchRelatedProducts = async () => {
+  const fetchRelatedProducts = async (currentSeller?: SupplierData) => {
     try {
-      const { data: relatedData } = await supabase
+      const sellerToUse = currentSeller || supplier;
+      
+      if (sellerToUse) {
+        // Try to fetch products from the same seller first
+        const { data: sellerProducts } = await supabase
+          .from('products')
+          .select('id, title, images, price_min, country, moq, seller_id, published')
+          .eq('seller_id', sellerToUse.user_id)
+          .neq('id', id)
+          .eq('published', true)
+          .limit(4);
+
+        if (sellerProducts && sellerProducts.length > 0) {
+          const related = sellerProducts.map((item) => ({
+            id: item.id,
+            title: item.title,
+            images: item.images || ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop'],
+            price: item.price_min?.toString() || 'Contact',
+            country: item.country,
+            moq: item.moq,
+            supplier: sellerToUse.company_name,
+            seller_id: sellerToUse.user_id,
+            is_verified: sellerToUse.verified,
+            type: 'product' as const,
+          }));
+          setRelatedProducts(related);
+          return;
+        }
+      }
+
+      // If no seller-specific products, fetch general related products
+      const { data: generalProducts } = await supabase
         .from('products')
-        .select('id, title, images, price_min, country, moq, seller_id')
+        .select('id, title, images, price_min, country, moq, seller_id, published')
         .neq('id', id)
         .eq('published', true)
         .limit(4);
 
-      if (relatedData && relatedData.length > 0) {
+      if (generalProducts && generalProducts.length > 0) {
         const relatedWithSuppliers = await Promise.all(
-          relatedData.map(async (item) => {
+          generalProducts.map(async (item) => {
             const { data: supplierData } = await supabase
               .from('suppliers')
               .select('company_name, verified')
@@ -438,7 +579,8 @@ export default function ProductInsights() {
               price: item.price_min?.toString() || 'Contact',
               country: item.country,
               moq: item.moq,
-              supplier: supplierData?.company_name || 'Supplier',
+              supplier: supplierData?.company_name || 'Verified Supplier',
+              seller_id: item.seller_id || 'unknown',
               is_verified: supplierData?.verified || false,
               type: 'product' as const,
             };
@@ -446,63 +588,100 @@ export default function ProductInsights() {
         );
         setRelatedProducts(relatedWithSuppliers);
       } else {
-        // Create mock related products if none exist
+        // Create mock related products with proper seller info
+        const seller = sellerToUse || createFallbackSeller();
         setRelatedProducts([
           {
             id: '1',
-            title: 'Wireless Headphones',
+            title: 'Wireless Headphones Pro',
             images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop'],
             price: '29.99',
             country: 'China',
             moq: 50,
-            supplier: 'AudioTech Co.',
-            is_verified: true,
+            supplier: seller.company_name,
+            seller_id: seller.user_id,
+            is_verified: seller.verified,
             type: 'product',
           },
           {
             id: '2',
-            title: 'Smart Watch',
+            title: 'Smart Watch Series 5',
             images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop'],
             price: '89.99',
             country: 'China',
             moq: 100,
-            supplier: 'TechGear Ltd.',
-            is_verified: true,
+            supplier: seller.company_name,
+            seller_id: seller.user_id,
+            is_verified: seller.verified,
             type: 'product',
           },
           {
             id: '3',
-            title: 'Laptop Stand',
+            title: 'Premium Laptop Stand',
             images: ['https://images.unsplash.com/photo-1586950012036-b957a8c4c6f8?w=400&h=400&fit=crop'],
             price: '24.99',
             country: 'Taiwan',
             moq: 50,
-            supplier: 'OfficePro',
-            is_verified: true,
+            supplier: seller.company_name,
+            seller_id: seller.user_id,
+            is_verified: seller.verified,
             type: 'product',
           },
           {
             id: '4',
-            title: 'USB-C Hub',
+            title: 'Multi-Port USB-C Hub',
             images: ['https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=400&h=400&fit=crop'],
             price: '39.99',
             country: 'China',
             moq: 100,
-            supplier: 'ConnectTech',
-            is_verified: true,
+            supplier: seller.company_name,
+            seller_id: seller.user_id,
+            is_verified: seller.verified,
             type: 'product',
           },
         ]);
       }
     } catch (error) {
       console.error('Error fetching related products:', error);
-      // Set empty array if error
-      setRelatedProducts([]);
+      // Create mock related products with seller
+      const seller = createFallbackSeller();
+      setRelatedProducts([
+        {
+          id: '1',
+          title: 'Wireless Headphones',
+          images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop'],
+          price: '29.99',
+          country: 'China',
+          moq: 50,
+          supplier: seller.company_name,
+          seller_id: seller.user_id,
+          is_verified: seller.verified,
+          type: 'product',
+        },
+        {
+          id: '2',
+          title: 'Smart Watch',
+          images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop'],
+          price: '89.99',
+          country: 'China',
+          moq: 100,
+          supplier: seller.company_name,
+          seller_id: seller.user_id,
+          is_verified: seller.verified,
+          type: 'product',
+        },
+      ]);
     }
   };
 
   const handleAddToCart = async () => {
     if (!product) return;
+
+    // Validate we have seller information
+    if (!product.seller_id || !supplier) {
+      toast.error('Cannot add product to cart: Missing seller information');
+      return;
+    }
 
     addItem({
       product_id: product.id,
@@ -512,23 +691,36 @@ export default function ProductInsights() {
       quantity: Math.max(quantity, product.moq || 1),
       moq: product.moq || 1,
       unit: 'piece',
-      seller_id: product.seller_id || '',
-      seller_name: product.supplier || 'Verified Supplier',
+      seller_id: product.seller_id,
+      seller_name: product.supplier || supplier.company_name,
+      supplier_company: supplier.company_name,
+      supplier_verified: supplier.verified,
     });
 
     toast.success('Added to cart!');
   };
 
   const handleContactSupplier = () => {
-    if (product?.seller_id) {
+    if (!supplier) {
+      toast.error('Supplier information not available');
+      return;
+    }
+
+    if (product?.seller_id && product.seller_id !== 'fallback-user') {
       navigate(`/messages?supplier=${product.seller_id}`);
     } else {
-      toast.info('Sample product - Contact feature disabled');
+      // For mock products, show contact info
+      toast.info(`Contact ${supplier.company_name} at ${supplier.email || 'contact@supplier.com'}`);
     }
   };
 
   const handleRequestQuotation = () => {
-    toast.success('Quotation request sent to supplier');
+    if (!product || !supplier) {
+      toast.error('Cannot request quotation: Missing product or supplier information');
+      return;
+    }
+
+    toast.success(`Quotation request sent to ${supplier.company_name}`);
   };
 
   const scrollImages = (direction: 'left' | 'right') => {
@@ -546,9 +738,11 @@ export default function ProductInsights() {
     const num = parseFloat(price);
     if (isNaN(num)) return price;
     return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(num);
+    }).format(num).replace('$', '');
   };
 
   const calculateTotal = () => {
@@ -584,29 +778,23 @@ export default function ProductInsights() {
     );
   }
 
-  // We never show "Product Not Found" - we always have a product (real or fallback)
-  if (!product) {
-    // This should never happen, but just in case
+  if (!product || !supplier) {
     return (
       <div className="min-h-screen bg-gray-50 pb-24">
         <Header />
         <div className="container mx-auto px-4 py-8">
-          <Skeleton className="h-12 w-48 mb-6" />
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-8 space-y-6">
-              <Skeleton className="aspect-square rounded-lg" />
-              <div className="flex gap-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} className="h-20 w-20 rounded" />
-                ))}
-              </div>
-            </div>
-            <div className="lg:col-span-4 space-y-4">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-32 w-full" />
-            </div>
-          </div>
+          <Card className="border border-red-200 bg-red-50">
+            <CardContent className="p-8 text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold mb-2">Product Not Available</h2>
+              <p className="text-gray-600 mb-4">
+                Unable to load product information. Please try again or browse other products.
+              </p>
+              <Button onClick={() => navigate('/products')}>
+                Browse Products
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -851,16 +1039,22 @@ export default function ProductInsights() {
                     <div className="border-t pt-4 space-y-3">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-gray-500">Page Views:</span>
-                        <span className="font-medium">{supplier?.page_views || 2450}</span>
+                        <span className="font-medium">{supplier.page_views}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-gray-500">Inquiries:</span>
-                        <span className="font-medium">{supplier?.inquiries || 156}</span>
+                        <span className="font-medium">{supplier.inquiries}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-gray-500">Response Rate:</span>
                         <span className="font-medium text-green-600">
-                          {supplier?.response_rate || 85}%
+                          {supplier.response_rate}%
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">Supplier Status:</span>
+                        <span className={`font-medium ${supplier.online_status ? 'text-green-600' : 'text-gray-500'}`}>
+                          {supplier.online_status ? 'Online' : 'Offline'}
                         </span>
                       </div>
                     </div>
@@ -1187,6 +1381,7 @@ export default function ProductInsights() {
                             )}
                           </div>
                           <p className="text-xs text-gray-500 mt-1">MOQ: {item.moq} pieces</p>
+                          <p className="text-xs text-gray-400 mt-1">by {item.supplier}</p>
                         </CardContent>
                       </Card>
                     </Link>
@@ -1205,26 +1400,32 @@ export default function ProductInsights() {
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="font-semibold text-lg mb-1">{supplier?.company_name}</h3>
+                      <h3 className="font-semibold text-lg mb-1">{supplier.company_name}</h3>
                       <div className="flex items-center gap-2 mb-2">
-                        {supplier?.gold_supplier && (
+                        {supplier.gold_supplier && (
                           <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
                             <Award className="h-3 w-3 mr-1" />
                             Gold Supplier
                           </Badge>
                         )}
-                        {supplier?.assessed_supplier && (
+                        {supplier.assessed_supplier && (
                           <Badge variant="outline" className="border-blue-200 text-blue-600">
                             Assessed
+                          </Badge>
+                        )}
+                        {supplier.verified && (
+                          <Badge variant="outline" className="border-green-200 text-green-600">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Verified
                           </Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-500">
                         <Factory className="h-4 w-4" />
-                        <span>{supplier?.business_type}</span>
+                        <span>{supplier.business_type}</span>
                       </div>
                     </div>
-                    {supplier?.online_status && (
+                    {supplier.online_status && (
                       <div className="flex items-center gap-1">
                         <div className="h-2 w-2 rounded-full bg-green-500"></div>
                         <span className="text-sm text-green-600">Online</span>
@@ -1235,12 +1436,12 @@ export default function ProductInsights() {
                   {/* Supplier Stats */}
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-2xl font-bold text-[#FF6B35]">{supplier?.response_rate}%</p>
+                      <p className="text-2xl font-bold text-[#FF6B35]">{supplier.response_rate}%</p>
                       <p className="text-xs text-gray-500">Response Rate</p>
                     </div>
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <p className="text-2xl font-bold text-[#FF6B35]">
-                        {new Date().getFullYear() - (supplier?.year_established || 2015)}
+                        {new Date().getFullYear() - supplier.year_established}
                       </p>
                       <p className="text-xs text-gray-500">Years on Platform</p>
                     </div>
@@ -1248,20 +1449,28 @@ export default function ProductInsights() {
 
                   {/* Quick Info */}
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <MapPin className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm">
-                        {product.country_flag} {product.country}
-                      </span>
-                    </div>
+                    {supplier.address && (
+                      <div className="flex items-center gap-3">
+                        <MapPin className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm">{supplier.address}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-3">
                       <Briefcase className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm">{supplier?.employees} Employees</span>
+                      <span className="text-sm">{supplier.employees} Employees</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <Package className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm">{supplier?.total_products} Products</span>
+                      <span className="text-sm">{supplier.total_products} Products</span>
                     </div>
+                    {supplier.website && (
+                      <div className="flex items-center gap-3">
+                        <ExternalLink className="h-4 w-4 text-gray-400" />
+                        <a href={supplier.website} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
+                          Visit Website
+                        </a>
+                      </div>
+                    )}
                   </div>
 
                   {/* Contact Button */}
@@ -1292,7 +1501,7 @@ export default function ProductInsights() {
                       <Printer className="h-4 w-4 mr-2" />
                       Print This Page
                     </Button>
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button variant="outline" className="w-full justify-start" onClick={() => navigate(`/supplier/${supplier.id}`)}>
                       <ExternalLink className="h-4 w-4 mr-2" />
                       View Company Profile
                     </Button>
@@ -1351,6 +1560,11 @@ export default function ProductInsights() {
               <div>
                 <p className="text-sm text-gray-500">Min. Order</p>
                 <p className="font-medium">{product.moq} pieces</p>
+              </div>
+              <Separator orientation="vertical" className="h-12" />
+              <div>
+                <p className="text-sm text-gray-500">Supplier</p>
+                <p className="font-medium">{supplier.company_name}</p>
               </div>
             </div>
 
