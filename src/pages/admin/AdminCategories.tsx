@@ -25,21 +25,15 @@ import {
   ChevronRight,
   ChevronDown,
   Check,
-  X,
   Copy,
   RefreshCw,
   Layers,
   Filter,
   Eye,
   EyeOff,
-  MoveVertical,
-  Zap,
-  AlertCircle,
   Grid,
   ListTree,
-  FolderPlus,
-  FolderOpen,
-  FolderClosed
+  AlertCircle
 } from 'lucide-react';
 import {
   Dialog,
@@ -80,25 +74,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { CSVImport } from '@/components/admin/CSVImport';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import {
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 interface Category {
   id: string;
@@ -117,12 +92,6 @@ interface Category {
   subcategories?: Category[];
   level?: number;
   path?: string[];
-}
-
-interface BulkOperation {
-  type: 'delete' | 'deactivate' | 'activate' | 'move';
-  categoryIds: string[];
-  data?: any;
 }
 
 const generateSlug = (name: string, existingSlugs: Set<string> = new Set()): string => {
@@ -148,196 +117,7 @@ const validateSlug = (slug: string): boolean => {
   return slugRegex.test(slug);
 };
 
-const SortableCategoryRow = ({ category, onEdit, onDelete, isExpanded, onToggle, viewMode, onMove }: {
-  category: Category;
-  onEdit: (cat: Category) => void;
-  onDelete: (id: string) => void;
-  isExpanded: boolean;
-  onToggle: (id: string) => void;
-  viewMode: 'list' | 'tree';
-  onMove: (id: string, direction: 'up' | 'down') => void;
-}) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: category.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <TableRow ref={setNodeRef} style={style} className={isDragging ? 'bg-muted/50' : ''}>
-      <TableCell className="w-12">
-        <div className="flex items-center gap-1">
-          {viewMode === 'tree' && category.subcategories && category.subcategories.length > 0 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => onToggle(category.id)}
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </Button>
-          )}
-          {viewMode === 'list' && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 cursor-move"
-              {...attributes}
-              {...listeners}
-            >
-              <MoveVertical className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-lg ${category.image_url ? 'bg-muted' : 'bg-primary/10'} overflow-hidden shrink-0`}>
-            {category.image_url ? (
-              <img 
-                src={category.image_url} 
-                alt={category.name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                {category.parent_id ? (
-                  <FolderClosed className="h-5 w-5 text-primary" />
-                ) : (
-                  <FolderOpen className="h-5 w-5 text-primary" />
-                )}
-              </div>
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className={`font-medium ${!category.is_active ? 'opacity-50' : ''}`}>
-                {category.name}
-              </span>
-              {!category.is_active && (
-                <Badge variant="outline" className="text-xs">Inactive</Badge>
-              )}
-              {category.level && category.level > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  Level {category.level}
-                </Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground truncate">
-              {category.slug} {category.description && ` • ${category.description.substring(0, 30)}...`}
-            </p>
-          </div>
-        </div>
-      </TableCell>
-      <TableCell className="hidden md:table-cell">
-        <div className="flex flex-col gap-1">
-          <span className="text-sm">{category.parent_id ? 'Subcategory' : 'Main Category'}</span>
-          {category.path && category.path.length > 0 && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              {category.path.map((p, i) => (
-                <span key={i}>
-                  {p}
-                  {i < category.path!.length - 1 && <ChevronRight className="h-3 w-3 inline mx-1" />}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </TableCell>
-      <TableCell>
-        <div className="flex flex-col">
-          <span className="font-medium">{category.productCount || 0}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 text-xs"
-            onClick={() => onMove(category.id, 'up')}
-          >
-            ↑
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 text-xs"
-            onClick={() => onMove(category.id, 'down')}
-          >
-            ↓
-          </Button>
-        </div>
-      </TableCell>
-      <TableCell>
-        <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onEdit(category)}
-            title="Edit"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              navigator.clipboard.writeText(category.id);
-              toast({ title: 'Category ID copied to clipboard' });
-            }}
-            title="Copy ID"
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-destructive" title="Delete">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Category?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will delete "{category.name}" and {category.productCount || 0} products will become uncategorized.
-                  {category.subcategories && category.subcategories.length > 0 && (
-                    <span className="block mt-2 text-destructive">
-                      ⚠️ Warning: This will also delete {category.subcategories.length} subcategories!
-                    </span>
-                  )}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground"
-                  onClick={() => onDelete(category.id)}
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-};
-
-export default function AdvancedCategoryManager() {
+export default function AdminCategories() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [flatCategories, setFlatCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -351,8 +131,6 @@ export default function AdvancedCategoryManager() {
   const [showInactive, setShowInactive] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'productCount' | 'created_at' | 'sort_order'>('sort_order');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [bulkMoveDialogOpen, setBulkMoveDialogOpen] = useState(false);
-  const [bulkMoveTarget, setBulkMoveTarget] = useState<string>('');
   
   const [form, setForm] = useState({
     name: '',
@@ -366,23 +144,12 @@ export default function AdvancedCategoryManager() {
     is_active: true,
   });
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
   // Build hierarchical category tree
   const buildCategoryTree = useCallback((categories: Category[]): Category[] => {
     const categoryMap = new Map<string, Category>();
     const rootCategories: Category[] = [];
 
-    // First pass: Create map and set level/path
+    // First pass: Create map
     categories.forEach(category => {
       categoryMap.set(category.id, {
         ...category,
@@ -406,7 +173,7 @@ export default function AdvancedCategoryManager() {
       }
     });
 
-    // Sort each level
+    // Sort categories
     const sortCategories = (cats: Category[]): Category[] => {
       return [...cats].sort((a, b) => {
         if (sortBy === 'name') {
@@ -480,7 +247,7 @@ export default function AdvancedCategoryManager() {
       if (categoriesError) throw categoriesError;
 
       if (categoriesData) {
-        // Get product counts in a single query
+        // Get product counts
         const { data: productCounts, error: countsError } = await supabase
           .from('products')
           .select('category_id')
@@ -560,45 +327,38 @@ export default function AdvancedCategoryManager() {
     setDialogOpen(true);
   };
 
-  const validateForm = (): string[] => {
-    const errors: string[] = [];
-    
-    if (!form.name.trim()) {
-      errors.push('Category name is required');
-    }
-    
-    if (!form.slug.trim()) {
-      errors.push('Slug is required');
-    } else if (!validateSlug(form.slug)) {
-      errors.push('Slug can only contain lowercase letters, numbers, and hyphens');
-    }
-    
-    if (form.parent_id === editingCategory?.id) {
-      errors.push('Category cannot be its own parent');
-    }
-    
-    // Check for circular reference
-    if (form.parent_id && editingCategory) {
-      const checkCircular = (parentId: string): boolean => {
-        if (parentId === editingCategory.id) return true;
-        const parent = categories.find(c => c.id === parentId);
-        return parent?.parent_id ? checkCircular(parent.parent_id) : false;
-      };
-      
-      if (checkCircular(form.parent_id)) {
-        errors.push('Cannot create circular parent-child relationship');
-      }
-    }
-    
-    return errors;
-  };
-
   const handleSubmit = async () => {
-    const errors = validateForm();
-    if (errors.length > 0) {
+    if (!form.name.trim()) {
       toast({
         title: 'Validation Error',
-        description: errors.join(', '),
+        description: 'Category name is required',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (!form.slug.trim()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Slug is required',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (!validateSlug(form.slug)) {
+      toast({
+        title: 'Validation Error',
+        description: 'Slug can only contain lowercase letters, numbers, and hyphens',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (form.parent_id === editingCategory?.id) {
+      toast({
+        title: 'Validation Error',
+        description: 'Category cannot be its own parent',
         variant: 'destructive'
       });
       return;
@@ -660,16 +420,12 @@ export default function AdvancedCategoryManager() {
   const deleteCategory = async (id: string) => {
     try {
       // First, move all subcategories to parent (or make them root)
-      const subcategories = categories.filter(c => c.parent_id === id);
-      
-      if (subcategories.length > 0) {
-        const { error: updateError } = await supabase
-          .from('categories')
-          .update({ parent_id: null })
-          .eq('parent_id', id);
-          
-        if (updateError) throw updateError;
-      }
+      const { error: updateError } = await supabase
+        .from('categories')
+        .update({ parent_id: null })
+        .eq('parent_id', id);
+        
+      if (updateError) throw updateError;
 
       // Then delete the category
       const { error: deleteError } = await supabase
@@ -694,46 +450,8 @@ export default function AdvancedCategoryManager() {
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      const oldIndex = flatCategories.findIndex(c => c.id === active.id);
-      const newIndex = flatCategories.findIndex(c => c.id === over.id);
-
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newOrder = arrayMove(flatCategories, oldIndex, newIndex);
-        setFlatCategories(newOrder);
-        
-        // Update sort_order in database
-        try {
-          const updates = newOrder.map((cat, index) => ({
-            id: cat.id,
-            sort_order: (index + 1) * 10
-          }));
-
-          const { error } = await supabase
-            .from('categories')
-            .upsert(updates);
-
-          if (error) throw error;
-          
-          fetchCategories();
-          toast({ title: 'Order updated successfully' });
-        } catch (error: any) {
-          console.error('Error updating order:', error);
-          toast({
-            title: 'Error',
-            description: 'Failed to update category order',
-            variant: 'destructive'
-          });
-        }
-      }
-    }
-  };
-
-  const handleBulkOperation = async (operation: BulkOperation) => {
-    if (operation.categoryIds.length === 0) {
+  const handleBulkOperation = async (operation: 'delete' | 'deactivate' | 'activate', categoryIds: string[]) => {
+    if (categoryIds.length === 0) {
       toast({
         title: 'No categories selected',
         description: 'Please select categories first',
@@ -743,50 +461,40 @@ export default function AdvancedCategoryManager() {
     }
 
     try {
-      switch (operation.type) {
-        case 'delete':
-          // Delete categories (will cascade due to foreign key)
-          const { error: deleteError } = await supabase
+      if (operation === 'delete') {
+        // For bulk delete, move all to root first
+        for (const id of categoryIds) {
+          const { error: updateError } = await supabase
             .from('categories')
-            .delete()
-            .in('id', operation.categoryIds);
+            .update({ parent_id: null })
+            .eq('parent_id', id);
+            
+          if (updateError) throw updateError;
+        }
 
-          if (deleteError) throw deleteError;
-          
-          toast({ 
-            title: 'Success', 
-            description: `${operation.categoryIds.length} categories deleted` 
-          });
-          break;
+        const { error: deleteError } = await supabase
+          .from('categories')
+          .delete()
+          .in('id', categoryIds);
 
-        case 'deactivate':
-        case 'activate':
-          const { error: statusError } = await supabase
-            .from('categories')
-            .update({ is_active: operation.type === 'activate' })
-            .in('id', operation.categoryIds);
+        if (deleteError) throw deleteError;
+        
+        toast({ 
+          title: 'Success', 
+          description: `${categoryIds.length} categories deleted` 
+        });
+      } else {
+        const { error } = await supabase
+          .from('categories')
+          .update({ is_active: operation === 'activate' })
+          .in('id', categoryIds);
 
-          if (statusError) throw statusError;
-          
-          toast({ 
-            title: 'Success', 
-            description: `${operation.categoryIds.length} categories ${operation.type}d` 
-          });
-          break;
-
-        case 'move':
-          const { error: moveError } = await supabase
-            .from('categories')
-            .update({ parent_id: operation.data.parentId })
-            .in('id', operation.categoryIds);
-
-          if (moveError) throw moveError;
-          
-          toast({ 
-            title: 'Success', 
-            description: `${operation.categoryIds.length} categories moved` 
-          });
-          break;
+        if (error) throw error;
+        
+        toast({ 
+          title: 'Success', 
+          description: `${categoryIds.length} categories ${operation}d` 
+        });
       }
 
       fetchCategories();
@@ -809,6 +517,11 @@ export default function AdvancedCategoryManager() {
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       try {
+        if (!row.name || !row.name.trim()) {
+          errors.push(`Row ${i + 2}: Name is required`);
+          continue;
+        }
+
         const categoryData = {
           name: row.name.trim(),
           slug: row.slug?.trim() || generateSlug(row.name, existingSlugs),
@@ -821,7 +534,7 @@ export default function AdvancedCategoryManager() {
           is_active: row.is_active?.toLowerCase() !== 'false',
         };
 
-        // Intelligent parent lookup
+        // Find parent by name or slug
         if (row.parent_name || row.parent_slug) {
           const parent = categories.find(c => 
             (row.parent_name && c.name.toLowerCase() === row.parent_name.toLowerCase()) ||
@@ -830,27 +543,6 @@ export default function AdvancedCategoryManager() {
           
           if (parent) {
             categoryData.parent_id = parent.id;
-          } else if (row.parent_name || row.parent_slug) {
-            // Create parent if it doesn't exist (for nested imports)
-            const parentSlug = row.parent_slug || generateSlug(row.parent_name!, existingSlugs);
-            existingSlugs.add(parentSlug);
-            
-            const { data: newParent, error: parentError } = await supabase
-              .from('categories')
-              .insert([{
-                name: row.parent_name!.trim(),
-                slug: parentSlug,
-                sort_order: (categories.length + i) * 10,
-                is_active: true,
-                created_at: new Date().toISOString(),
-              }])
-              .select()
-              .single();
-
-            if (parentError) throw parentError;
-            
-            categoryData.parent_id = newParent.id;
-            success++;
           }
         }
 
@@ -910,65 +602,6 @@ export default function AdvancedCategoryManager() {
     URL.revokeObjectURL(url);
   };
 
-  const moveCategoryOrder = async (categoryId: string, direction: 'up' | 'down') => {
-    const category = categories.find(c => c.id === categoryId);
-    if (!category) return;
-
-    const siblings = categories.filter(c => 
-      c.parent_id === category.parent_id && c.id !== categoryId
-    );
-    
-    const allSiblings = [...siblings, category].sort((a, b) => a.sort_order - b.sort_order);
-    const currentIndex = allSiblings.findIndex(c => c.id === categoryId);
-    
-    if (
-      (direction === 'up' && currentIndex > 0) ||
-      (direction === 'down' && currentIndex < allSiblings.length - 1)
-    ) {
-      const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-      [allSiblings[currentIndex], allSiblings[newIndex]] = 
-      [allSiblings[newIndex], allSiblings[currentIndex]];
-      
-      // Update sort orders
-      const updates = allSiblings.map((cat, index) => ({
-        id: cat.id,
-        sort_order: (index + 1) * 10
-      }));
-
-      try {
-        const { error } = await supabase
-          .from('categories')
-          .upsert(updates);
-
-        if (error) throw error;
-        
-        fetchCategories();
-        toast({ title: 'Category order updated' });
-      } catch (error: any) {
-        console.error('Error updating order:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to update category order',
-          variant: 'destructive'
-        });
-      }
-    }
-  };
-
-  const filteredCategories = flatCategories.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.slug.toLowerCase().includes(search.toLowerCase()) ||
-    c.description?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const stats = {
-    total: categories.length,
-    active: categories.filter(c => c.is_active).length,
-    topLevel: categories.filter(c => !c.parent_id).length,
-    subCategories: categories.filter(c => c.parent_id).length,
-    withProducts: categories.filter(c => (c.productCount || 0) > 0).length,
-  };
-
   const toggleCategoryExpand = (categoryId: string) => {
     setExpandedCategories(prev => {
       const newSet = new Set(prev);
@@ -994,7 +627,7 @@ export default function AdvancedCategoryManager() {
   };
 
   const selectAllVisible = () => {
-    const visibleIds = new Set(filteredCategories.map(c => c.id));
+    const visibleIds = new Set(flatCategories.map(c => c.id));
     setSelectedCategories(visibleIds);
   };
 
@@ -1002,12 +635,26 @@ export default function AdvancedCategoryManager() {
     setSelectedCategories(new Set());
   };
 
+  const filteredCategories = flatCategories.filter(c => 
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.slug.toLowerCase().includes(search.toLowerCase()) ||
+    c.description?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const stats = {
+    total: categories.length,
+    active: categories.filter(c => c.is_active).length,
+    topLevel: categories.filter(c => !c.parent_id).length,
+    subCategories: categories.filter(c => c.parent_id).length,
+    withProducts: categories.filter(c => (c.productCount || 0) > 0).length,
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold">Advanced Category Manager</h1>
-          <p className="text-muted-foreground">Intelligent hierarchical category management</p>
+          <h1 className="text-2xl lg:text-3xl font-bold">Category Management</h1>
+          <p className="text-muted-foreground">Organize products into categories</p>
         </div>
         
         <div className="flex flex-wrap gap-2 w-full lg:w-auto">
@@ -1102,11 +749,6 @@ export default function AdvancedCategoryManager() {
                       }
                     </SelectContent>
                   </Select>
-                  {form.parent_id && (
-                    <p className="text-xs text-muted-foreground">
-                      Will become a subcategory of {categories.find(c => c.id === form.parent_id)?.name}
-                    </p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -1122,16 +764,6 @@ export default function AdvancedCategoryManager() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="meta_title">Meta Title</Label>
-                    <Input
-                      id="meta_title"
-                      value={form.meta_title}
-                      onChange={(e) => setForm({ ...form, meta_title: e.target.value })}
-                      placeholder="For SEO"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
                     <Label htmlFor="image_url">Image URL</Label>
                     <Input
                       id="image_url"
@@ -1140,20 +772,7 @@ export default function AdvancedCategoryManager() {
                       placeholder="https://..."
                     />
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="meta_description">Meta Description</Label>
-                  <Textarea
-                    id="meta_description"
-                    value={form.meta_description}
-                    onChange={(e) => setForm({ ...form, meta_description: e.target.value })}
-                    placeholder="For SEO - appears in search results"
-                    rows={2}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  
                   <div className="space-y-2">
                     <Label htmlFor="sort_order">Sort Order</Label>
                     <Input
@@ -1164,15 +783,36 @@ export default function AdvancedCategoryManager() {
                     />
                     <p className="text-xs text-muted-foreground">Lower numbers appear first</p>
                   </div>
-                  
-                  <div className="flex items-center space-x-2 pt-6">
-                    <Switch
-                      id="is_active"
-                      checked={form.is_active}
-                      onCheckedChange={(checked) => setForm({ ...form, is_active: checked })}
-                    />
-                    <Label htmlFor="is_active">Active (visible to customers)</Label>
-                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="meta_title">Meta Title (SEO)</Label>
+                  <Input
+                    id="meta_title"
+                    value={form.meta_title}
+                    onChange={(e) => setForm({ ...form, meta_title: e.target.value })}
+                    placeholder="For search engines"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="meta_description">Meta Description (SEO)</Label>
+                  <Textarea
+                    id="meta_description"
+                    value={form.meta_description}
+                    onChange={(e) => setForm({ ...form, meta_description: e.target.value })}
+                    placeholder="Appears in search results"
+                    rows={2}
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="is_active"
+                    checked={form.is_active}
+                    onCheckedChange={(checked) => setForm({ ...form, is_active: checked })}
+                  />
+                  <Label htmlFor="is_active">Active (visible to customers)</Label>
                 </div>
 
                 <DialogFooter className="pt-4">
@@ -1193,10 +833,10 @@ export default function AdvancedCategoryManager() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Total</CardDescription>
+            <CardDescription>Total Categories</CardDescription>
             <CardTitle className="text-2xl">{stats.total}</CardTitle>
           </CardHeader>
           <CardContent>
@@ -1223,27 +863,6 @@ export default function AdvancedCategoryManager() {
             <CardTitle className="text-2xl text-green-600">{stats.withProducts}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Selected</CardDescription>
-            <CardTitle className="text-2xl text-amber-600">{selectedCategories.size}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedCategories.size > 0 && (
-              <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={clearSelection}>
-                Clear
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Max Depth</CardDescription>
-            <CardTitle className="text-2xl">
-              {Math.max(...categories.map(c => c.level || 0), 0)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
       </div>
 
       {/* Bulk Operations Bar */}
@@ -1266,10 +885,7 @@ export default function AdvancedCategoryManager() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleBulkOperation({
-                    type: 'activate',
-                    categoryIds: Array.from(selectedCategories)
-                  })}
+                  onClick={() => handleBulkOperation('activate', Array.from(selectedCategories))}
                 >
                   <Eye className="h-4 w-4 mr-2" />
                   Activate
@@ -1277,57 +893,11 @@ export default function AdvancedCategoryManager() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleBulkOperation({
-                    type: 'deactivate',
-                    categoryIds: Array.from(selectedCategories)
-                  })}
+                  onClick={() => handleBulkOperation('deactivate', Array.from(selectedCategories))}
                 >
                   <EyeOff className="h-4 w-4 mr-2" />
                   Deactivate
                 </Button>
-                <Dialog open={bulkMoveDialogOpen} onOpenChange={setBulkMoveDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <FolderPlus className="h-4 w-4 mr-2" />
-                      Move To
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Move Selected Categories</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <Select value={bulkMoveTarget} onValueChange={setBulkMoveTarget}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select target category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">Move to Root</SelectItem>
-                          {categories
-                            .filter(c => !Array.from(selectedCategories).includes(c.id))
-                            .map(cat => (
-                              <SelectItem key={cat.id} value={cat.id}>
-                                {cat.name}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        onClick={() => {
-                          handleBulkOperation({
-                            type: 'move',
-                            categoryIds: Array.from(selectedCategories),
-                            data: { parentId: bulkMoveTarget || null }
-                          });
-                          setBulkMoveDialogOpen(false);
-                          setBulkMoveTarget('');
-                        }}
-                      >
-                        Move Categories
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="destructive" size="sm">
@@ -1347,10 +917,7 @@ export default function AdvancedCategoryManager() {
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         className="bg-destructive text-destructive-foreground"
-                        onClick={() => handleBulkOperation({
-                          type: 'delete',
-                          categoryIds: Array.from(selectedCategories)
-                        })}
+                        onClick={() => handleBulkOperation('delete', Array.from(selectedCategories))}
                       >
                         Delete {selectedCategories.size} Categories
                       </AlertDialogAction>
@@ -1371,7 +938,7 @@ export default function AdvancedCategoryManager() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search categories by name, slug, or description..."
+                  placeholder="Search categories..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-10"
@@ -1381,13 +948,13 @@ export default function AdvancedCategoryManager() {
             
             <div className="flex flex-wrap gap-2">
               <div className="flex items-center gap-2">
+                <Switch
+                  id="show-inactive"
+                  checked={showInactive}
+                  onCheckedChange={setShowInactive}
+                  className="mr-2"
+                />
                 <Label htmlFor="show-inactive" className="text-sm whitespace-nowrap">
-                  <Switch
-                    id="show-inactive"
-                    checked={showInactive}
-                    onCheckedChange={setShowInactive}
-                    className="mr-2"
-                  />
                   Show Inactive
                 </Label>
               </div>
@@ -1492,42 +1059,160 @@ export default function AdvancedCategoryManager() {
             </div>
           ) : (
             <div className="overflow-x-auto -mx-4 sm:mx-0">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">#</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="hidden md:table-cell">Hierarchy</TableHead>
-                      <TableHead>Products</TableHead>
-                      <TableHead>Actions</TableHead>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="hidden md:table-cell">Hierarchy</TableHead>
+                    <TableHead>Products</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCategories.map((category) => (
+                    <TableRow key={category.id}>
+                      <TableCell className="w-12">
+                        <div className="flex items-center gap-1">
+                          {viewMode === 'tree' && category.subcategories && category.subcategories.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => toggleCategoryExpand(category.id)}
+                            >
+                              {expandedCategories.has(category.id) ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                          <input
+                            type="checkbox"
+                            checked={selectedCategories.has(category.id)}
+                            onChange={() => toggleSelectCategory(category.id)}
+                            className="h-4 w-4"
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-lg ${category.image_url ? 'bg-muted' : 'bg-primary/10'} overflow-hidden shrink-0`}>
+                            {category.image_url ? (
+                              <img 
+                                src={category.image_url} 
+                                alt={category.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <FolderTree className="h-5 w-5 text-primary" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-medium ${!category.is_active ? 'opacity-50' : ''}`}>
+                                {category.name}
+                              </span>
+                              {!category.is_active && (
+                                <Badge variant="outline" className="text-xs">Inactive</Badge>
+                              )}
+                              {category.level && category.level > 0 && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Level {category.level}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {category.slug} {category.description && ` • ${category.description.substring(0, 30)}...`}
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm">{category.parent_id ? 'Subcategory' : 'Main Category'}</span>
+                          {category.path && category.path.length > 0 && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              {category.path.map((p, i) => (
+                                <span key={i}>
+                                  {p}
+                                  {i < category.path!.length - 1 && <ChevronRight className="h-3 w-3 inline mx-1" />}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{category.productCount || 0}</span>
+                          {category.productCount === 0 && (
+                            <Badge variant="outline" className="text-xs">Empty</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditDialog(category)}
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              navigator.clipboard.writeText(category.id);
+                              toast({ title: 'Category ID copied to clipboard' });
+                            }}
+                            title="Copy ID"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-destructive" title="Delete">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Category?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will delete "{category.name}" and {category.productCount || 0} products will become uncategorized.
+                                  {category.subcategories && category.subcategories.length > 0 && (
+                                    <span className="block mt-2 text-destructive">
+                                      ⚠️ Subcategories will be moved to root level
+                                    </span>
+                                  )}
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-destructive text-destructive-foreground"
+                                  onClick={() => deleteCategory(category.id)}
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <SortableContext
-                      items={filteredCategories.map(c => c.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {filteredCategories.map((category) => (
-                        <SortableCategoryRow
-                          key={category.id}
-                          category={category}
-                          onEdit={openEditDialog}
-                          onDelete={deleteCategory}
-                          isExpanded={expandedCategories.has(category.id)}
-                          onToggle={toggleCategoryExpand}
-                          viewMode={viewMode}
-                          onMove={moveCategoryOrder}
-                        />
-                      ))}
-                    </SortableContext>
-                  </TableBody>
-                </Table>
-              </DndContext>
+                  ))}
+                </TableBody>
+              </Table>
               
               <div className="mt-4 text-sm text-muted-foreground">
                 Showing {filteredCategories.length} of {flatCategories.length} categories
@@ -1559,7 +1244,7 @@ export default function AdvancedCategoryManager() {
             description: 'Latest electronic gadgets',
             meta_title: 'Electronics Store',
             meta_description: 'Shop the latest electronics',
-            image_url: 'https://example.com/electronics.jpg',
+            image_url: '',
             sort_order: '10',
             is_active: 'true'
           },
@@ -1577,106 +1262,6 @@ export default function AdvancedCategoryManager() {
           },
         ]}
       />
-
-      {/* Quick Actions Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common category management tasks</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button
-              variant="outline"
-              className="justify-start h-auto py-4"
-              onClick={() => {
-                // Auto-generate missing slugs
-                const updates = categories
-                  .filter(cat => !validateSlug(cat.slug))
-                  .map(cat => ({
-                    id: cat.id,
-                    slug: generateSlug(cat.name, new Set(categories.map(c => c.slug).filter(s => s !== cat.slug)))
-                  }));
-                
-                if (updates.length > 0) {
-                  supabase
-                    .from('categories')
-                    .upsert(updates)
-                    .then(() => {
-                      toast({ title: `Fixed ${updates.length} invalid slugs` });
-                      fetchCategories();
-                    });
-                } else {
-                  toast({ title: 'All slugs are valid!' });
-                }
-              }}
-            >
-              <Zap className="h-5 w-5 mr-3" />
-              <div className="text-left">
-                <div className="font-medium">Fix Invalid Slugs</div>
-                <div className="text-xs text-muted-foreground">Auto-correct malformed slugs</div>
-              </div>
-            </Button>
-            
-            <Button
-              variant="outline"
-              className="justify-start h-auto py-4"
-              onClick={async () => {
-                // Reorder all categories
-                const updates = flatCategories.map((cat, index) => ({
-                  id: cat.id,
-                  sort_order: (index + 1) * 10
-                }));
-                
-                const { error } = await supabase
-                  .from('categories')
-                  .upsert(updates);
-                
-                if (error) {
-                  toast({
-                    title: 'Error',
-                    description: 'Failed to reorder categories',
-                    variant: 'destructive'
-                  });
-                } else {
-                  toast({ title: 'Categories reordered successfully' });
-                  fetchCategories();
-                }
-              }}
-            >
-              <Layers className="h-5 w-5 mr-3" />
-              <div className="text-left">
-                <div className="font-medium">Reorder All</div>
-                <div className="text-xs text-muted-foreground">Reset sort order by current view</div>
-              </div>
-            </Button>
-            
-            <Button
-              variant="outline"
-              className="justify-start h-auto py-4"
-              onClick={() => {
-                // Deactivate empty categories
-                const emptyCategories = categories.filter(cat => (cat.productCount || 0) === 0);
-                
-                if (emptyCategories.length > 0) {
-                  handleBulkOperation({
-                    type: 'deactivate',
-                    categoryIds: emptyCategories.map(c => c.id)
-                  });
-                } else {
-                  toast({ title: 'No empty categories found' });
-                }
-              }}
-            >
-              <AlertCircle className="h-5 w-5 mr-3" />
-              <div className="text-left">
-                <div className="font-medium">Deactivate Empty</div>
-                <div className="text-xs text-muted-foreground">Deactivate categories with no products</div>
-              </div>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
