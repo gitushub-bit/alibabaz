@@ -181,6 +181,18 @@ export default function CartCheckout() {
 
     setProcessing(true);
     try {
+      // Quick validation: ensure no items are missing seller_id before attempting to create orders
+      const missingItems = items.filter(i => !i.seller_id).map(i => i.title || i.product_id || 'Unnamed item');
+      if (missingItems.length > 0) {
+        toast({
+          title: 'Missing seller for cart item(s)',
+          description: `The following item(s) are missing a seller: ${missingItems.join(', ')}. Please remove and re-add them.`,
+          variant: 'destructive',
+        });
+        setProcessing(false);
+        return;
+      }
+
       const createdOrderIds: string[] = [];
 
       // Ensure product IDs exist (products.product_id is a FK) and avoid empty UUIDs

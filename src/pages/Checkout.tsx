@@ -75,6 +75,16 @@ export default function Checkout() {
     if (productId) fetchProduct();
   }, [productId, user, authLoading]);
 
+  // If the URL contains a `step=confirmation` or an `order` param, open confirmation view.
+  useEffect(() => {
+    const stepParam = searchParams.get('step');
+    const orderParam = searchParams.get('order');
+    if (stepParam === 'confirmation') {
+      if (orderParam) setOrderId(orderParam);
+      setStep('confirmation');
+    }
+  }, [searchParams]);
+
   const fetchUserProfile = async () => {
     if (!user) return;
     const { data } = await supabase
@@ -182,7 +192,16 @@ export default function Checkout() {
       status: 'confirmed',
     }).eq('id', orderId);
 
+    // Ensure the user lands on the confirmation view even if redirected elsewhere.
+    // Add query params so the page can rehydrate the confirmation state.
     setStep('confirmation');
+    try {
+      const target = `/checkout?product=${productId || ''}&step=confirmation&order=${orderId}`;
+      navigate(target, { replace: true });
+    } catch (err) {
+      // fallback: stay in-page if navigation fails
+      console.error('Navigation to confirmation failed', err);
+    }
   };
 
   if (loading || authLoading) {
