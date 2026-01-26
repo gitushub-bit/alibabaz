@@ -38,6 +38,13 @@ import {
   Briefcase,
   ChevronRight as ChevronRightIcon,
   Image as ImageIcon,
+  TrendingUp,
+  Eye,
+  Flag,
+  Building2,
+  Clock,
+  Users,
+  Zap,
 } from 'lucide-react';
 
 interface ProductData {
@@ -66,6 +73,8 @@ interface ProductData {
   specifications?: Record<string, string>;
   features?: string[];
   certifications?: string[];
+  category_id?: string;
+  unit?: string;
 }
 
 interface SupplierData {
@@ -104,6 +113,23 @@ interface Review {
   helpful_count: number;
   images: string[];
   product_attributes?: Record<string, string>;
+}
+
+interface RelatedProduct {
+  id: string;
+  title: string;
+  images: string[];
+  price: string;
+  price_min?: number;
+  price_max?: number;
+  moq: number;
+  unit: string;
+  seller_id: string;
+  supplier: string;
+  is_verified: boolean;
+  country?: string;
+  slug?: string;
+  category?: string;
 }
 
 // Fallback product data
@@ -146,7 +172,7 @@ export default function ProductInsights() {
   const [product, setProduct] = useState<ProductData | null>(null);
   const [supplier, setSupplier] = useState<SupplierData | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [relatedProducts, setRelatedProducts] = useState<ProductData[]>([]);
+  const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -297,8 +323,8 @@ export default function ProductInsights() {
         }
       }
 
-      // Fetch related products
-      await fetchRelatedProducts(sellerData);
+      // Fetch related products from database
+      await fetchRelatedProductsFromDB();
 
     } catch (error) {
       console.error('Error fetching product:', error);
@@ -321,7 +347,7 @@ export default function ProductInsights() {
   const fetchFromProductsTable = async () => {
     const { data, error } = await supabase
       .from('products')
-      .select('*, category:categories(name), seller:profiles(*)')
+      .select('*, category:categories(name, id), seller:profiles(*)')
       .eq('id', id)
       .eq('published', true)
       .maybeSingle();
@@ -486,16 +512,18 @@ export default function ProductInsights() {
       country: data.country || sellerInfo.address?.split(',').pop()?.trim() || 'Global',
       country_flag: data.country_flag || '🌍',
       category: data.category?.name || data.category || data.type || 'General',
+      category_id: data.category_id || data.category?.id,
       supplier: data.supplier || sellerInfo.company_name,
       seller_id: productSellerId,
       moq: data.moq || data.minimum_order || 1,
+      unit: data.unit || 'piece',
       supply_ability: data.supply_ability || data.capacity || 'Contact supplier for details',
       lead_time: data.lead_time || data.delivery_time || '15-30 days',
       payment_terms: data.payment_terms || data.payment_methods || ['T/T', 'L/C', 'Western Union', 'PayPal'],
       packaging_details: data.packaging_details || data.packaging || 'Standard export packaging',
       discount: data.discount || data.discount_percentage,
       is_verified: data.is_verified || data.verified || sellerInfo.verified || false,
-      slug: data.slug,
+      slug: data.slug || data.id,
       type: data.type || 'product',
       specifications: data.specifications || data.attributes || {
         'Material': 'Various materials available',
@@ -556,155 +584,252 @@ export default function ProductInsights() {
     ]);
   };
 
-  const fetchRelatedProducts = async (currentSeller?: SupplierData) => {
+  const fetchRelatedProductsFromDB = async () => {
     try {
-      const sellerToUse = currentSeller || supplier;
-      
-      if (sellerToUse) {
-        // Try to fetch products from the same seller first
-        const { data: sellerProducts } = await supabase
-          .from('products')
-          .select('id, title, images, price_min, country, moq, seller_id, published')
-          .eq('seller_id', sellerToUse.user_id)
-          .neq('id', id)
-          .eq('published', true)
-          .limit(4);
+      if (!product) return;
 
-        if (sellerProducts && sellerProducts.length > 0) {
-          const related = sellerProducts.map((item) => ({
-            id: item.id,
-            title: item.title,
-            images: item.images ? [getSafeImage(item.images[0], 0)] : [IMAGE_FALLBACKS[0]],
-            price: item.price_min?.toString() || 'Contact',
-            country: item.country,
-            moq: item.moq,
-            supplier: sellerToUse.company_name,
-            seller_id: sellerToUse.user_id,
-            is_verified: sellerToUse.verified,
-            type: 'product' as const,
-          }));
-          setRelatedProducts(related);
-          return;
+      // Try multiple strategies to find related products
+      let relatedData: any[] = [];
+
+      // Strategy 1: Same category products
+      if (product.category_id) {
+        const { data: categoryProducts } = await supabase
+          .from('products')
+          .select('*, category:categories(name), seller:profiles(*)')
+          .eq('category_id', product.category_id)
+          .neq('id', product.id)
+          .eq('published', true)
+          .limit(8);
+
+        if (categoryProducts && categoryProducts.length > 0) {
+          relatedData = categoryProducts;
         }
       }
 
-      // If no seller-specific products, fetch general related products
-      const { data: generalProducts } = await supabase
-        .from('products')
-        .select('id, title, images, price_min, country, moq, seller_id, published')
-        .neq('id', id)
-        .eq('published', true)
-        .limit(4);
+      // Strategy 2: Same seller products if category didn't return enough
+      if (relatedData.length < 4 && product.seller_id) {
+        const { data: sellerProducts } = await supabase
+          .from('products')
+          .select('*, category:categories(name), seller:profiles(*)')
+          .eq('seller_id', product.seller_id)
+          .neq('id', product.id)
+          .eq('published', true)
+          .limit(8 - relatedData.length);
 
-      if (generalProducts && generalProducts.length > 0) {
-        const relatedWithSuppliers = await Promise.all(
-          generalProducts.map(async (item) => {
+        if (sellerProducts) {
+          // Merge without duplicates
+          const existingIds = new Set(relatedData.map(p => p.id));
+          sellerProducts.forEach(p => {
+            if (!existingIds.has(p.id)) {
+              relatedData.push(p);
+            }
+          });
+        }
+      }
+
+      // Strategy 3: Recent products if still not enough
+      if (relatedData.length < 4) {
+        const { data: recentProducts } = await supabase
+          .from('products')
+          .select('*, category:categories(name), seller:profiles(*)')
+          .neq('id', product.id)
+          .eq('published', true)
+          .order('created_at', { ascending: false })
+          .limit(8 - relatedData.length);
+
+        if (recentProducts) {
+          // Merge without duplicates
+          const existingIds = new Set(relatedData.map(p => p.id));
+          recentProducts.forEach(p => {
+            if (!existingIds.has(p.id)) {
+              relatedData.push(p);
+            }
+          });
+        }
+      }
+
+      // Transform data and get supplier info
+      const relatedWithSuppliers = await Promise.all(
+        relatedData.slice(0, 8).map(async (item) => {
+          let supplierName = item.supplier;
+          let supplierVerified = item.verified;
+
+          // Try to get supplier data if available
+          if (item.seller_id) {
             const { data: supplierData } = await supabase
               .from('suppliers')
               .select('company_name, verified')
               .eq('user_id', item.seller_id)
               .single();
 
-            return {
-              id: item.id,
-              title: item.title,
-              images: item.images ? [getSafeImage(item.images[0], 0)] : [IMAGE_FALLBACKS[0]],
-              price: item.price_min?.toString() || 'Contact',
-              country: item.country,
-              moq: item.moq,
-              supplier: supplierData?.company_name || 'Verified Supplier',
-              seller_id: item.seller_id || 'unknown',
-              is_verified: supplierData?.verified || false,
-              type: 'product' as const,
-            };
-          })
-        );
-        setRelatedProducts(relatedWithSuppliers);
-      } else {
-        // Create mock related products with proper seller info
-        const seller = sellerToUse || createFallbackSeller();
-        setRelatedProducts([
-          {
-            id: '1',
-            title: 'Wireless Headphones Pro',
-            images: [IMAGE_FALLBACKS[0]],
-            price: '29.99',
-            country: 'China',
-            moq: 50,
-            supplier: seller.company_name,
-            seller_id: seller.user_id,
-            is_verified: seller.verified,
-            type: 'product',
-          },
-          {
-            id: '2',
-            title: 'Smart Watch Series 5',
-            images: [IMAGE_FALLBACKS[1]],
-            price: '89.99',
-            country: 'China',
-            moq: 100,
-            supplier: seller.company_name,
-            seller_id: seller.user_id,
-            is_verified: seller.verified,
-            type: 'product',
-          },
-          {
-            id: '3',
-            title: 'Premium Laptop Stand',
-            images: [IMAGE_FALLBACKS[2]],
-            price: '24.99',
-            country: 'Taiwan',
-            moq: 50,
-            supplier: seller.company_name,
-            seller_id: seller.user_id,
-            is_verified: seller.verified,
-            type: 'product',
-          },
-          {
-            id: '4',
-            title: 'Multi-Port USB-C Hub',
-            images: [IMAGE_FALLBACKS[0]],
-            price: '39.99',
-            country: 'China',
-            moq: 100,
-            supplier: seller.company_name,
-            seller_id: seller.user_id,
-            is_verified: seller.verified,
-            type: 'product',
-          },
-        ]);
-      }
+            if (supplierData) {
+              supplierName = supplierData.company_name || supplierName;
+              supplierVerified = supplierData.verified || supplierVerified;
+            }
+          }
+
+          return {
+            id: item.id,
+            title: item.title || 'Unnamed Product',
+            images: item.images ? [getSafeImage(item.images[0], 0)] : [IMAGE_FALLBACKS[0]],
+            price: item.price?.toString() || item.price_min?.toString() || 'Contact',
+            price_min: item.price_min,
+            price_max: item.price_max,
+            moq: item.moq || 1,
+            unit: item.unit || 'piece',
+            seller_id: item.seller_id,
+            supplier: supplierName || 'Verified Supplier',
+            is_verified: supplierVerified || false,
+            country: item.country,
+            slug: item.slug || item.id,
+            category: item.category?.name || 'General',
+          };
+        })
+      );
+
+      setRelatedProducts(relatedWithSuppliers);
+
     } catch (error) {
-      console.error('Error fetching related products:', error);
-      // Create mock related products with seller
-      const seller = createFallbackSeller();
-      setRelatedProducts([
-        {
-          id: '1',
-          title: 'Wireless Headphones',
-          images: [IMAGE_FALLBACKS[0]],
-          price: '29.99',
-          country: 'China',
-          moq: 50,
-          supplier: seller.company_name,
-          seller_id: seller.user_id,
-          is_verified: seller.verified,
-          type: 'product',
-        },
-        {
-          id: '2',
-          title: 'Smart Watch',
-          images: [IMAGE_FALLBACKS[1]],
-          price: '89.99',
-          country: 'China',
-          moq: 100,
-          supplier: seller.company_name,
-          seller_id: seller.user_id,
-          is_verified: seller.verified,
-          type: 'product',
-        },
-      ]);
+      console.error('Error fetching related products from DB:', error);
+      // Create fallback related products
+      createFallbackRelatedProducts();
     }
+  };
+
+  const createFallbackRelatedProducts = () => {
+    const seller = supplier || createFallbackSeller();
+    const fallbackProducts: RelatedProduct[] = [
+      {
+        id: '1',
+        title: 'Premium Wireless Headphones Pro',
+        images: [IMAGE_FALLBACKS[0]],
+        price: '29.99',
+        price_min: 29.99,
+        price_max: 39.99,
+        moq: 50,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'premium-wireless-headphones-pro',
+        category: 'Electronics',
+      },
+      {
+        id: '2',
+        title: 'Smart Watch Series 7',
+        images: [IMAGE_FALLBACKS[1]],
+        price: '89.99',
+        price_min: 89.99,
+        price_max: 99.99,
+        moq: 100,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'smart-watch-series-7',
+        category: 'Wearables',
+      },
+      {
+        id: '3',
+        title: 'Ergonomic Office Chair',
+        images: [IMAGE_FALLBACKS[2]],
+        price: '149.99',
+        price_min: 149.99,
+        price_max: 199.99,
+        moq: 10,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'Vietnam',
+        slug: 'ergonomic-office-chair',
+        category: 'Furniture',
+      },
+      {
+        id: '4',
+        title: 'Multi-Port USB-C Hub',
+        images: [IMAGE_FALLBACKS[0]],
+        price: '39.99',
+        price_min: 39.99,
+        price_max: 49.99,
+        moq: 100,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'Taiwan',
+        slug: 'multi-port-usb-c-hub',
+        category: 'Computer Accessories',
+      },
+      {
+        id: '5',
+        title: 'LED Desk Lamp',
+        images: [IMAGE_FALLBACKS[1]],
+        price: '24.99',
+        price_min: 24.99,
+        price_max: 34.99,
+        moq: 50,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'led-desk-lamp',
+        category: 'Home & Office',
+      },
+      {
+        id: '6',
+        title: 'Bluetooth Speaker',
+        images: [IMAGE_FALLBACKS[2]],
+        price: '49.99',
+        price_min: 49.99,
+        price_max: 59.99,
+        moq: 100,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'bluetooth-speaker',
+        category: 'Audio',
+      },
+      {
+        id: '7',
+        title: 'Portable Power Bank',
+        images: [IMAGE_FALLBACKS[0]],
+        price: '34.99',
+        price_min: 34.99,
+        price_max: 44.99,
+        moq: 200,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'portable-power-bank',
+        category: 'Mobile Accessories',
+      },
+      {
+        id: '8',
+        title: 'Wireless Mouse',
+        images: [IMAGE_FALLBACKS[1]],
+        price: '19.99',
+        price_min: 19.99,
+        price_max: 29.99,
+        moq: 300,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'wireless-mouse',
+        category: 'Computer Accessories',
+      },
+    ];
+
+    setRelatedProducts(fallbackProducts.slice(0, 8));
   };
 
   const handleAddToCart = async () => {
@@ -723,7 +848,7 @@ export default function ProductInsights() {
       image: product.images[0] || IMAGE_FALLBACKS[0],
       quantity: Math.max(quantity, product.moq || 1),
       moq: product.moq || 1,
-      unit: 'piece',
+      unit: product.unit || 'piece',
       seller_id: product.seller_id,
       seller_name: product.supplier || supplier.company_name,
       supplier_company: supplier.company_name,
@@ -788,6 +913,90 @@ export default function ProductInsights() {
     if (isNaN(price)) return '0.00';
     return (price * quantity).toFixed(2);
   };
+
+  // Small Product Card Component
+  const SmallProductCard = ({ product: item }: { product: RelatedProduct }) => (
+    <Link to={`/product-insights/product/${item.slug || item.id}`} className="group block">
+      <Card className="border border-gray-200 hover:border-[#FF6B35] transition-all duration-200 hover:shadow-md h-full overflow-hidden">
+        <div className="relative">
+          <div className="aspect-square overflow-hidden bg-gray-100">
+            <img
+              src={getSafeImage(item.images[0], 0)}
+              alt={item.title}
+              className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+              loading="lazy"
+              onError={(e) => {
+                e.currentTarget.src = IMAGE_FALLBACKS[0];
+              }}
+            />
+          </div>
+          {item.is_verified && (
+            <div className="absolute top-2 right-2">
+              <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-0">
+                <Shield className="h-3 w-3 mr-1" />
+                Verified
+              </Badge>
+            </div>
+          )}
+          {item.price_min && item.price_max && item.price_max > item.price_min && (
+            <div className="absolute bottom-2 left-2">
+              <Badge variant="secondary" className="bg-blue-100 text-blue-600 text-xs">
+                <TrendingUp className="h-3 w-3 mr-1" />
+                Price Range
+              </Badge>
+            </div>
+          )}
+        </div>
+        <CardContent className="p-3">
+          <h3 className="text-sm font-medium line-clamp-2 mb-2 min-h-[2.5rem] group-hover:text-[#FF6B35] transition-colors">
+            {item.title}
+          </h3>
+          
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-bold text-[#FF6B35] text-base">${formatPrice(item.price)}</span>
+                {item.price_min && item.price_max && item.price_max > item.price_min && (
+                  <span className="text-xs text-gray-500 ml-1">~ ${item.price_max}</span>
+                )}
+              </div>
+              {item.moq > 1 && (
+                <Badge variant="outline" className="text-xs border-gray-300">
+                  MOQ: {item.moq}
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span className="truncate max-w-[70%]">{item.supplier}</span>
+              {item.country && (
+                <span className="flex items-center">
+                  <Globe className="h-3 w-3 mr-1" />
+                  {item.country}
+                </span>
+              )}
+            </div>
+            
+            <div className="pt-2 border-t">
+              <Button 
+                size="sm" 
+                className="w-full text-xs h-7 bg-[#FF6B35] hover:bg-[#FF854F]"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Add to cart logic here
+                  toast.success(`Added ${item.title} to cart`);
+                }}
+              >
+                <ShoppingCart className="h-3 w-3 mr-1" />
+                Add to Inquiry
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
 
   if (loading) {
     return (
@@ -1167,14 +1376,17 @@ export default function ProductInsights() {
                     {product.features && product.features.length > 0 && (
                       <div>
                         <h3 className="text-lg font-semibold mb-2 sm:mb-3">Key Features</h3>
-                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-2">
+                        <div className="grid md:grid-cols-2 gap-4 mt-6">
                           {product.features.map((feature, index) => (
-                            <li key={index} className="flex items-start gap-2">
-                              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                              <span className="text-gray-600 text-sm sm:text-base">{feature}</span>
-                            </li>
+                            <div key={index} className="flex items-start gap-3">
+                              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <h4 className="font-medium">{feature.split(':')[0]}</h4>
+                                <p className="text-sm text-gray-600">{feature.split(':')[1] || feature}</p>
+                              </div>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     )}
 
@@ -1313,7 +1525,7 @@ export default function ProductInsights() {
                                 Reply
                               </Button>
                               <Button variant="ghost" size="sm" className="text-gray-500 text-xs sm:text-sm">
-                                <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                                <Flag className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                                 Report
                               </Button>
                             </div>
@@ -1406,49 +1618,27 @@ export default function ProductInsights() {
               </Tabs>
             </Card>
 
-            {/* Related Products */}
+            {/* Related Products Section with Smaller Cards */}
             {relatedProducts.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
-                  <h2 className="text-lg sm:text-xl font-semibold">Related Products</h2>
-                  <Button variant="ghost" className="text-[#FF6B35] text-sm sm:text-base">
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-semibold">Related Products</h2>
+                    <p className="text-sm text-gray-500">Similar products you might be interested in</p>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    className="text-[#FF6B35] text-sm sm:text-base"
+                    onClick={() => navigate(`/products?category=${product.category_id}`)}
+                  >
                     View All <ChevronRightIcon className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {relatedProducts.map((item) => (
-                    <Link
-                      key={item.id}
-                      to={`/product-insights/product/${item.id}`}
-                      className="group"
-                    >
-                      <Card className="border border-gray-200 hover:border-[#FF6B35] transition-colors overflow-hidden h-full">
-                        <div className="aspect-square overflow-hidden bg-gray-100">
-                          <img
-                            src={getSafeImage(item.images[0], 0)}
-                            alt={item.title}
-                            className="w-full h-full object-contain p-2 sm:p-4 group-hover:scale-105 transition-transform duration-300"
-                            loading="lazy"
-                            onError={(e) => {
-                              e.currentTarget.src = IMAGE_FALLBACKS[0];
-                            }}
-                          />
-                        </div>
-                        <CardContent className="p-3 sm:p-4">
-                          <h3 className="text-xs sm:text-sm font-medium line-clamp-2 mb-1 sm:mb-2 min-h-[2.5rem] sm:min-h-[3rem] group-hover:text-[#FF6B35]">
-                            {item.title}
-                          </h3>
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-[#FF6B35] text-sm sm:text-base">${item.price}</span>
-                            {item.is_verified && (
-                              <Shield className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">MOQ: {item.moq} pieces</p>
-                          <p className="text-xs text-gray-400 mt-1 truncate">by {item.supplier}</p>
-                        </CardContent>
-                      </Card>
-                    </Link>
+                
+                {/* Products Grid - Responsive with smaller cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                  {relatedProducts.slice(0, 8).map((item) => (
+                    <SmallProductCard key={item.id} product={item} />
                   ))}
                 </div>
               </div>
@@ -1459,11 +1649,14 @@ export default function ProductInsights() {
           <div className="lg:col-span-4 space-y-6 hidden lg:block">
             {/* Sticky Container */}
             <div className="sticky top-24 space-y-6">
-              {/* Supplier Card */}
+              {/* Supplier Card - Alibaba Style */}
               <Card className="border border-gray-200 shadow-sm">
                 <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 flex items-center justify-center border-2 border-white shadow-sm">
+                      <Building2 className="h-8 w-8 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
                       <h3 className="font-semibold text-lg mb-1">{supplier.company_name}</h3>
                       <div className="flex items-center gap-2 mb-2">
                         {supplier.gold_supplier && (
@@ -1484,9 +1677,8 @@ export default function ProductInsights() {
                           </Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <Factory className="h-4 w-4" />
-                        <span>{supplier.business_type}</span>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">Response Rate:</span> {supplier.response_rate}%
                       </div>
                     </div>
                     {supplier.online_status && (
@@ -1500,14 +1692,14 @@ export default function ProductInsights() {
                   {/* Supplier Stats */}
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-2xl font-bold text-[#FF6B35]">{supplier.response_rate}%</p>
-                      <p className="text-xs text-gray-500">Response Rate</p>
+                      <Clock className="h-5 w-5 mx-auto text-gray-600 mb-1" />
+                      <p className="text-xs text-gray-500">Established</p>
+                      <p className="text-xl font-bold text-[#FF6B35]">{supplier.year_established}</p>
                     </div>
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-2xl font-bold text-[#FF6B35]">
-                        {new Date().getFullYear() - supplier.year_established}
-                      </p>
-                      <p className="text-xs text-gray-500">Years on Platform</p>
+                      <Users className="h-5 w-5 mx-auto text-gray-600 mb-1" />
+                      <p className="text-xs text-gray-500">Employees</p>
+                      <p className="text-xl font-bold text-[#FF6B35]">{supplier.employees}</p>
                     </div>
                   </div>
 
@@ -1538,13 +1730,30 @@ export default function ProductInsights() {
                   </div>
 
                   {/* Contact Button */}
-                  <Button 
-                    className="w-full mt-6 bg-[#FF6B35] hover:bg-[#FF854F]"
-                    onClick={handleContactSupplier}
-                  >
-                    <MessageCircle className="h-5 w-5 mr-2" />
-                    Contact Supplier
-                  </Button>
+                  <div className="space-y-3 pt-6 border-t">
+                    <Button 
+                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+                      onClick={handleContactSupplier}
+                    >
+                      <MessageCircle className="h-5 w-5 mr-2" />
+                      Contact Supplier
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      className="w-full border-blue-500 text-blue-600 hover:bg-blue-50"
+                      onClick={() => navigate('/rfq/new', { state: { productId: product?.id } })}
+                    >
+                      Send Inquiry
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      className="w-full text-gray-600 hover:text-blue-600"
+                      onClick={() => navigate(`/supplier/${supplier.id}`)}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Company Profile
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -1649,3 +1858,10 @@ export default function ProductInsights() {
     </div>
   );
 }
+
+// Add missing Globe icon component
+const Globe = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+  </svg>
+);
