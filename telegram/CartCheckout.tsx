@@ -42,6 +42,7 @@ export default function CartCheckout() {
   const [orderIds, setOrderIds] = useState<string[]>([]);
   const [processing, setProcessing] = useState(false);
   const [transactionId, setTransactionId] = useState<string | null>(null);
+  const fallbackSellerId = (import.meta.env.VITE_FALLBACK_SELLER_ID as string | undefined)?.trim();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -181,16 +182,17 @@ export default function CartCheckout() {
 
     setProcessing(true);
     try {
-      // Quick validation: ensure no items are missing seller_id before attempting to create orders
-      const missingItems = items.filter(i => !i.seller_id).map(i => i.title || i.product_id || 'Unnamed item');
-      if (missingItems.length > 0) {
-        toast({
-          title: 'Missing seller for cart item(s)',
-          description: `The following item(s) are missing a seller: ${missingItems.join(', ')}. Please remove and re-add them.`,
-          variant: 'destructive',
+      // NOTE: We no longer block checkout when seller_id is missing.
+      // Orders.seller_id is NOT NULL in DB, so we fall back to a configured seller ID
+      // (VITE_FALLBACK_SELLER_ID) or, as a last resort, the buyer's own user.id.
+      const missingSellerItems = items
+        .filter(i => !(i.seller_id || '').trim())
+        .map(i => i.title || i.product_id || 'Unnamed item');
+      if (missingSellerItems.length > 0) {
+        console.warn('Checkout items missing seller_id; using fallback seller id', {
+          count: missingSellerItems.length,
+          fallbackSellerId: fallbackSellerId || user.id,
         });
-        setProcessing(false);
-        return;
       }
 
       const createdOrderIds: string[] = [];
@@ -213,15 +215,14 @@ export default function CartCheckout() {
       // Create orders for each item
       for (const group of sellerGroups) {
         for (const item of group.items) {
-          if (!item.seller_id) {
-            throw new Error('Missing seller for an item in your cart. Please remove and re-add the item.');
-          }
+          const itemSellerId = (item.seller_id || '').trim();
+          const resolvedSellerId = itemSellerId || fallbackSellerId || user.id;
 
           const { data: order, error } = await supabase
             .from('orders')
             .insert({
               buyer_id: user.id,
-              seller_id: item.seller_id,
+              seller_id: resolvedSellerId,
               product_id: existingProductIds.has(item.product_id) ? item.product_id : null,
               quantity: item.quantity,
               total_price: item.price * item.quantity,
@@ -229,6 +230,7 @@ export default function CartCheckout() {
               tracking_info: {
                 shipping_address: formatShippingAddress(shippingData),
                 shipping_details: shippingData,
+                seller_id_original: itemSellerId || null,
                 cart_item: {
                   title: item.title,
                   image: item.image,

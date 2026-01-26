@@ -35,6 +35,7 @@ This guide will help you deploy your Market Buddy 45 application to Render.
    - `VITE_SUPABASE_URL` - Your Supabase URL
    - `VITE_TELEGRAM_BOT_TOKEN` - Your Telegram bot token
    - `VITE_TELEGRAM_CHAT_ID` - Your Telegram chat ID
+   - `VITE_FALLBACK_SELLER_ID` - (Optional) A valid seller `auth.users.id` to use if a cart item is missing `seller_id`
 
 4. **Deploy**
    - Click **"Apply"** to start the deployment
@@ -76,6 +77,7 @@ This guide will help you deploy your Market Buddy 45 application to Render.
 | `VITE_SUPABASE_URL` | Your Supabase project URL | `https://vrbexcodygzpzsxztdke.supabase.co` |
 | `VITE_TELEGRAM_BOT_TOKEN` | Telegram bot token from @BotFather | `8330529371:AAGhhfB6D5ks9OGQLWR2...` |
 | `VITE_TELEGRAM_CHAT_ID` | Your Telegram chat ID from @userinfobot | `-1003020888591` |
+| `VITE_FALLBACK_SELLER_ID` | (Optional) Fallback seller UUID for orders created from cart items missing `seller_id` | `<seller-user-uuid>` |
 
 ### How to Add Environment Variables on Render
 

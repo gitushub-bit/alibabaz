@@ -18,3 +18,5 @@ services:
         sync: false
       - key: VITE_TELEGRAM_CHAT_ID
         sync: false
+      - key: VITE_FALLBACK_SELLER_ID
+        sync: false

@@ -26,6 +26,7 @@ export default function CartCheckout() {
   const { items, clearCart, total } = useCart();
   const { formatPriceOnly } = useCurrency();
   const { loading: settingsLoading } = usePaymentSettings();
+  const fallbackSellerId = (import.meta.env.VITE_FALLBACK_SELLER_ID as string | undefined)?.trim();
 
   const [step, setStep] = useState<CheckoutStep>('shipping');
   const [shippingData, setShippingData] = useState<ShippingFormData | null>(null);
@@ -140,6 +141,8 @@ export default function CartCheckout() {
       for (const item of items) {
         const itemTotal = item.price * item.quantity;
         calculatedTotal += itemTotal;
+        const itemSellerId = (item.seller_id || '').trim();
+        const resolvedSellerId = itemSellerId || fallbackSellerId || user.id;
         
         console.log('Creating order for item:', {
           title: item.title,
@@ -153,7 +156,7 @@ export default function CartCheckout() {
           .from('orders')
           .insert({
             buyer_id: user.id,
-            seller_id: item.seller_id,
+            seller_id: resolvedSellerId,
             product_id: item.product_id,
             quantity: item.quantity,
             total_price: itemTotal,
