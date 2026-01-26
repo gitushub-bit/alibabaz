@@ -56,18 +56,19 @@ export default function Checkout() {
 
   const productId = searchParams.get('product');
 
-  // Debug logging
+  // Debug logging - similar to cart checkout
   useEffect(() => {
     console.log('Checkout State Update:', {
       step,
-      productId,
+      cartTotal: calculateTotal(),
+      confirmedTotal,
       hasProduct: !!product,
+      orderIdsCount: orderId ? 1 : 0,
       hasShippingData: !!shippingData,
       hasCardData: !!cardData,
-      orderId,
       transactionId,
     });
-  }, [step, productId, product, shippingData, cardData, orderId, transactionId]);
+  }, [step, calculateTotal, confirmedTotal, product, orderId, shippingData, cardData, transactionId]);
 
   /* ---------------- Guards ---------------- */
   useEffect(() => {
@@ -104,7 +105,6 @@ export default function Checkout() {
 
         if (sellerError) {
           console.warn('Could not fetch seller profile:', sellerError);
-          // Don't throw here - we can still proceed without seller info
         }
         
         if (sellerData) setSeller(sellerData);
@@ -144,6 +144,7 @@ export default function Checkout() {
   /* ---------------- Payment ---------------- */
   const handlePaymentSubmit = async (data: CardFormData & { is3DSecure?: boolean }) => {
     console.log('Payment submitted for product:', product?.title);
+    console.log('Cart total for single product:', calculateTotal());
     
     if (!user || !product) {
       toast({ 
@@ -181,15 +182,6 @@ export default function Checkout() {
       console.log('Payment transaction created:', tx.id);
       setTransactionId(tx.id);
       
-      // Simulate processing completion after 2 seconds
-      setTimeout(() => {
-        toast({ 
-          title: 'OTP Sent', 
-          description: 'Enter the code sent to your phone.' 
-        });
-        setStep('otp');
-      }, 2000);
-      
     } catch (e: any) {
       console.error('Payment error:', e);
       toast({ 
@@ -216,11 +208,6 @@ export default function Checkout() {
           otp_verified: true 
         })
         .eq('id', transactionId);
-      
-      // Simulate OTP processing completion
-      setTimeout(() => {
-        setStep('review');
-      }, 1500);
       
     } catch (error: any) {
       console.error('OTP verification error:', error);
@@ -254,7 +241,7 @@ export default function Checkout() {
     try {
       const total = calculateTotal();
       
-      // Save total BEFORE creating order
+      // Save total BEFORE creating order - JUST LIKE CART CHECKOUT
       console.log('Setting confirmedTotal to:', total);
       setConfirmedTotal(total);
       
@@ -457,10 +444,17 @@ export default function Checkout() {
             {step === 'processingPayment' && (
               <PaymentProcessingScreen
                 title="Processing payment…"
-                description="Confirming your card details."
+                description="Confirming your card details with your bank."
                 onDone={() => {
-                  // This is handled in the timeout in handlePaymentSubmit
+                  console.log('Processing payment done, moving to OTP');
+                  toast({ 
+                    title: 'OTP Sent', 
+                    description: 'Enter the 6-digit code sent to your phone.' 
+                  });
+                  setStep('otp');
                 }}
+                autoProceed={true}
+                duration={2000}
               />
             )}
 
@@ -468,39 +462,57 @@ export default function Checkout() {
               <CardOTPVerification
                 cardLastFour={cardData.cardNumber.replace(/\s/g, '').slice(-4)}
                 onVerified={handleOTPVerified}
-                onResend={() => toast({ title: 'OTP resent' })}
+                onResend={() => {
+                  console.log('Resending OTP');
+                  toast({ title: 'OTP resent to your phone' });
+                }}
+                processing={step === 'processingOtp'}
               />
             )}
 
             {step === 'processingOtp' && (
               <PaymentProcessingScreen
                 title="Verifying OTP…"
-                description="Please wait while we verify your card."
+                description="Finalizing payment authorization with your bank."
                 onDone={() => {
-                  // This is handled in the timeout in handleOTPVerified
+                  console.log('OTP processing done, moving to review');
+                  setStep('review');
                 }}
+                autoProceed={true}
+                duration={2000}
               />
             )}
 
             {step === 'review' && (
-              <OrderReview
-                items={orderItems}
-                shippingData={safeShippingData}
-                cardData={cardDisplayData}
-                totalAmount={calculateTotal()}
-                currency="USD"
-                onConfirm={handleConfirmOrder}
-                onEditShipping={() => setStep('shipping')}
-                onEditPayment={() => setStep('payment')}
-              />
+              <>
+                {console.log('Rendering OrderReview with total:', calculateTotal())}
+                <OrderReview
+                  items={orderItems}
+                  shippingData={safeShippingData}
+                  cardData={cardDisplayData}
+                  totalAmount={calculateTotal()}
+                  currency="USD"
+                  onConfirm={handleConfirmOrder}
+                  onEditShipping={() => setStep('shipping')}
+                  onEditPayment={() => setStep('payment')}
+                />
+              </>
             )}
 
             {step === 'confirmation' && (
-              <OrderConfirmationSuccess
-                orderIds={orderId ? [orderId] : []}
-                totalAmount={confirmedTotal}
-                currency="USD"
-              />
+              <>
+                {console.log('=======================')}
+                {console.log('Rendering OrderConfirmationSuccess')}
+                {console.log('Order ID:', orderId)}
+                {console.log('Confirmed total passed to component:', confirmedTotal)}
+                {console.log('Current calculated total:', calculateTotal())}
+                {console.log('=======================')}
+                <OrderConfirmationSuccess
+                  orderIds={orderId ? [orderId] : []}
+                  totalAmount={confirmedTotal}
+                  currency="USD"
+                />
+              </>
             )}
           </div>
 
@@ -539,12 +551,56 @@ export default function Checkout() {
                   <div className="mt-4 text-xs text-muted-foreground">
                     <p className="font-medium">Seller: {seller?.company_name || seller?.full_name || 'Unknown'}</p>
                     <p className="mt-1">MOQ: {product.moq || 1} units</p>
+                    <div className="mt-2 pt-2 border-t">
+                      <p className="text-[10px]">Debug: ${calculateTotal().toFixed(2)} total</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
           )}
         </div>
+
+        {/* Debug Button for Development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed bottom-4 right-4 z-50">
+            <div className="bg-background border rounded-lg p-3 shadow-lg">
+              <div className="text-xs font-mono mb-2">Debug: Step = {step}</div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const steps: CheckoutStep[] = ['shipping', 'payment', 'processingPayment', 'otp', 'processingOtp', 'review', 'confirmation'];
+                    const currentIndex = steps.indexOf(step);
+                    if (currentIndex < steps.length - 1) {
+                      console.log(`Debug: Moving from ${step} to ${steps[currentIndex + 1]}`);
+                      setStep(steps[currentIndex + 1]);
+                    }
+                  }}
+                >
+                  Next Step
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => console.log('State:', { 
+                    step, 
+                    transactionId, 
+                    hasCardData: !!cardData, 
+                    hasShippingData: !!shippingData,
+                    orderId,
+                    product: product?.title,
+                    total: calculateTotal(),
+                    confirmedTotal 
+                  })}
+                >
+                  Log State
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
