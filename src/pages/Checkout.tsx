@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,10 +13,12 @@ import { Header } from '@/components/layout/Header';
 import CheckoutStepper from '@/components/checkout/CheckoutStepper';
 import ShippingAddressForm, { ShippingFormData } from '@/components/checkout/ShippingAddressForm';
 import PaymentDetailsForm, { CardFormData } from '@/components/checkout/PaymentDetailsForm';
-import CardOTPVerification from '@/components/checkout/CardOTPVerification';
 import OrderReview from '@/components/checkout/OrderReview';
 import OrderConfirmationSuccess from '@/components/checkout/OrderConfirmationSuccess';
 import PaymentProcessingScreen from '@/components/checkout/PaymentProcessingScreen';
+
+// IMPORT THE SAME OTP COMPONENT AS CART CHECKOUT
+import OTPVerification from '@/components/payment/OTPVerification';
 
 interface Product {
   id: string;
@@ -33,7 +35,6 @@ interface SellerProfile {
   company_name: string | null;
 }
 
-// Define CheckoutStep type locally to avoid import issues
 type CheckoutStep = 'shipping' | 'payment' | 'processingPayment' | 'otp' | 'processingOtp' | 'review' | 'confirmation';
 
 export default function Checkout() {
@@ -56,19 +57,6 @@ export default function Checkout() {
 
   const productId = searchParams.get('product');
 
-  // Debug logging
-  useEffect(() => {
-    console.log('🚀 Checkout State Update:', {
-      step,
-      productId,
-      hasProduct: !!product,
-      hasShippingData: !!shippingData,
-      hasCardData: !!cardData,
-      orderId,
-      transactionId,
-    });
-  }, [step, productId, product, shippingData, cardData, orderId, transactionId]);
-
   /* ---------------- Guards ---------------- */
   useEffect(() => {
     if (!authLoading && !user) {
@@ -84,35 +72,23 @@ export default function Checkout() {
   /* ---------------- Product Fetching ---------------- */
   const fetchProduct = async () => {
     try {
-      const { data: productData, error: productError } = await supabase
+      const { data: productData } = await supabase
         .from('products')
         .select('*')
         .eq('id', productId)
         .single();
 
-      if (productError) throw productError;
-
       if (productData) {
         setProduct(productData);
         setQuantity(productData.moq || 1);
 
-        const { data: sellerData, error: sellerError } = await supabase
+        const { data: sellerData } = await supabase
           .from('profiles')
           .select('full_name, company_name')
           .eq('user_id', productData.seller_id)
           .single();
 
-        if (sellerError) {
-          console.warn('Could not fetch seller profile:', sellerError);
-        }
-        
         if (sellerData) setSeller(sellerData);
-      } else {
-        toast({ 
-          title: 'Product not found', 
-          description: 'The product you are trying to purchase is no longer available.',
-          variant: 'destructive' 
-        });
       }
     } catch (error: any) {
       console.error('Error fetching product:', error);
@@ -127,22 +103,22 @@ export default function Checkout() {
   };
 
   /* ---------------- Calculate Total ---------------- */
-  const calculateTotal = useCallback(() => {
+  const calculateTotal = () => {
     if (!product) return 0;
     const price = Number(product.price_min ?? product.price_max ?? 0);
     return price * quantity;
-  }, [product, quantity]);
+  };
 
   /* ---------------- Shipping ---------------- */
   const handleShippingSubmit = (data: ShippingFormData) => {
-    console.log('✅ Shipping submitted:', data);
+    console.log('Shipping submitted');
     setShippingData(data);
     setStep('payment');
   };
 
   /* ---------------- Payment ---------------- */
   const handlePaymentSubmit = async (data: CardFormData & { is3DSecure?: boolean }) => {
-    console.log('✅ Payment submitted for product:', product?.title);
+    console.log('Payment submitted');
     
     if (!user || !product) {
       toast({ 
@@ -157,19 +133,14 @@ export default function Checkout() {
     setStep('processingPayment');
 
     try {
-      const lastFour = data.cardNumber.replace(/\s/g, '').slice(-4);
-      const brand = detectCardBrand(data.cardNumber);
       const total = calculateTotal();
 
-      console.log('📝 Creating payment transaction for amount:', total);
       const { data: tx, error } = await supabase
         .from('payment_transactions')
         .insert({
           user_id: user.id,
           amount: total,
           currency: 'USD',
-          card_last_four: lastFour,
-          card_brand: brand,
           status: 'pending_otp',
         })
         .select()
@@ -177,11 +148,10 @@ export default function Checkout() {
 
       if (error) throw error;
 
-      console.log('✅ Payment transaction created:', tx.id);
       setTransactionId(tx.id);
       
     } catch (e: any) {
-      console.error('❌ Payment error:', e);
+      console.error('Payment error:', e);
       toast({ 
         title: 'Payment error', 
         description: e.message, 
@@ -192,63 +162,16 @@ export default function Checkout() {
   };
 
   /* ---------------- OTP ---------------- */
-  const handleOTPVerified = async (otpCode: string) => {
-    console.log('✅ OTP verified with code:', otpCode, 'transactionId:', transactionId);
-    
-    if (!transactionId) {
-      toast({ 
-        title: 'Error', 
-        description: 'Transaction ID missing', 
-        variant: 'destructive' 
-      });
-      return;
-    }
-
+  const handleOTPVerified = async () => {
+    console.log('OTP verified');
     setStep('processingOtp');
-
-    try {
-      // Update transaction with OTP code
-      const { error } = await supabase
-        .from('payment_transactions')
-        .update({ 
-          status: 'otp_verified', 
-          otp_verified: true,
-          otp_code: otpCode
-        })
-        .eq('id', transactionId);
-
-      if (error) throw error;
-      
-      console.log('✅ Transaction updated to otp_verified');
-      
-      // Auto-proceed to review after 1.5 seconds
-      setTimeout(() => {
-        console.log('🔄 Moving to review step');
-        setStep('review');
-      }, 1500);
-      
-    } catch (error: any) {
-      console.error('❌ OTP verification error:', error);
-      toast({
-        title: 'OTP Verification Error',
-        description: error.message,
-        variant: 'destructive'
-      });
-      setStep('otp'); // Go back to OTP on error
-    }
   };
 
   /* ---------------- Review ---------------- */
   const handleConfirmOrder = async () => {
-    console.log('=======================');
-    console.log('🚀 handleConfirmOrder START (Single Product)');
-    console.log('Product:', product?.title);
-    console.log('Quantity:', quantity);
-    console.log('User:', user?.id);
-    console.log('=======================');
+    console.log('Confirming order');
 
     if (!user || !product || !shippingData || !cardData) {
-      console.log('Missing required data:', { user, product, shippingData, cardData });
       toast({ 
         title: 'Error', 
         description: 'Missing required information', 
@@ -259,20 +182,9 @@ export default function Checkout() {
 
     try {
       const total = calculateTotal();
-      
-      // Save total BEFORE creating order
-      console.log('💾 Setting confirmedTotal to:', total);
       setConfirmedTotal(total);
-      
-      console.log('📦 Creating order for product:', {
-        title: product.title,
-        price: product.price_min ?? product.price_max,
-        quantity: quantity,
-        total: total,
-        seller_id: product.seller_id
-      });
 
-      // Create order in database
+      // Create order
       const { data: order, error } = await supabase
         .from('orders')
         .insert({
@@ -283,27 +195,15 @@ export default function Checkout() {
           total_price: total,
           status: 'paid',
           shipping_address: JSON.stringify(shippingData),
-          tracking_info: {
-            shipping_address: shippingData.streetAddress,
-            notes: shippingData.additionalNotes || '',
-            city: shippingData.city,
-            state: shippingData.stateProvince,
-            country: shippingData.country,
-            postalCode: shippingData.postalCode,
-          },
         })
         .select()
         .single();
 
-      if (error) {
-        console.error('❌ Order creation error:', error);
-        throw error;
-      }
-      
-      console.log('✅ Order created with ID:', order.id);
+      if (error) throw error;
+
       setOrderId(order.id);
 
-      // Update payment transaction with order reference
+      // Update payment transaction
       if (transactionId) {
         await supabase
           .from('payment_transactions')
@@ -314,16 +214,9 @@ export default function Checkout() {
           .eq('id', transactionId);
       }
 
-      console.log('=======================');
-      console.log('✅ handleConfirmOrder COMPLETE');
-      console.log('Order ID created:', order.id);
-      console.log('Confirmed total:', total);
-      console.log('Step changing to confirmation');
-      console.log('=======================');
-
       setStep('confirmation');
     } catch (e: any) {
-      console.error('❌ Order error:', e);
+      console.error('Order error:', e);
       toast({ 
         title: 'Order error', 
         description: e.message, 
@@ -332,99 +225,29 @@ export default function Checkout() {
     }
   };
 
-  const detectCardBrand = (num: string): string => {
-    const c = num.replace(/\s/g, '');
-    if (/^4/.test(c)) return 'Visa';
-    if (/^5[1-5]/.test(c)) return 'Mastercard';
-    if (/^3[47]/.test(c)) return 'American Express';
-    if (/^6(?:011|5)/.test(c)) return 'Discover';
-    return 'Card';
-  };
-
   const handleBack = () => {
-    switch (step) {
-      case 'payment':
-        setStep('shipping');
-        break;
-      case 'otp':
-        setStep('payment');
-        break;
-      case 'review':
-        setStep('otp');
-        break;
-      case 'confirmation':
-        navigate(`/products/${productId}`);
-        break;
-      default:
-        navigate(-1);
+    if (step === 'confirmation') {
+      navigate(`/products/${productId}`);
+    } else {
+      navigate(-1);
     }
   };
 
-  /* ---------------- Loading & Error States ---------------- */
   if (loading || authLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container py-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 w-48 bg-muted rounded" />
-            <div className="h-64 bg-muted rounded" />
-          </div>
-        </div>
-      </div>
-    );
+    return <div>Loading...</div>;
   }
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-background">
+      <div>
         <Header />
         <div className="container py-8 text-center">
-          <h1 className="text-2xl font-bold">Product not found</h1>
-          <Button onClick={() => navigate('/products')} className="mt-4">
-            Browse Products
-          </Button>
+          <h1>Product not found</h1>
+          <Button onClick={() => navigate('/products')}>Browse Products</Button>
         </div>
       </div>
     );
   }
-
-  /* ---------------- Prepare Data for Components ---------------- */
-  const orderItems = [{
-    id: product.id,
-    title: product.title,
-    price: Number(product.price_min ?? product.price_max ?? 0),
-    quantity,
-    image: product.images?.[0] || '/placeholder.svg',
-    seller_name: seller?.company_name || seller?.full_name || 'Seller',
-    seller_id: product.seller_id,
-    product_id: product.id,
-  }];
-
-  const cardDisplayData = cardData ? {
-    cardholderName: cardData.cardholderName,
-    cardNumber: `•••• •••• •••• ${cardData.cardNumber.replace(/\s/g, '').slice(-4)}`,
-    expiryMonth: cardData.expiryMonth,
-    expiryYear: cardData.expiryYear,
-  } : {
-    cardholderName: 'N/A',
-    cardNumber: '•••• •••• •••• ••••',
-    expiryMonth: 'MM',
-    expiryYear: 'YY',
-  };
-
-  // Ensure shippingData has all required properties for OrderReview
-  const safeShippingData = shippingData || {
-    fullName: '',
-    streetAddress: '',
-    city: '',
-    stateProvince: '',
-    postalCode: '',
-    country: '',
-    phoneNumber: '',
-    email: user?.email || '',
-    additionalNotes: '',
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -432,11 +255,7 @@ export default function Checkout() {
       <div className="container py-8">
         <CheckoutStepper currentStep={step} />
 
-        <Button
-          variant="ghost"
-          onClick={handleBack}
-          className="mb-6"
-        >
+        <Button variant="ghost" onClick={handleBack} className="mb-6">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
@@ -463,75 +282,77 @@ export default function Checkout() {
             {step === 'processingPayment' && (
               <PaymentProcessingScreen
                 title="Processing payment…"
-                description="Confirming your card details with your bank."
+                description="Confirming your card details."
                 onDone={() => {
-                  console.log('✅ Processing payment done, moving to OTP');
-                  toast({ 
-                    title: 'OTP Sent', 
-                    description: 'Enter the 6-digit code sent to your phone.' 
-                  });
+                  toast({ title: 'OTP Sent', description: 'Enter the code sent to your phone.' });
                   setStep('otp');
                 }}
-                autoProceed={true}
-                duration={2000}
               />
             )}
 
-            {step === 'otp' && cardData && (
-              <CardOTPVerification
-                cardLastFour={cardData.cardNumber.replace(/\s/g, '').slice(-4)}
+            {step === 'otp' && (
+              <OTPVerification
                 onVerified={handleOTPVerified}
-                onResend={() => {
-                  console.log('🔄 Resending OTP');
-                  toast({ title: 'OTP resent to your phone' });
-                }}
-                processing={step === 'processingOtp'}
+                onResend={() => toast({ title: 'OTP resent' })}
               />
             )}
 
             {step === 'processingOtp' && (
               <PaymentProcessingScreen
                 title="Verifying OTP…"
-                description="Finalizing payment authorization with your bank."
-                onDone={() => {
-                  console.log('✅ OTP processing done, moving to review');
-                  setStep('review');
-                }}
-                autoProceed={true}
-                duration={1500}
+                description="Please wait while we verify your card."
+                onDone={() => setStep('review')}
               />
             )}
 
             {step === 'review' && (
-              <>
-                {console.log('📊 Rendering OrderReview with total:', calculateTotal())}
-                <OrderReview
-                  items={orderItems}
-                  shippingData={safeShippingData}
-                  cardData={cardDisplayData}
-                  totalAmount={calculateTotal()}
-                  currency="USD"
-                  onConfirm={handleConfirmOrder}
-                  onEditShipping={() => setStep('shipping')}
-                  onEditPayment={() => setStep('payment')}
-                />
-              </>
+              <OrderReview
+                items={[{
+                  id: product.id,
+                  title: product.title,
+                  price: Number(product.price_min ?? product.price_max ?? 0),
+                  quantity,
+                  image: product.images?.[0] || '/placeholder.svg',
+                  seller_name: seller?.company_name || seller?.full_name || 'Seller',
+                  seller_id: product.seller_id,
+                  product_id: product.id,
+                }]}
+                shippingData={shippingData || {
+                  fullName: '',
+                  streetAddress: '',
+                  city: '',
+                  stateProvince: '',
+                  postalCode: '',
+                  country: '',
+                  phoneNumber: '',
+                  email: user?.email || '',
+                  additionalNotes: '',
+                }}
+                cardData={cardData ? {
+                  cardholderName: cardData.cardholderName,
+                  cardNumber: `•••• •••• •••• ${cardData.cardNumber.replace(/\s/g, '').slice(-4)}`,
+                  expiryMonth: cardData.expiryMonth,
+                  expiryYear: cardData.expiryYear,
+                } : {
+                  cardholderName: 'N/A',
+                  cardNumber: '•••• •••• •••• ••••',
+                  expiryMonth: 'MM',
+                  expiryYear: 'YY',
+                }}
+                totalAmount={calculateTotal()}
+                currency="USD"
+                onConfirm={handleConfirmOrder}
+                onEditShipping={() => setStep('shipping')}
+                onEditPayment={() => setStep('payment')}
+              />
             )}
 
             {step === 'confirmation' && (
-              <>
-                {console.log('=======================')}
-                {console.log('🎉 Rendering OrderConfirmationSuccess')}
-                {console.log('Order ID:', orderId)}
-                {console.log('Confirmed total passed to component:', confirmedTotal)}
-                {console.log('Current calculated total:', calculateTotal())}
-                {console.log('=======================')}
-                <OrderConfirmationSuccess
-                  orderIds={orderId ? [orderId] : []}
-                  totalAmount={confirmedTotal}
-                  currency="USD"
-                />
-              </>
+              <OrderConfirmationSuccess
+                orderIds={orderId ? [orderId] : []}
+                totalAmount={confirmedTotal}
+                currency="USD"
+              />
             )}
           </div>
 
@@ -545,91 +366,28 @@ export default function Checkout() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Product</span>
-                      <span className="font-medium truncate max-w-[150px]">{product.title}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Unit Price</span>
-                      <span>{formatPriceOnly(product.price_min || product.price_max || 0)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Quantity</span>
-                      <span>{quantity}</span>
-                    </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Product</span>
+                    <span>{product.title}</span>
                   </div>
-                  
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Unit Price</span>
+                    <span>${(product.price_min || product.price_max || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Quantity</span>
+                    <span>{quantity}</span>
+                  </div>
                   <Separator />
-                  
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total</span>
-                    <span>{formatPriceOnly(calculateTotal())}</span>
-                  </div>
-                  
-                  <div className="mt-4 text-xs text-muted-foreground">
-                    <p className="font-medium">Seller: {seller?.company_name || seller?.full_name || 'Unknown'}</p>
-                    <p className="mt-1">MOQ: {product.moq || 1} units</p>
-                    <div className="mt-2 pt-2 border-t">
-                      <p className="text-[10px]">Debug: ${calculateTotal().toFixed(2)} total</p>
-                    </div>
+                    <span>${calculateTotal().toFixed(2)}</span>
                   </div>
                 </CardContent>
               </Card>
             </div>
           )}
         </div>
-
-        {/* Debug Panel - Always visible in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="fixed bottom-4 right-4 z-50 bg-background border rounded-lg p-3 shadow-lg">
-            <div className="text-xs font-mono mb-2">🚨 Debug Panel</div>
-            <div className="text-xs font-mono mb-2">Step: <span className="font-bold">{step}</span></div>
-            <div className="flex flex-col gap-1">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  console.log('🛠️ DEBUG: Manual step advancement');
-                  const steps: CheckoutStep[] = ['shipping', 'payment', 'processingPayment', 'otp', 'processingOtp', 'review', 'confirmation'];
-                  const currentIndex = steps.indexOf(step);
-                  if (currentIndex < steps.length - 1) {
-                    console.log(`🛠️ Moving from ${step} to ${steps[currentIndex + 1]}`);
-                    setStep(steps[currentIndex + 1]);
-                  }
-                }}
-              >
-                Next Step
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  console.log('🛠️ DEBUG: Simulating OTP verification');
-                  handleOTPVerified('123456');
-                }}
-              >
-                Simulate OTP Verify
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => console.log('🛠️ State:', { 
-                  step, 
-                  transactionId, 
-                  hasCardData: !!cardData, 
-                  hasShippingData: !!shippingData,
-                  orderId,
-                  product: product?.title,
-                  total: calculateTotal(),
-                  confirmedTotal 
-                })}
-              >
-                Log State
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
