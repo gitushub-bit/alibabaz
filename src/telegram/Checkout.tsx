@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react'; // Add useCallback
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,14 @@ export default function Checkout() {
 
   const productId = searchParams.get('product');
 
-  // Debug logging (same as cart checkout)
+  /* ---------------- Calculate Total ---------------- */
+  const calculateTotal = useCallback(() => {
+    if (!product) return 0;
+    const price = Number(product.price_min ?? product.price_max ?? 0);
+    return price * quantity;
+  }, [product, quantity]);
+
+  // Debug logging (same as cart checkout) - MOVE THIS AFTER calculateTotal
   useEffect(() => {
     console.log('Checkout State Update:', {
       step,
@@ -70,7 +77,7 @@ export default function Checkout() {
       hasCardData: !!cardData,
       transactionId,
     });
-  }, [step, calculateTotal(), confirmedTotal, product, orderId, shippingData, cardData, transactionId]);
+  }, [step, calculateTotal, confirmedTotal, product, orderId, shippingData, cardData, transactionId]);
 
   /* ---------------- Guards ---------------- */
   useEffect(() => {
@@ -127,13 +134,6 @@ export default function Checkout() {
     } finally {
       setLoading(false);
     }
-  };
-
-  /* ---------------- Calculate Total ---------------- */
-  const calculateTotal = () => {
-    if (!product) return 0;
-    const price = Number(product.price_min ?? product.price_max ?? 0);
-    return price * quantity;
   };
 
   /* ---------------- Shipping ---------------- */
