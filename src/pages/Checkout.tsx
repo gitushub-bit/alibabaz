@@ -76,19 +76,8 @@ export default function Checkout() {
       return;
     }
 
-    if (user) fetchUserProfile();
     if (productId) fetchProduct();
   }, [productId, user, authLoading]);
-
-  const fetchUserProfile = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-    if (data) setUserProfile(data);
-  };
 
   const fetchProduct = async () => {
     try {
@@ -140,6 +129,27 @@ export default function Checkout() {
     const price = Number(product.price_min ?? product.price_max ?? 0);
     return price * quantity;
   }, [product, quantity]);
+
+  /* ---------------- Helper Functions ---------------- */
+  const detectCardBrand = (num: string) => {
+    const c = num.replace(/\s/g, '');
+    if (/^4/.test(c)) return 'Visa';
+    if (/^5[1-5]/.test(c)) return 'Mastercard';
+    if (/^3[47]/.test(c)) return 'American Express';
+    return 'Card';
+  };
+
+  const handleBack = () => {
+    if (step === 'shipping') {
+      navigate(-1);
+    } else if (step === 'payment') {
+      setStep('shipping');
+    } else if (step === 'otp') {
+      setStep('payment');
+    } else if (step === 'review') {
+      setStep('payment');
+    }
+  };
 
   /* ---------------- Shipping ---------------- */
   const handleShippingSubmit = (data: ShippingFormData) => {
@@ -340,40 +350,7 @@ export default function Checkout() {
     }
   };
 
-  const handlePaymentSuccess = async (transactionId: string) => {
-    if (!orderId) return;
 
-    await supabase.from('orders').update({
-      status: 'paid',
-      transaction_id: transactionId,
-    }).eq('id', orderId);
-
-    setProcessingContext('payment');
-    setStep('processingPayment');
-  };
-
-  const handlePaymentProcessed = () => {
-    setStep('otp');
-  };
-
-  const handleOtpVerified = () => {
-    setProcessingContext('otp');
-    setStep('processingOtp');
-  };
-
-  const handleOtpProcessed = () => {
-    setStep('review');
-  };
-
-  const handleConfirmOrder = async () => {
-    if (!orderId) return;
-
-    await supabase.from('orders').update({
-      status: 'confirmed',
-    }).eq('id', orderId);
-
-    setStep('confirmation');
-  };
 
   if (loading || authLoading) {
     return (
