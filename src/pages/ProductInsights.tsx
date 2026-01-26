@@ -37,6 +37,14 @@ import {
   Factory,
   Briefcase,
   ChevronRight as ChevronRightIcon,
+  Image as ImageIcon,
+  TrendingUp,
+  Eye,
+  Flag,
+  Building2,
+  Clock,
+  Users,
+  Zap,
 } from 'lucide-react';
 
 interface ProductData {
@@ -52,7 +60,7 @@ interface ProductData {
   country_flag?: string;
   category?: string;
   supplier?: string;
-  seller_id?: string;
+  seller_id: string;
   moq?: number;
   supply_ability?: string;
   lead_time?: string;
@@ -65,9 +73,13 @@ interface ProductData {
   specifications?: Record<string, string>;
   features?: string[];
   certifications?: string[];
+  category_id?: string;
+  unit?: string;
 }
 
 interface SupplierData {
+  id: string;
+  user_id: string;
   company_name: string;
   response_rate: number;
   verified: boolean;
@@ -83,6 +95,10 @@ interface SupplierData {
   gold_supplier: boolean;
   assessed_supplier: boolean;
   response_time?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  website?: string;
 }
 
 interface Review {
@@ -99,8 +115,53 @@ interface Review {
   product_attributes?: Record<string, string>;
 }
 
-// Fallback product data in case no product is found
+interface RelatedProduct {
+  id: string;
+  title: string;
+  images: string[];
+  price: string;
+  price_min?: number;
+  price_max?: number;
+  moq: number;
+  unit: string;
+  seller_id: string;
+  supplier: string;
+  is_verified: boolean;
+  country?: string;
+  slug?: string;
+  category?: string;
+}
+
+// Fallback product data
 const FALLBACK_PRODUCT_ID = 'f79d4b6c-4a7d-4e5a-b8c3-2e8d9b7f1a2e';
+
+// Image fallbacks for broken images
+const IMAGE_FALLBACKS = [
+  'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop',
+  'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=800&h=800&fit=crop',
+  'https://images.unsplash.com/photo-1484704849700-f032a568e944?w=800&h=800&fit=crop'
+];
+
+const getSafeImage = (imageUrl?: string, index: number = 0) => {
+  if (!imageUrl || imageUrl.trim() === '') {
+    return IMAGE_FALLBACKS[index % IMAGE_FALLBACKS.length];
+  }
+  
+  // Check if it's a valid URL or relative path
+  if (imageUrl.startsWith('http') || imageUrl.startsWith('/') || imageUrl.startsWith('data:')) {
+    return imageUrl;
+  }
+  
+  // Try to get from Supabase storage
+  try {
+    const { data } = supabase.storage
+      .from('product-images')
+      .getPublicUrl(imageUrl);
+    return data.publicUrl || IMAGE_FALLBACKS[index % IMAGE_FALLBACKS.length];
+  } catch (error) {
+    return IMAGE_FALLBACKS[index % IMAGE_FALLBACKS.length];
+  }
+};
 
 export default function ProductInsights() {
   const { id, type } = useParams<{ id: string; type?: string }>();
@@ -111,15 +172,87 @@ export default function ProductInsights() {
   const [product, setProduct] = useState<ProductData | null>(null);
   const [supplier, setSupplier] = useState<SupplierData | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [relatedProducts, setRelatedProducts] = useState<ProductData[]>([]);
+  const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
   const [retryCount, setRetryCount] = useState(0);
+  const [imageError, setImageError] = useState<Record<number, boolean>>({});
 
   const imagesRef = useRef<HTMLDivElement>(null);
+
+  // Fetch a random verified seller from database or create fallback
+  const fetchRandomSeller = async () => {
+    try {
+      // Try to get any verified seller from database
+      const { data: sellers, error } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('verified', true)
+        .limit(1)
+        .single();
+
+      if (error || !sellers) {
+        console.log('No verified sellers found, creating fallback seller');
+        return createFallbackSeller();
+      }
+
+      return {
+        id: sellers.id,
+        user_id: sellers.user_id || `seller-${Date.now()}`,
+        company_name: sellers.company_name || 'Verified Supplier',
+        response_rate: sellers.response_rate || 85,
+        verified: sellers.verified || true,
+        business_type: sellers.business_type || 'Manufacturer',
+        year_established: sellers.year_established || 2015,
+        employees: sellers.employees || '51-200',
+        main_markets: sellers.main_markets || ['Global', 'North America', 'Europe'],
+        total_products: sellers.total_products || 128,
+        page_views: sellers.page_views || 2450,
+        inquiries: sellers.inquiries || 156,
+        online_status: sellers.online_status !== false,
+        trade_assurance: sellers.trade_assurance || true,
+        gold_supplier: sellers.gold_supplier || true,
+        assessed_supplier: sellers.assessed_supplier || true,
+        response_time: sellers.response_time || 'Within 24 hours',
+        email: sellers.email,
+        phone: sellers.phone,
+        address: sellers.address,
+        website: sellers.website,
+      };
+    } catch (error) {
+      console.error('Error fetching seller:', error);
+      return createFallbackSeller();
+    }
+  };
+
+  const createFallbackSeller = (): SupplierData => {
+    return {
+      id: 'fallback-seller-id',
+      user_id: user?.id || `fallback-user-${Date.now()}`,
+      company_name: 'Global Suppliers Inc.',
+      response_rate: 85,
+      verified: true,
+      business_type: 'Manufacturer & Exporter',
+      year_established: 2015,
+      employees: '51-200',
+      main_markets: ['Global', 'North America', 'Europe', 'Asia'],
+      total_products: 128,
+      page_views: 2450,
+      inquiries: 156,
+      online_status: true,
+      trade_assurance: true,
+      gold_supplier: true,
+      assessed_supplier: true,
+      response_time: 'Within 24 hours',
+      email: 'contact@globalsuppliers.com',
+      phone: '+1 (555) 123-4567',
+      address: '123 Trade Center, Shanghai, China',
+      website: 'https://globalsuppliers.com',
+    };
+  };
 
   useEffect(() => {
     if (id) {
@@ -134,6 +267,10 @@ export default function ProductInsights() {
       const productType = type || 'product';
       let productData: any = null;
       let foundProduct = false;
+
+      // First, fetch or create a seller to ensure we have seller data
+      const sellerData = await fetchRandomSeller();
+      setSupplier(sellerData);
 
       // Strategy 1: Try based on the type parameter
       if (productType === 'deal') {
@@ -156,12 +293,12 @@ export default function ProductInsights() {
 
       if (productData) {
         foundProduct = true;
-        await processProductData(productData);
+        await processProductData(productData, sellerData);
       }
 
-      // Strategy 3: If still not found, use a fallback product
+      // Strategy 3: If still not found, create a product linked to the seller
       if (!foundProduct) {
-        console.log('No product found, using fallback...');
+        console.log('No product found, creating product with seller...');
         
         // Try to get any published product from the database
         const { data: fallbackProducts } = await supabase
@@ -174,20 +311,20 @@ export default function ProductInsights() {
         if (fallbackProducts) {
           productData = fallbackProducts;
           foundProduct = true;
-          await processProductData(productData);
+          await processProductData(productData, sellerData);
         } else {
-          // Last resort: create a mock product
-          productData = createMockProduct();
+          // Create a mock product linked to the seller
+          productData = createMockProduct(sellerData);
           foundProduct = true;
-          await processProductData(productData);
+          await processProductData(productData, sellerData);
           
           // Show toast message
           toast.info('Showing a sample product. Real products will load from your database.');
         }
       }
 
-      // Fetch related products
-      await fetchRelatedProducts();
+      // Fetch related products from database
+      await fetchRelatedProductsFromDB();
 
     } catch (error) {
       console.error('Error fetching product:', error);
@@ -196,9 +333,10 @@ export default function ProductInsights() {
       if (retryCount < 2) {
         setRetryCount(prev => prev + 1);
       } else {
-        // After retries, create a mock product
-        const mockProduct = createMockProduct();
-        await processProductData(mockProduct);
+        // After retries, create a mock product with seller
+        const sellerData = await fetchRandomSeller();
+        const mockProduct = createMockProduct(sellerData);
+        await processProductData(mockProduct, sellerData);
         toast.error('Failed to load product. Showing sample product instead.');
       }
     } finally {
@@ -209,7 +347,7 @@ export default function ProductInsights() {
   const fetchFromProductsTable = async () => {
     const { data, error } = await supabase
       .from('products')
-      .select('*, category:categories(name)')
+      .select('*, category:categories(name, id), seller:profiles(*)')
       .eq('id', id)
       .eq('published', true)
       .maybeSingle();
@@ -224,7 +362,7 @@ export default function ProductInsights() {
   const fetchFromDealsTable = async () => {
     const { data, error } = await supabase
       .from('deals')
-      .select('*')
+      .select('*, seller:profiles(*)')
       .eq('id', id)
       .eq('is_active', true)
       .maybeSingle();
@@ -245,10 +383,10 @@ export default function ProductInsights() {
     const dealData = await fetchFromDealsTable();
     if (dealData) return { ...dealData, source: 'deals' };
 
-    // Try featured products (if you have such a table)
+    // Try featured products
     const { data: featuredData } = await supabase
       .from('featured_products')
-      .select('*')
+      .select('*, seller:profiles(*)')
       .eq('id', id)
       .maybeSingle();
     
@@ -257,131 +395,152 @@ export default function ProductInsights() {
     return null;
   };
 
-  const createMockProduct = () => {
+  const createMockProduct = (seller: SupplierData): any => {
     return {
       id: id || FALLBACK_PRODUCT_ID,
-      title: 'Sample Product - Add Your Products in Admin Panel',
+      title: 'Premium Wireless Headphones - Sample Product',
       description: 'This is a sample product. To see real products, please add products through the admin panel. You can manage products, set prices, upload images, and configure all product details.',
-      images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop'],
+      images: IMAGE_FALLBACKS,
       price: '29.99',
       original_price: '49.99',
       min_price: '25.00',
       max_price: '35.00',
       country: 'China',
+      country_flag: '🇨🇳',
       category: 'Electronics',
-      supplier: 'Sample Supplier Co.',
-      seller_id: user?.id || '',
+      supplier: seller.company_name,
+      seller_id: seller.user_id,
       moq: 50,
       supply_ability: '5000 Piece/Pieces per Month',
       lead_time: '15-30 days',
-      payment_terms: ['T/T', 'PayPal', 'Credit Card'],
-      packaging_details: 'Standard export packaging',
+      payment_terms: ['T/T', 'PayPal', 'Credit Card', 'Western Union'],
+      packaging_details: 'Standard export packaging with protective foam',
       discount: 40,
       is_verified: true,
+      slug: 'premium-wireless-headphones',
       type: 'product' as const,
       specifications: {
-        'Material': 'Premium Plastic',
-        'Color': 'Black, White, Blue',
-        'Size': 'Standard',
-        'Weight': '150g',
-        'Warranty': '1 Year',
+        'Brand Name': 'AudioTech',
+        'Model Number': 'ATH-M50xBT',
+        'Material': 'Premium Plastic & Metal',
+        'Color': 'Black, White, Blue, Red',
+        'Connectivity': 'Bluetooth 5.0',
+        'Battery Life': '40 hours',
+        'Charging Time': '2 hours',
+        'Weight': '285g',
+        'Warranty': '2 Years',
+        'Certification': 'CE, FCC, RoHS'
       },
       features: [
-        'High quality materials',
-        'Durable construction',
-        'Easy to use',
-        'CE Certified',
+        'Premium sound quality with noise cancellation',
+        '40-hour battery life with quick charge',
+        'Comfortable over-ear design with memory foam',
+        'Built-in microphone for hands-free calls',
+        'Foldable design for easy portability',
+        'Multi-point connection (connect to 2 devices)'
       ],
-      certifications: ['CE', 'ROHS'],
+      certifications: ['CE', 'FCC', 'RoHS', 'REACH'],
     };
   };
 
-  const processProductData = async (data: any) => {
+  const processProductData = async (data: any, fallbackSeller: SupplierData) => {
+    // Extract seller info from data or use fallback
+    let sellerInfo = fallbackSeller;
+    let productSellerId = data.seller_id || data.seller?.id || fallbackSeller.user_id;
+    
+    // Try to get supplier data from profiles or suppliers table
+    if (data.seller || data.seller_id) {
+      try {
+        const { data: supplierData } = await supabase
+          .from('suppliers')
+          .select('*')
+          .eq('user_id', productSellerId)
+          .single();
+
+        if (supplierData) {
+          sellerInfo = {
+            id: supplierData.id,
+            user_id: supplierData.user_id,
+            company_name: supplierData.company_name || data.supplier || 'Verified Supplier',
+            response_rate: supplierData.response_rate || 85,
+            verified: supplierData.verified || false,
+            business_type: supplierData.business_type || 'Manufacturer',
+            year_established: supplierData.year_established || 2015,
+            employees: supplierData.employees || '51-200',
+            main_markets: supplierData.main_markets || ['Global', 'North America', 'Europe'],
+            total_products: supplierData.total_products || 128,
+            page_views: supplierData.page_views || 2450,
+            inquiries: supplierData.inquiries || 156,
+            online_status: supplierData.online_status !== false,
+            trade_assurance: supplierData.trade_assurance || true,
+            gold_supplier: supplierData.gold_supplier || true,
+            assessed_supplier: supplierData.assessed_supplier || true,
+            response_time: supplierData.response_time || 'Within 24 hours',
+            email: supplierData.email,
+            phone: supplierData.phone,
+            address: supplierData.address,
+            website: supplierData.website,
+          };
+        }
+      } catch (error) {
+        console.log('Using fallback seller data');
+      }
+    }
+
+    setSupplier(sellerInfo);
+
+    // Process images safely
+    let processedImages: string[] = [];
+    if (Array.isArray(data.images) && data.images.length > 0) {
+      processedImages = data.images.map((img: string, index: number) => getSafeImage(img, index));
+    } else if (data.image) {
+      processedImages = [getSafeImage(data.image, 0)];
+    } else {
+      processedImages = [IMAGE_FALLBACKS[0]];
+    }
+
     // Transform data to match ProductData interface
     const transformedProduct: ProductData = {
       id: data.id,
-      title: data.title || 'Unnamed Product',
+      title: data.title || data.name || 'Unnamed Product',
       description: data.description || 'No description available.',
-      images: data.images || data.image ? [data.image] : ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop'],
+      images: processedImages,
       price: data.price?.toString() || data.price_min?.toString() || 'Contact for price',
       original_price: data.original_price?.toString(),
       min_price: data.min_price?.toString() || data.price_min?.toString(),
       max_price: data.max_price?.toString() || data.price_max?.toString(),
-      country: data.country || 'Global',
-      category: data.category?.name || data.category || 'General',
-      supplier: data.supplier || 'Verified Supplier',
-      seller_id: data.seller_id,
-      moq: data.moq || 1,
-      supply_ability: data.supply_ability || 'Contact supplier for details',
-      lead_time: data.lead_time || '15-30 days',
-      payment_terms: data.payment_terms || ['T/T', 'L/C', 'Western Union', 'PayPal'],
-      packaging_details: data.packaging_details || 'Standard export packaging',
-      discount: data.discount,
-      is_verified: data.is_verified || data.verified || false,
-      slug: data.slug,
+      country: data.country || sellerInfo.address?.split(',').pop()?.trim() || 'Global',
+      country_flag: data.country_flag || '🌍',
+      category: data.category?.name || data.category || data.type || 'General',
+      category_id: data.category_id || data.category?.id,
+      supplier: data.supplier || sellerInfo.company_name,
+      seller_id: productSellerId,
+      moq: data.moq || data.minimum_order || 1,
+      unit: data.unit || 'piece',
+      supply_ability: data.supply_ability || data.capacity || 'Contact supplier for details',
+      lead_time: data.lead_time || data.delivery_time || '15-30 days',
+      payment_terms: data.payment_terms || data.payment_methods || ['T/T', 'L/C', 'Western Union', 'PayPal'],
+      packaging_details: data.packaging_details || data.packaging || 'Standard export packaging',
+      discount: data.discount || data.discount_percentage,
+      is_verified: data.is_verified || data.verified || sellerInfo.verified || false,
+      slug: data.slug || data.id,
       type: data.type || 'product',
-      specifications: data.specifications || {
+      specifications: data.specifications || data.attributes || {
         'Material': 'Various materials available',
         'Color': 'Customizable',
         'Size': 'Various sizes',
+        'MOQ': `${data.moq || 1} pieces`,
       },
-      features: data.features || [
+      features: data.features || data.key_features || [
         'High quality',
         'Competitive price',
         'Reliable supplier',
+        'Customizable options',
       ],
       certifications: data.certifications || [],
     };
 
     setProduct(transformedProduct);
-
-    // Fetch supplier data if seller_id exists
-    if (transformedProduct.seller_id) {
-      const { data: supplierData } = await supabase
-        .from('suppliers')
-        .select('*')
-        .eq('user_id', transformedProduct.seller_id)
-        .single();
-
-      if (supplierData) {
-        setSupplier({
-          company_name: supplierData.company_name || transformedProduct.supplier || 'Verified Supplier',
-          response_rate: supplierData.response_rate || 85,
-          verified: supplierData.verified || false,
-          business_type: supplierData.business_type || 'Manufacturer',
-          year_established: supplierData.year_established || 2015,
-          employees: supplierData.employees || '51-200',
-          main_markets: supplierData.main_markets || ['Global', 'North America', 'Europe'],
-          total_products: 128,
-          page_views: 2450,
-          inquiries: 156,
-          online_status: true,
-          trade_assurance: true,
-          gold_supplier: Math.random() > 0.5,
-          assessed_supplier: Math.random() > 0.3,
-          response_time: 'Within 24 hours',
-        });
-      }
-    } else {
-      // Create a mock supplier
-      setSupplier({
-        company_name: transformedProduct.supplier || 'Verified Supplier',
-        response_rate: 85,
-        verified: transformedProduct.is_verified || false,
-        business_type: 'Manufacturer',
-        year_established: 2015,
-        employees: '51-200',
-        main_markets: ['Global', 'North America', 'Europe'],
-        total_products: 128,
-        page_views: 2450,
-        inquiries: 156,
-        online_status: true,
-        trade_assurance: true,
-        gold_supplier: transformedProduct.is_verified || false,
-        assessed_supplier: transformedProduct.is_verified || false,
-        response_time: 'Within 24 hours',
-      });
-    }
 
     // Set mock reviews
     setReviews([
@@ -393,7 +552,7 @@ export default function ProductInsights() {
         date: '2024-01-15',
         verified_order: true,
         title: 'Excellent Quality',
-        content: 'The product exceeded my expectations. Packaging was perfect and shipping was fast.',
+        content: 'The product exceeded my expectations. Packaging was perfect and shipping was fast. Will order again!',
         helpful_count: 12,
         images: [],
         product_attributes: { color: 'Black', size: 'Medium' },
@@ -405,130 +564,321 @@ export default function ProductInsights() {
         rating: 4,
         date: '2024-01-10',
         verified_order: true,
-        title: 'Good Value',
-        content: 'Good quality for the price. Communication with supplier was excellent.',
+        title: 'Good Value for Money',
+        content: 'Good quality for the price. Communication with supplier was excellent and delivery was on time.',
         helpful_count: 8,
+        images: [],
+      },
+      {
+        id: '3',
+        user_name: 'Mike R.',
+        user_avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike',
+        rating: 5,
+        date: '2024-01-05',
+        verified_order: true,
+        title: 'Perfect for Business',
+        content: 'Ordered 500 pieces for my store. Quality is consistent and packaging is professional.',
+        helpful_count: 5,
         images: [],
       },
     ]);
   };
 
-  const fetchRelatedProducts = async () => {
+  const fetchRelatedProductsFromDB = async () => {
     try {
-      const { data: relatedData } = await supabase
-        .from('products')
-        .select('id, title, images, price_min, country, moq, seller_id')
-        .neq('id', id)
-        .eq('published', true)
-        .limit(4);
+      if (!product) return;
 
-      if (relatedData && relatedData.length > 0) {
-        const relatedWithSuppliers = await Promise.all(
-          relatedData.map(async (item) => {
+      // Try multiple strategies to find related products
+      let relatedData: any[] = [];
+
+      // Strategy 1: Same category products
+      if (product.category_id) {
+        const { data: categoryProducts } = await supabase
+          .from('products')
+          .select('*, category:categories(name), seller:profiles(*)')
+          .eq('category_id', product.category_id)
+          .neq('id', product.id)
+          .eq('published', true)
+          .limit(8);
+
+        if (categoryProducts && categoryProducts.length > 0) {
+          relatedData = categoryProducts;
+        }
+      }
+
+      // Strategy 2: Same seller products if category didn't return enough
+      if (relatedData.length < 4 && product.seller_id) {
+        const { data: sellerProducts } = await supabase
+          .from('products')
+          .select('*, category:categories(name), seller:profiles(*)')
+          .eq('seller_id', product.seller_id)
+          .neq('id', product.id)
+          .eq('published', true)
+          .limit(8 - relatedData.length);
+
+        if (sellerProducts) {
+          // Merge without duplicates
+          const existingIds = new Set(relatedData.map(p => p.id));
+          sellerProducts.forEach(p => {
+            if (!existingIds.has(p.id)) {
+              relatedData.push(p);
+            }
+          });
+        }
+      }
+
+      // Strategy 3: Recent products if still not enough
+      if (relatedData.length < 4) {
+        const { data: recentProducts } = await supabase
+          .from('products')
+          .select('*, category:categories(name), seller:profiles(*)')
+          .neq('id', product.id)
+          .eq('published', true)
+          .order('created_at', { ascending: false })
+          .limit(8 - relatedData.length);
+
+        if (recentProducts) {
+          // Merge without duplicates
+          const existingIds = new Set(relatedData.map(p => p.id));
+          recentProducts.forEach(p => {
+            if (!existingIds.has(p.id)) {
+              relatedData.push(p);
+            }
+          });
+        }
+      }
+
+      // Transform data and get supplier info
+      const relatedWithSuppliers = await Promise.all(
+        relatedData.slice(0, 8).map(async (item) => {
+          let supplierName = item.supplier;
+          let supplierVerified = item.verified;
+
+          // Try to get supplier data if available
+          if (item.seller_id) {
             const { data: supplierData } = await supabase
               .from('suppliers')
               .select('company_name, verified')
               .eq('user_id', item.seller_id)
               .single();
 
-            return {
-              id: item.id,
-              title: item.title,
-              images: item.images || ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop'],
-              price: item.price_min?.toString() || 'Contact',
-              country: item.country,
-              moq: item.moq,
-              supplier: supplierData?.company_name || 'Supplier',
-              is_verified: supplierData?.verified || false,
-              type: 'product' as const,
-            };
-          })
-        );
-        setRelatedProducts(relatedWithSuppliers);
-      } else {
-        // Create mock related products if none exist
-        setRelatedProducts([
-          {
-            id: '1',
-            title: 'Wireless Headphones',
-            images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop'],
-            price: '29.99',
-            country: 'China',
-            moq: 50,
-            supplier: 'AudioTech Co.',
-            is_verified: true,
-            type: 'product',
-          },
-          {
-            id: '2',
-            title: 'Smart Watch',
-            images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop'],
-            price: '89.99',
-            country: 'China',
-            moq: 100,
-            supplier: 'TechGear Ltd.',
-            is_verified: true,
-            type: 'product',
-          },
-          {
-            id: '3',
-            title: 'Laptop Stand',
-            images: ['https://images.unsplash.com/photo-1586950012036-b957a8c4c6f8?w=400&h=400&fit=crop'],
-            price: '24.99',
-            country: 'Taiwan',
-            moq: 50,
-            supplier: 'OfficePro',
-            is_verified: true,
-            type: 'product',
-          },
-          {
-            id: '4',
-            title: 'USB-C Hub',
-            images: ['https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=400&h=400&fit=crop'],
-            price: '39.99',
-            country: 'China',
-            moq: 100,
-            supplier: 'ConnectTech',
-            is_verified: true,
-            type: 'product',
-          },
-        ]);
-      }
+            if (supplierData) {
+              supplierName = supplierData.company_name || supplierName;
+              supplierVerified = supplierData.verified || supplierVerified;
+            }
+          }
+
+          return {
+            id: item.id,
+            title: item.title || 'Unnamed Product',
+            images: item.images ? [getSafeImage(item.images[0], 0)] : [IMAGE_FALLBACKS[0]],
+            price: item.price?.toString() || item.price_min?.toString() || 'Contact',
+            price_min: item.price_min,
+            price_max: item.price_max,
+            moq: item.moq || 1,
+            unit: item.unit || 'piece',
+            seller_id: item.seller_id,
+            supplier: supplierName || 'Verified Supplier',
+            is_verified: supplierVerified || false,
+            country: item.country,
+            slug: item.slug || item.id,
+            category: item.category?.name || 'General',
+          };
+        })
+      );
+
+      setRelatedProducts(relatedWithSuppliers);
+
     } catch (error) {
-      console.error('Error fetching related products:', error);
-      // Set empty array if error
-      setRelatedProducts([]);
+      console.error('Error fetching related products from DB:', error);
+      // Create fallback related products
+      createFallbackRelatedProducts();
     }
+  };
+
+  const createFallbackRelatedProducts = () => {
+    const seller = supplier || createFallbackSeller();
+    const fallbackProducts: RelatedProduct[] = [
+      {
+        id: '1',
+        title: 'Premium Wireless Headphones Pro',
+        images: [IMAGE_FALLBACKS[0]],
+        price: '29.99',
+        price_min: 29.99,
+        price_max: 39.99,
+        moq: 50,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'premium-wireless-headphones-pro',
+        category: 'Electronics',
+      },
+      {
+        id: '2',
+        title: 'Smart Watch Series 7',
+        images: [IMAGE_FALLBACKS[1]],
+        price: '89.99',
+        price_min: 89.99,
+        price_max: 99.99,
+        moq: 100,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'smart-watch-series-7',
+        category: 'Wearables',
+      },
+      {
+        id: '3',
+        title: 'Ergonomic Office Chair',
+        images: [IMAGE_FALLBACKS[2]],
+        price: '149.99',
+        price_min: 149.99,
+        price_max: 199.99,
+        moq: 10,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'Vietnam',
+        slug: 'ergonomic-office-chair',
+        category: 'Furniture',
+      },
+      {
+        id: '4',
+        title: 'Multi-Port USB-C Hub',
+        images: [IMAGE_FALLBACKS[0]],
+        price: '39.99',
+        price_min: 39.99,
+        price_max: 49.99,
+        moq: 100,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'Taiwan',
+        slug: 'multi-port-usb-c-hub',
+        category: 'Computer Accessories',
+      },
+      {
+        id: '5',
+        title: 'LED Desk Lamp',
+        images: [IMAGE_FALLBACKS[1]],
+        price: '24.99',
+        price_min: 24.99,
+        price_max: 34.99,
+        moq: 50,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'led-desk-lamp',
+        category: 'Home & Office',
+      },
+      {
+        id: '6',
+        title: 'Bluetooth Speaker',
+        images: [IMAGE_FALLBACKS[2]],
+        price: '49.99',
+        price_min: 49.99,
+        price_max: 59.99,
+        moq: 100,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'bluetooth-speaker',
+        category: 'Audio',
+      },
+      {
+        id: '7',
+        title: 'Portable Power Bank',
+        images: [IMAGE_FALLBACKS[0]],
+        price: '34.99',
+        price_min: 34.99,
+        price_max: 44.99,
+        moq: 200,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'portable-power-bank',
+        category: 'Mobile Accessories',
+      },
+      {
+        id: '8',
+        title: 'Wireless Mouse',
+        images: [IMAGE_FALLBACKS[1]],
+        price: '19.99',
+        price_min: 19.99,
+        price_max: 29.99,
+        moq: 300,
+        unit: 'piece',
+        seller_id: seller.user_id,
+        supplier: seller.company_name,
+        is_verified: true,
+        country: 'China',
+        slug: 'wireless-mouse',
+        category: 'Computer Accessories',
+      },
+    ];
+
+    setRelatedProducts(fallbackProducts.slice(0, 8));
   };
 
   const handleAddToCart = async () => {
     if (!product) return;
 
+    // Validate we have seller information
+    if (!product.seller_id || !supplier) {
+      toast.error('Cannot add product to cart: Missing seller information');
+      return;
+    }
+
     addItem({
       product_id: product.id,
       title: product.title,
       price: parseFloat(product.price.replace(/[^0-9.]/g, '')) || 0,
-      image: product.images[0] || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop',
+      image: product.images[0] || IMAGE_FALLBACKS[0],
       quantity: Math.max(quantity, product.moq || 1),
       moq: product.moq || 1,
-      unit: 'piece',
-      seller_id: product.seller_id || '',
-      seller_name: product.supplier || 'Verified Supplier',
+      unit: product.unit || 'piece',
+      seller_id: product.seller_id,
+      seller_name: product.supplier || supplier.company_name,
+      supplier_company: supplier.company_name,
+      supplier_verified: supplier.verified,
     });
 
     toast.success('Added to cart!');
   };
 
   const handleContactSupplier = () => {
-    if (product?.seller_id) {
+    if (!supplier) {
+      toast.error('Supplier information not available');
+      return;
+    }
+
+    if (product?.seller_id && product.seller_id !== 'fallback-user') {
       navigate(`/messages?supplier=${product.seller_id}`);
     } else {
-      toast.info('Sample product - Contact feature disabled');
+      // For mock products, show contact info
+      toast.info(`Contact ${supplier.company_name} at ${supplier.email || 'contact@supplier.com'}`);
     }
   };
 
   const handleRequestQuotation = () => {
-    toast.success('Quotation request sent to supplier');
+    if (!product || !supplier) {
+      toast.error('Cannot request quotation: Missing product or supplier information');
+      return;
+    }
+
+    toast.success(`Quotation request sent to ${supplier.company_name}`);
   };
 
   const scrollImages = (direction: 'left' | 'right') => {
@@ -541,14 +891,20 @@ export default function ProductInsights() {
     }
   };
 
+  const handleImageError = (index: number) => {
+    setImageError(prev => ({ ...prev, [index]: true }));
+  };
+
   const formatPrice = (price: string) => {
     if (price.toLowerCase().includes('contact')) return price;
     const num = parseFloat(price);
     if (isNaN(num)) return price;
     return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(num);
+    }).format(num).replace('$', '');
   };
 
   const calculateTotal = () => {
@@ -557,6 +913,90 @@ export default function ProductInsights() {
     if (isNaN(price)) return '0.00';
     return (price * quantity).toFixed(2);
   };
+
+  // Small Product Card Component
+  const SmallProductCard = ({ product: item }: { product: RelatedProduct }) => (
+    <Link to={`/product-insights/product/${item.slug || item.id}`} className="group block">
+      <Card className="border border-gray-200 hover:border-[#FF6B35] transition-all duration-200 hover:shadow-md h-full overflow-hidden">
+        <div className="relative">
+          <div className="aspect-square overflow-hidden bg-gray-100">
+            <img
+              src={getSafeImage(item.images[0], 0)}
+              alt={item.title}
+              className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+              loading="lazy"
+              onError={(e) => {
+                e.currentTarget.src = IMAGE_FALLBACKS[0];
+              }}
+            />
+          </div>
+          {item.is_verified && (
+            <div className="absolute top-2 right-2">
+              <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-0">
+                <Shield className="h-3 w-3 mr-1" />
+                Verified
+              </Badge>
+            </div>
+          )}
+          {item.price_min && item.price_max && item.price_max > item.price_min && (
+            <div className="absolute bottom-2 left-2">
+              <Badge variant="secondary" className="bg-blue-100 text-blue-600 text-xs">
+                <TrendingUp className="h-3 w-3 mr-1" />
+                Price Range
+              </Badge>
+            </div>
+          )}
+        </div>
+        <CardContent className="p-3">
+          <h3 className="text-sm font-medium line-clamp-2 mb-2 min-h-[2.5rem] group-hover:text-[#FF6B35] transition-colors">
+            {item.title}
+          </h3>
+          
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-bold text-[#FF6B35] text-base">${formatPrice(item.price)}</span>
+                {item.price_min && item.price_max && item.price_max > item.price_min && (
+                  <span className="text-xs text-gray-500 ml-1">~ ${item.price_max}</span>
+                )}
+              </div>
+              {item.moq > 1 && (
+                <Badge variant="outline" className="text-xs border-gray-300">
+                  MOQ: {item.moq}
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span className="truncate max-w-[70%]">{item.supplier}</span>
+              {item.country && (
+                <span className="flex items-center">
+                  <Globe className="h-3 w-3 mr-1" />
+                  {item.country}
+                </span>
+              )}
+            </div>
+            
+            <div className="pt-2 border-t">
+              <Button 
+                size="sm" 
+                className="w-full text-xs h-7 bg-[#FF6B35] hover:bg-[#FF854F]"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Add to cart logic here
+                  toast.success(`Added ${item.title} to cart`);
+                }}
+              >
+                <ShoppingCart className="h-3 w-3 mr-1" />
+                Add to Inquiry
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
 
   if (loading) {
     return (
@@ -584,29 +1024,23 @@ export default function ProductInsights() {
     );
   }
 
-  // We never show "Product Not Found" - we always have a product (real or fallback)
-  if (!product) {
-    // This should never happen, but just in case
+  if (!product || !supplier) {
     return (
       <div className="min-h-screen bg-gray-50 pb-24">
         <Header />
         <div className="container mx-auto px-4 py-8">
-          <Skeleton className="h-12 w-48 mb-6" />
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-8 space-y-6">
-              <Skeleton className="aspect-square rounded-lg" />
-              <div className="flex gap-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} className="h-20 w-20 rounded" />
-                ))}
-              </div>
-            </div>
-            <div className="lg:col-span-4 space-y-4">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-32 w-full" />
-            </div>
-          </div>
+          <Card className="border border-red-200 bg-red-50">
+            <CardContent className="p-8 text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold mb-2">Product Not Available</h2>
+              <p className="text-gray-600 mb-4">
+                Unable to load product information. Please try again or browse other products.
+              </p>
+              <Button onClick={() => navigate('/products')}>
+                Browse Products
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -663,66 +1097,83 @@ export default function ProductInsights() {
           <div className="lg:col-span-8 space-y-8">
             {/* Product Images */}
             <Card className="border border-gray-200 shadow-sm">
-              <CardContent className="p-6">
-                <div className="flex flex-col lg:flex-row gap-6">
-                  {/* Main Image */}
-                  <div className="lg:w-2/3">
-                    <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 mb-4">
-                      <img
-                        src={product.images[selectedImage]}
-                        alt={product.title}
-                        className="w-full h-full object-contain p-4"
-                      />
-                      <div className="absolute top-4 right-4 flex gap-2">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
+                  {/* Main Image - Improved responsive sizing */}
+                  <div className="lg:w-7/12">
+                    <div className="relative aspect-square sm:aspect-[4/3] lg:aspect-square rounded-lg overflow-hidden bg-gray-100 mb-3 sm:mb-4">
+                      {!imageError[selectedImage] && product.images[selectedImage] ? (
+                        <img
+                          src={getSafeImage(product.images[selectedImage], selectedImage)}
+                          alt={product.title}
+                          className="w-full h-full object-contain p-2 sm:p-4"
+                          onError={() => handleImageError(selectedImage)}
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center p-4">
+                          <ImageIcon className="h-16 w-16 text-gray-400 mb-2" />
+                          <p className="text-gray-500 text-sm text-center">Image not available</p>
+                        </div>
+                      )}
+                      <div className="absolute top-2 sm:top-4 right-2 sm:right-4 flex gap-1 sm:gap-2">
                         <Button
                           variant="secondary"
                           size="icon"
-                          className="rounded-full bg-white/90 backdrop-blur-sm shadow-sm"
+                          className="rounded-full bg-white/90 backdrop-blur-sm shadow-sm h-8 w-8 sm:h-10 sm:w-10"
                           onClick={() => setIsFavorite(!isFavorite)}
                         >
-                          <Heart className={`h-5 w-5 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                          <Heart className={`h-4 w-4 sm:h-5 sm:w-5 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
                         </Button>
                         <Button
                           variant="secondary"
                           size="icon"
-                          className="rounded-full bg-white/90 backdrop-blur-sm shadow-sm"
+                          className="rounded-full bg-white/90 backdrop-blur-sm shadow-sm h-8 w-8 sm:h-10 sm:w-10"
                           onClick={() => {
                             navigator.clipboard.writeText(window.location.href);
                             toast.success('Link copied!');
                           }}
                         >
-                          <Share2 className="h-5 w-5" />
+                          <Share2 className="h-4 w-4 sm:h-5 sm:w-5" />
                         </Button>
                       </div>
                     </div>
                     
                     {/* Thumbnail Gallery */}
                     <div className="relative">
-                      <div className="flex gap-2 overflow-x-auto scrollbar-hide py-2" ref={imagesRef}>
+                      <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide py-1 sm:py-2" ref={imagesRef}>
                         {product.images.map((img, index) => (
                           <button
                             key={index}
                             onClick={() => setSelectedImage(index)}
-                            className={`flex-shrink-0 w-20 h-20 rounded-lg border-2 overflow-hidden ${
+                            className={`flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 overflow-hidden ${
                               selectedImage === index 
                                 ? 'border-[#FF6B35]' 
                                 : 'border-gray-200 hover:border-gray-300'
                             }`}
                           >
-                            <img
-                              src={img}
-                              alt={`Thumbnail ${index + 1}`}
-                              className="w-full h-full object-cover"
-                            />
+                            {!imageError[index] ? (
+                              <img
+                                src={getSafeImage(img, index)}
+                                alt={`Thumbnail ${index + 1}`}
+                                className="w-full h-full object-cover"
+                                onError={() => handleImageError(index)}
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                                <ImageIcon className="h-6 w-6 text-gray-400" />
+                              </div>
+                            )}
                           </button>
                         ))}
                       </div>
-                      {product.images.length > 4 && (
+                      {product.images.length > 3 && (
                         <>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/80 shadow-sm"
+                            className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/80 shadow-sm h-8 w-8 sm:h-9 sm:w-9"
                             onClick={() => scrollImages('left')}
                           >
                             <ChevronLeft className="h-4 w-4" />
@@ -730,7 +1181,7 @@ export default function ProductInsights() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/80 shadow-sm"
+                            className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/80 shadow-sm h-8 w-8 sm:h-9 sm:w-9"
                             onClick={() => scrollImages('right')}
                           >
                             <ChevronRight className="h-4 w-4" />
@@ -740,45 +1191,46 @@ export default function ProductInsights() {
                     </div>
                   </div>
 
-                  {/* Product Actions */}
-                  <div className="lg:w-1/3 space-y-6">
+                  {/* Product Actions - Improved responsive layout */}
+                  <div className="lg:w-5/12 space-y-4 sm:space-y-6">
                     <div>
-                      <h1 className="text-2xl font-semibold text-gray-800 mb-3">{product.title}</h1>
+                      <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-2 sm:mb-3">{product.title}</h1>
                       
                       {/* Price */}
-                      <div className="space-y-2 mb-4">
-                        <div className="flex items-center gap-3">
-                          <span className="text-3xl font-bold text-[#FF6B35]">
+                      <div className="space-y-1 sm:space-y-2 mb-3 sm:mb-4">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                          <span className="text-2xl sm:text-3xl font-bold text-[#FF6B35]">
                             ${formatPrice(product.price)}
                           </span>
                           {product.original_price && (
-                            <span className="text-lg text-gray-400 line-through">
+                            <span className="text-base sm:text-lg text-gray-400 line-through">
                               ${formatPrice(product.original_price)}
                             </span>
                           )}
                           {product.discount && product.discount > 0 && (
-                            <Badge className="bg-red-100 text-red-600 hover:bg-red-100">
+                            <Badge className="bg-red-100 text-red-600 hover:bg-red-100 text-xs sm:text-sm">
                               -{product.discount}%
                             </Badge>
                           )}
                         </div>
                         {product.min_price && product.max_price && (
-                          <p className="text-sm text-gray-500">
+                          <p className="text-xs sm:text-sm text-gray-500">
                             Price Range: ${formatPrice(product.min_price)} - ${formatPrice(product.max_price)} / piece
                           </p>
                         )}
                       </div>
 
                       {/* MOQ & Order Quantity */}
-                      <div className="space-y-4">
+                      <div className="space-y-3 sm:space-y-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2">
                             Order Quantity
                           </label>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <Button
                               variant="outline"
                               size="icon"
+                              className="h-8 w-8 sm:h-10 sm:w-10"
                               onClick={() => setQuantity(Math.max(product.moq || 1, quantity - 1))}
                               disabled={quantity <= (product.moq || 1)}
                             >
@@ -789,57 +1241,58 @@ export default function ProductInsights() {
                               min={product.moq || 1}
                               value={quantity}
                               onChange={(e) => setQuantity(Math.max(product.moq || 1, parseInt(e.target.value) || 1))}
-                              className="w-20 text-center border border-gray-300 rounded-md py-2 px-3"
+                              className="w-16 sm:w-20 text-center border border-gray-300 rounded-md py-1 sm:py-2 px-2 sm:px-3 text-sm sm:text-base"
                             />
                             <Button
                               variant="outline"
                               size="icon"
+                              className="h-8 w-8 sm:h-10 sm:w-10"
                               onClick={() => setQuantity(quantity + 1)}
                             >
                               +
                             </Button>
-                            <span className="text-sm text-gray-500 ml-2">
+                            <span className="text-xs sm:text-sm text-gray-500 ml-1 sm:ml-2">
                               (Min. Order: {product.moq || 1} pieces)
                             </span>
                           </div>
                         </div>
 
                         {/* Total Price */}
-                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <span className="font-medium">Total Price:</span>
-                          <span className="text-xl font-bold text-[#FF6B35]">${calculateTotal()}</span>
+                        <div className="flex items-center justify-between p-2 sm:p-3 bg-gray-50 rounded-lg">
+                          <span className="font-medium text-sm sm:text-base">Total Price:</span>
+                          <span className="text-lg sm:text-xl font-bold text-[#FF6B35]">${calculateTotal()}</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="space-y-3">
+                    {/* Action Buttons - Stack on mobile */}
+                    <div className="space-y-2 sm:space-y-3">
                       <Button 
-                        className="w-full bg-[#FF6B35] hover:bg-[#FF854F] text-white"
+                        className="w-full bg-[#FF6B35] hover:bg-[#FF854F] text-white text-sm sm:text-base"
                         onClick={handleAddToCart}
                       >
-                        <ShoppingCart className="h-5 w-5 mr-2" />
+                        <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                         Add to Cart
                       </Button>
                       <Button 
                         variant="outline" 
-                        className="w-full border-[#FF6B35] text-[#FF6B35] hover:bg-[#FF6B35]/10"
+                        className="w-full border-[#FF6B35] text-[#FF6B35] hover:bg-[#FF6B35]/10 text-sm sm:text-base"
                         onClick={handleContactSupplier}
                       >
-                        <MessageCircle className="h-5 w-5 mr-2" />
+                        <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                         Contact Supplier
                       </Button>
                       <div className="grid grid-cols-2 gap-2">
                         <Button 
                           variant="outline"
-                          className="border-gray-300"
+                          className="border-gray-300 text-xs sm:text-sm"
                           onClick={handleRequestQuotation}
                         >
                           Request Quotation
                         </Button>
                         <Button 
                           variant="outline"
-                          className="border-gray-300"
+                          className="border-gray-300 text-xs sm:text-sm"
                           onClick={() => navigate('/cart')}
                         >
                           Buy Now
@@ -847,21 +1300,31 @@ export default function ProductInsights() {
                       </div>
                     </div>
 
-                    {/* Quick Stats */}
-                    <div className="border-t pt-4 space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500">Page Views:</span>
-                        <span className="font-medium">{supplier?.page_views || 2450}</span>
+                    {/* Quick Stats - Responsive grid */}
+                    <div className="border-t pt-3 sm:pt-4 space-y-2 sm:space-y-3">
+                      <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-between gap-2 sm:gap-0">
+                        <div className="flex flex-col">
+                          <span className="text-xs sm:text-sm text-gray-500">Page Views:</span>
+                          <span className="font-medium text-sm sm:text-base">{supplier.page_views}</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs sm:text-sm text-gray-500">Inquiries:</span>
+                          <span className="font-medium text-sm sm:text-base">{supplier.inquiries}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500">Inquiries:</span>
-                        <span className="font-medium">{supplier?.inquiries || 156}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500">Response Rate:</span>
-                        <span className="font-medium text-green-600">
-                          {supplier?.response_rate || 85}%
-                        </span>
+                      <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-between gap-2 sm:gap-0">
+                        <div className="flex flex-col">
+                          <span className="text-xs sm:text-sm text-gray-500">Response Rate:</span>
+                          <span className="font-medium text-green-600 text-sm sm:text-base">
+                            {supplier.response_rate}%
+                          </span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs sm:text-sm text-gray-500">Supplier Status:</span>
+                          <span className={`font-medium text-sm sm:text-base ${supplier.online_status ? 'text-green-600' : 'text-gray-500'}`}>
+                            {supplier.online_status ? 'Online' : 'Offline'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -869,67 +1332,70 @@ export default function ProductInsights() {
               </CardContent>
             </Card>
 
-            {/* Product Tabs */}
+            {/* Product Tabs - Mobile responsive */}
             <Card className="border border-gray-200 shadow-sm">
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <div className="border-b">
-                  <TabsList className="w-full justify-start h-auto p-0 bg-transparent">
+                  <TabsList className="w-full justify-start h-auto p-0 bg-transparent overflow-x-auto">
                     <TabsTrigger 
                       value="description" 
-                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-6 py-3"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm"
                     >
-                      Product Details
+                      Details
                     </TabsTrigger>
                     <TabsTrigger 
                       value="specifications" 
-                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-6 py-3"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm"
                     >
-                      Specifications
+                      Specs
                     </TabsTrigger>
                     <TabsTrigger 
                       value="reviews" 
-                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-6 py-3"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm"
                     >
                       Reviews ({reviews.length})
                     </TabsTrigger>
                     <TabsTrigger 
                       value="shipping" 
-                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-6 py-3"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm"
                     >
-                      Shipping & Support
+                      Shipping
                     </TabsTrigger>
                   </TabsList>
                 </div>
 
-                <TabsContent value="description" className="p-6">
-                  <div className="space-y-6">
+                <TabsContent value="description" className="p-4 sm:p-6">
+                  <div className="space-y-4 sm:space-y-6">
                     <div>
-                      <h3 className="text-lg font-semibold mb-3">Description</h3>
-                      <p className="text-gray-600 whitespace-pre-line">
+                      <h3 className="text-lg font-semibold mb-2 sm:mb-3">Description</h3>
+                      <p className="text-gray-600 whitespace-pre-line text-sm sm:text-base">
                         {product.description}
                       </p>
                     </div>
 
                     {product.features && product.features.length > 0 && (
                       <div>
-                        <h3 className="text-lg font-semibold mb-3">Key Features</h3>
-                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <h3 className="text-lg font-semibold mb-2 sm:mb-3">Key Features</h3>
+                        <div className="grid md:grid-cols-2 gap-4 mt-6">
                           {product.features.map((feature, index) => (
-                            <li key={index} className="flex items-center gap-2">
-                              <CheckCircle className="h-4 w-4 text-green-500" />
-                              <span className="text-gray-600">{feature}</span>
-                            </li>
+                            <div key={index} className="flex items-start gap-3">
+                              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <h4 className="font-medium">{feature.split(':')[0]}</h4>
+                                <p className="text-sm text-gray-600">{feature.split(':')[1] || feature}</p>
+                              </div>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     )}
 
                     {product.certifications && product.certifications.length > 0 && (
                       <div>
-                        <h3 className="text-lg font-semibold mb-3">Certifications</h3>
+                        <h3 className="text-lg font-semibold mb-2 sm:mb-3">Certifications</h3>
                         <div className="flex gap-2 flex-wrap">
                           {product.certifications.map((cert, index) => (
-                            <Badge key={index} variant="outline" className="bg-blue-50 text-blue-600 border-blue-200">
+                            <Badge key={index} variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 text-xs sm:text-sm">
                               {cert}
                             </Badge>
                           ))}
@@ -939,19 +1405,19 @@ export default function ProductInsights() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="specifications" className="p-6">
+                <TabsContent value="specifications" className="p-4 sm:p-6">
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold mb-4">Product Specifications</h3>
+                    <h3 className="text-lg font-semibold mb-2 sm:mb-4">Product Specifications</h3>
                     {product.specifications && Object.keys(product.specifications).length > 0 ? (
                       <div className="border rounded-lg overflow-hidden">
                         <table className="w-full">
                           <tbody>
                             {Object.entries(product.specifications).map(([key, value], index) => (
                               <tr key={key} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                <td className="px-4 py-3 border-r border-gray-200 font-medium text-gray-700 w-1/3">
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 border-r border-gray-200 font-medium text-gray-700 text-sm sm:text-base w-1/3">
                                   {key}
                                 </td>
-                                <td className="px-4 py-3 text-gray-600">
+                                <td className="px-3 sm:px-4 py-2 sm:py-3 text-gray-600 text-sm sm:text-base">
                                   {value}
                                 </td>
                               </tr>
@@ -960,14 +1426,14 @@ export default function ProductInsights() {
                         </table>
                       </div>
                     ) : (
-                      <p className="text-gray-500">No specifications available.</p>
+                      <p className="text-gray-500 text-sm sm:text-base">No specifications available.</p>
                     )}
                   </div>
                 </TabsContent>
 
-                <TabsContent value="reviews" className="p-6">
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
+                <TabsContent value="reviews" className="p-4 sm:p-6">
+                  <div className="space-y-4 sm:space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
                         <h3 className="text-lg font-semibold">Customer Reviews</h3>
                         <div className="flex items-center gap-2 mt-1">
@@ -975,7 +1441,7 @@ export default function ProductInsights() {
                             {[1, 2, 3, 4, 5].map((star) => (
                               <Star
                                 key={star}
-                                className={`h-5 w-5 ${
+                                className={`h-4 w-4 sm:h-5 sm:w-5 ${
                                   star <= 4.8 
                                     ? 'fill-yellow-400 text-yellow-400' 
                                     : 'text-gray-300'
@@ -983,44 +1449,44 @@ export default function ProductInsights() {
                               />
                             ))}
                           </div>
-                          <span className="text-lg font-bold ml-2">4.8</span>
-                          <span className="text-gray-500">({reviews.length} reviews)</span>
+                          <span className="text-base sm:text-lg font-bold ml-2">4.8</span>
+                          <span className="text-gray-500 text-sm sm:text-base">({reviews.length} reviews)</span>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" className="w-full sm:w-auto">
                         <Filter className="h-4 w-4 mr-2" />
                         Filter
                       </Button>
                     </div>
 
                     {/* Reviews List */}
-                    <div className="space-y-6">
+                    <div className="space-y-4 sm:space-y-6">
                       {reviews.map((review) => (
                         <Card key={review.id} className="border border-gray-200">
-                          <CardContent className="p-6">
-                            <div className="flex items-start justify-between mb-4">
+                          <CardContent className="p-4 sm:p-6">
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
                               <div className="flex items-center gap-3">
                                 <img
                                   src={review.user_avatar}
                                   alt={review.user_name}
-                                  className="h-10 w-10 rounded-full"
+                                  className="h-8 w-8 sm:h-10 sm:w-10 rounded-full"
                                 />
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    <span className="font-medium">{review.user_name}</span>
+                                    <span className="font-medium text-sm sm:text-base">{review.user_name}</span>
                                     {review.verified_order && (
                                       <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200 text-xs">
                                         <CheckCircle className="h-3 w-3 mr-1" />
-                                        Verified Order
+                                        Verified
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                                  <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
                                     <div className="flex items-center">
                                       {[1, 2, 3, 4, 5].map((star) => (
                                         <Star
                                           key={star}
-                                          className={`h-4 w-4 ${
+                                          className={`h-3 w-3 sm:h-4 sm:w-4 ${
                                             star <= review.rating 
                                               ? 'fill-yellow-400 text-yellow-400' 
                                               : 'text-gray-300'
@@ -1032,18 +1498,18 @@ export default function ProductInsights() {
                                   </div>
                                 </div>
                               </div>
-                              <Button variant="ghost" size="sm">
+                              <Button variant="ghost" size="sm" className="justify-start sm:justify-center mt-2 sm:mt-0">
                                 <ThumbsUp className="h-4 w-4 mr-1" />
                                 Helpful ({review.helpful_count})
                               </Button>
                             </div>
 
-                            <div className="space-y-3">
-                              <h4 className="font-medium">{review.title}</h4>
-                              <p className="text-gray-600">{review.content}</p>
+                            <div className="space-y-2 sm:space-y-3">
+                              <h4 className="font-medium text-sm sm:text-base">{review.title}</h4>
+                              <p className="text-gray-600 text-sm sm:text-base">{review.content}</p>
                               
                               {review.product_attributes && (
-                                <div className="flex gap-4 text-sm">
+                                <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm">
                                   {Object.entries(review.product_attributes).map(([key, value]) => (
                                     <div key={key} className="text-gray-500">
                                       <span className="font-medium">{key}:</span> {value}
@@ -1053,13 +1519,13 @@ export default function ProductInsights() {
                               )}
                             </div>
 
-                            <div className="flex gap-4 mt-4 pt-4 border-t">
-                              <Button variant="ghost" size="sm" className="text-gray-500">
-                                <MessageCircle className="h-4 w-4 mr-1" />
+                            <div className="flex gap-2 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t">
+                              <Button variant="ghost" size="sm" className="text-gray-500 text-xs sm:text-sm">
+                                <MessageCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                                 Reply
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-gray-500">
-                                <AlertCircle className="h-4 w-4 mr-1" />
+                              <Button variant="ghost" size="sm" className="text-gray-500 text-xs sm:text-sm">
+                                <Flag className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                                 Report
                               </Button>
                             </div>
@@ -1070,51 +1536,51 @@ export default function ProductInsights() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="shipping" className="p-6">
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <TabsContent value="shipping" className="p-4 sm:p-6">
+                  <div className="space-y-4 sm:space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       {/* Shipping Info */}
                       <div>
-                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <h3 className="text-lg font-semibold mb-2 sm:mb-4 flex items-center gap-2">
                           <Truck className="h-5 w-5 text-[#FF6B35]" />
                           Shipping Information
                         </h3>
-                        <div className="space-y-3">
+                        <div className="space-y-2 sm:space-y-3">
                           <div>
-                            <p className="text-sm text-gray-500">Lead Time</p>
-                            <p className="font-medium">{product.lead_time}</p>
+                            <p className="text-xs sm:text-sm text-gray-500">Lead Time</p>
+                            <p className="font-medium text-sm sm:text-base">{product.lead_time}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">Supply Ability</p>
-                            <p className="font-medium">{product.supply_ability}</p>
+                            <p className="text-xs sm:text-sm text-gray-500">Supply Ability</p>
+                            <p className="font-medium text-sm sm:text-base">{product.supply_ability}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">Port</p>
-                            <p className="font-medium">Shanghai, Ningbo, Shenzhen</p>
+                            <p className="text-xs sm:text-sm text-gray-500">Port</p>
+                            <p className="font-medium text-sm sm:text-base">Shanghai, Ningbo, Shenzhen</p>
                           </div>
                         </div>
                       </div>
 
                       {/* Payment & Support */}
                       <div>
-                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <h3 className="text-lg font-semibold mb-2 sm:mb-4 flex items-center gap-2">
                           <CreditCard className="h-5 w-5 text-[#FF6B35]" />
                           Payment & Support
                         </h3>
-                        <div className="space-y-3">
+                        <div className="space-y-2 sm:space-y-3">
                           <div>
-                            <p className="text-sm text-gray-500">Payment Terms</p>
-                            <div className="flex gap-2 flex-wrap mt-1">
+                            <p className="text-xs sm:text-sm text-gray-500">Payment Terms</p>
+                            <div className="flex gap-1 sm:gap-2 flex-wrap mt-1">
                               {product.payment_terms?.map((term, index) => (
-                                <Badge key={index} variant="secondary">
+                                <Badge key={index} variant="secondary" className="text-xs sm:text-sm">
                                   {term}
                                 </Badge>
                               ))}
                             </div>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">Packaging Details</p>
-                            <p className="font-medium">{product.packaging_details}</p>
+                            <p className="text-xs sm:text-sm text-gray-500">Packaging Details</p>
+                            <p className="font-medium text-sm sm:text-base">{product.packaging_details}</p>
                           </div>
                         </div>
                       </div>
@@ -1122,24 +1588,24 @@ export default function ProductInsights() {
 
                     {/* Trade Assurance */}
                     <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-                      <CardContent className="p-6">
-                        <div className="flex items-start gap-4">
-                          <ShieldCheck className="h-12 w-12 text-blue-600" />
+                      <CardContent className="p-4 sm:p-6">
+                        <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+                          <ShieldCheck className="h-8 w-8 sm:h-12 sm:w-12 text-blue-600 flex-shrink-0" />
                           <div className="flex-1">
                             <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                               Trade Assurance
-                              <Badge className="bg-blue-600 text-white">Protected</Badge>
+                              <Badge className="bg-blue-600 text-white text-xs sm:text-sm">Protected</Badge>
                             </h3>
-                            <p className="text-gray-600 mb-3">
+                            <p className="text-gray-600 text-sm sm:text-base mb-3">
                               Your payment is protected by Trade Assurance. Get refunded if your order is not shipped or as described.
                             </p>
-                            <div className="flex gap-4">
+                            <div className="flex flex-col sm:flex-row sm:gap-4 gap-2">
                               <div className="flex items-center gap-2">
-                                <CheckCircle className="h-5 w-5 text-green-500" />
+                                <CheckCircle className="h-4 w-4 text-green-500" />
                                 <span className="text-sm">On-time shipment</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <CheckCircle className="h-5 w-5 text-green-500" />
+                                <CheckCircle className="h-4 w-4 text-green-500" />
                                 <span className="text-sm">Product quality</span>
                               </div>
                             </div>
@@ -1152,79 +1618,70 @@ export default function ProductInsights() {
               </Tabs>
             </Card>
 
-            {/* Related Products */}
+            {/* Related Products Section with Smaller Cards */}
             {relatedProducts.length > 0 && (
               <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-semibold">Related Products</h2>
-                  <Button variant="ghost" className="text-[#FF6B35]">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-semibold">Related Products</h2>
+                    <p className="text-sm text-gray-500">Similar products you might be interested in</p>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    className="text-[#FF6B35] text-sm sm:text-base"
+                    onClick={() => navigate(`/products?category=${product.category_id}`)}
+                  >
                     View All <ChevronRightIcon className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {relatedProducts.map((item) => (
-                    <Link
-                      key={item.id}
-                      to={`/product-insights/product/${item.id}`}
-                      className="group"
-                    >
-                      <Card className="border border-gray-200 hover:border-[#FF6B35] transition-colors overflow-hidden">
-                        <div className="aspect-square overflow-hidden bg-gray-100">
-                          <img
-                            src={item.images[0]}
-                            alt={item.title}
-                            className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-300"
-                          />
-                        </div>
-                        <CardContent className="p-4">
-                          <h3 className="text-sm font-medium line-clamp-2 mb-2 group-hover:text-[#FF6B35]">
-                            {item.title}
-                          </h3>
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-[#FF6B35]">${item.price}</span>
-                            {item.is_verified && (
-                              <Shield className="h-4 w-4 text-green-500" />
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">MOQ: {item.moq} pieces</p>
-                        </CardContent>
-                      </Card>
-                    </Link>
+                
+                {/* Products Grid - Responsive with smaller cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                  {relatedProducts.slice(0, 8).map((item) => (
+                    <SmallProductCard key={item.id} product={item} />
                   ))}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Right Column - Supplier Info & Quick Actions */}
-          <div className="lg:col-span-4 space-y-6">
+          {/* Right Column - Supplier Info & Quick Actions - Hide on mobile, show on lg */}
+          <div className="lg:col-span-4 space-y-6 hidden lg:block">
             {/* Sticky Container */}
             <div className="sticky top-24 space-y-6">
-              {/* Supplier Card */}
+              {/* Supplier Card - Alibaba Style */}
               <Card className="border border-gray-200 shadow-sm">
                 <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="font-semibold text-lg mb-1">{supplier?.company_name}</h3>
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 flex items-center justify-center border-2 border-white shadow-sm">
+                      <Building2 className="h-8 w-8 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg mb-1">{supplier.company_name}</h3>
                       <div className="flex items-center gap-2 mb-2">
-                        {supplier?.gold_supplier && (
+                        {supplier.gold_supplier && (
                           <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
                             <Award className="h-3 w-3 mr-1" />
                             Gold Supplier
                           </Badge>
                         )}
-                        {supplier?.assessed_supplier && (
+                        {supplier.assessed_supplier && (
                           <Badge variant="outline" className="border-blue-200 text-blue-600">
                             Assessed
                           </Badge>
                         )}
+                        {supplier.verified && (
+                          <Badge variant="outline" className="border-green-200 text-green-600">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Verified
+                          </Badge>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <Factory className="h-4 w-4" />
-                        <span>{supplier?.business_type}</span>
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">Response Rate:</span> {supplier.response_rate}%
                       </div>
                     </div>
-                    {supplier?.online_status && (
+                    {supplier.online_status && (
                       <div className="flex items-center gap-1">
                         <div className="h-2 w-2 rounded-full bg-green-500"></div>
                         <span className="text-sm text-green-600">Online</span>
@@ -1235,43 +1692,68 @@ export default function ProductInsights() {
                   {/* Supplier Stats */}
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-2xl font-bold text-[#FF6B35]">{supplier?.response_rate}%</p>
-                      <p className="text-xs text-gray-500">Response Rate</p>
+                      <Clock className="h-5 w-5 mx-auto text-gray-600 mb-1" />
+                      <p className="text-xs text-gray-500">Established</p>
+                      <p className="text-xl font-bold text-[#FF6B35]">{supplier.year_established}</p>
                     </div>
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <p className="text-2xl font-bold text-[#FF6B35]">
-                        {new Date().getFullYear() - (supplier?.year_established || 2015)}
-                      </p>
-                      <p className="text-xs text-gray-500">Years on Platform</p>
+                      <Users className="h-5 w-5 mx-auto text-gray-600 mb-1" />
+                      <p className="text-xs text-gray-500">Employees</p>
+                      <p className="text-xl font-bold text-[#FF6B35]">{supplier.employees}</p>
                     </div>
                   </div>
 
                   {/* Quick Info */}
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <MapPin className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm">
-                        {product.country_flag} {product.country}
-                      </span>
-                    </div>
+                    {supplier.address && (
+                      <div className="flex items-center gap-3">
+                        <MapPin className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm">{supplier.address}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-3">
                       <Briefcase className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm">{supplier?.employees} Employees</span>
+                      <span className="text-sm">{supplier.employees} Employees</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <Package className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm">{supplier?.total_products} Products</span>
+                      <span className="text-sm">{supplier.total_products} Products</span>
                     </div>
+                    {supplier.website && (
+                      <div className="flex items-center gap-3">
+                        <ExternalLink className="h-4 w-4 text-gray-400" />
+                        <a href={supplier.website} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
+                          Visit Website
+                        </a>
+                      </div>
+                    )}
                   </div>
 
                   {/* Contact Button */}
-                  <Button 
-                    className="w-full mt-6 bg-[#FF6B35] hover:bg-[#FF854F]"
-                    onClick={handleContactSupplier}
-                  >
-                    <MessageCircle className="h-5 w-5 mr-2" />
-                    Contact Supplier
-                  </Button>
+                  <div className="space-y-3 pt-6 border-t">
+                    <Button 
+                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+                      onClick={handleContactSupplier}
+                    >
+                      <MessageCircle className="h-5 w-5 mr-2" />
+                      Contact Supplier
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      className="w-full border-blue-500 text-blue-600 hover:bg-blue-50"
+                      onClick={() => navigate('/rfq/new', { state: { productId: product?.id } })}
+                    >
+                      Send Inquiry
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      className="w-full text-gray-600 hover:text-blue-600"
+                      onClick={() => navigate(`/supplier/${supplier.id}`)}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Company Profile
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -1292,7 +1774,7 @@ export default function ProductInsights() {
                       <Printer className="h-4 w-4 mr-2" />
                       Print This Page
                     </Button>
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button variant="outline" className="w-full justify-start" onClick={() => navigate(`/supplier/${supplier.id}`)}>
                       <ExternalLink className="h-4 w-4 mr-2" />
                       View Company Profile
                     </Button>
@@ -1333,48 +1815,41 @@ export default function ProductInsights() {
         </div>
       </main>
 
-      {/* Fixed Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-        <div className="container mx-auto px-4 py-3">
+      {/* Fixed Bottom Bar - Mobile only */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 lg:hidden">
+        <div className="container mx-auto px-4 py-2 sm:py-3">
           <div className="flex items-center justify-between">
-            <div className="hidden md:flex items-center gap-6">
-              <div>
-                <p className="text-sm text-gray-500">Unit Price</p>
-                <p className="text-xl font-bold text-[#FF6B35]">${formatPrice(product.price)}</p>
+            <div className="flex items-center gap-4 overflow-x-auto scrollbar-hide">
+              <div className="min-w-[80px]">
+                <p className="text-xs text-gray-500">Unit Price</p>
+                <p className="font-bold text-[#FF6B35] text-sm">${formatPrice(product.price)}</p>
               </div>
-              <Separator orientation="vertical" className="h-12" />
-              <div>
-                <p className="text-sm text-gray-500">Total Price</p>
-                <p className="text-xl font-bold text-[#FF6B35]">${calculateTotal()}</p>
+              <Separator orientation="vertical" className="h-8" />
+              <div className="min-w-[80px]">
+                <p className="text-xs text-gray-500">Total</p>
+                <p className="font-bold text-[#FF6B35] text-sm">${calculateTotal()}</p>
               </div>
-              <Separator orientation="vertical" className="h-12" />
-              <div>
-                <p className="text-sm text-gray-500">Min. Order</p>
-                <p className="font-medium">{product.moq} pieces</p>
+              <Separator orientation="vertical" className="h-8" />
+              <div className="min-w-[60px]">
+                <p className="text-xs text-gray-500">MOQ</p>
+                <p className="font-medium text-sm">{product.moq}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 ml-2">
               <Button 
-                variant="outline" 
-                className="border-[#FF6B35] text-[#FF6B35] hover:bg-[#FF6B35]/10"
-                onClick={handleContactSupplier}
-              >
-                <MessageCircle className="h-4 w-4 mr-2" />
-                Contact Now
-              </Button>
-              <Button 
-                className="bg-[#FF6B35] hover:bg-[#FF854F]"
+                size="sm"
+                className="bg-[#FF6B35] hover:bg-[#FF854F] text-xs"
                 onClick={handleAddToCart}
               >
-                <ShoppingCart className="h-4 w-4 mr-2" />
-                Add to Cart
+                <ShoppingCart className="h-4 w-4" />
               </Button>
               <Button 
-                className="bg-green-600 hover:bg-green-700"
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-xs"
                 onClick={() => navigate('/cart')}
               >
-                Buy Now
+                Buy
               </Button>
             </div>
           </div>
@@ -1383,3 +1858,10 @@ export default function ProductInsights() {
     </div>
   );
 }
+
+// Add missing Globe icon component
+const Globe = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+  </svg>
+);
