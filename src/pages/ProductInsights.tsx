@@ -45,6 +45,7 @@ import {
   Clock,
   Users,
   Zap,
+  Globe,
 } from 'lucide-react';
 
 interface ProductData {
@@ -132,9 +133,6 @@ interface RelatedProduct {
   category?: string;
 }
 
-// Fallback product data
-const FALLBACK_PRODUCT_ID = 'f79d4b6c-4a7d-4e5a-b8c3-2e8d9b7f1a2e';
-
 // Image fallbacks for broken images
 const IMAGE_FALLBACKS = [
   'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop',
@@ -142,25 +140,67 @@ const IMAGE_FALLBACKS = [
   'https://images.unsplash.com/photo-1484704849700-f032a568e944?w=800&h=800&fit=crop'
 ];
 
-const getSafeImage = (imageUrl?: string, index: number = 0) => {
+const getSafeImage = (imageUrl?: string, index: number = 0): string => {
   if (!imageUrl || imageUrl.trim() === '') {
     return IMAGE_FALLBACKS[index % IMAGE_FALLBACKS.length];
   }
   
-  // Check if it's a valid URL or relative path
-  if (imageUrl.startsWith('http') || imageUrl.startsWith('/') || imageUrl.startsWith('data:')) {
+  // Check if it's a valid URL
+  if (imageUrl.startsWith('http') || imageUrl.startsWith('https') || imageUrl.startsWith('data:')) {
+    return imageUrl;
+  }
+  
+  // Check if it's a relative path
+  if (imageUrl.startsWith('/')) {
     return imageUrl;
   }
   
   // Try to get from Supabase storage
   try {
+    // Remove any query parameters or fragments
+    const cleanUrl = imageUrl.split('?')[0].split('#')[0];
+    
+    // Check if it's already a Supabase URL
+    if (cleanUrl.includes('supabase.co')) {
+      return cleanUrl;
+    }
+    
+    // Try to construct the public URL
     const { data } = supabase.storage
       .from('product-images')
-      .getPublicUrl(imageUrl);
+      .getPublicUrl(cleanUrl);
+    
     return data.publicUrl || IMAGE_FALLBACKS[index % IMAGE_FALLBACKS.length];
   } catch (error) {
+    console.error('Error getting image URL:', error);
     return IMAGE_FALLBACKS[index % IMAGE_FALLBACKS.length];
   }
+};
+
+const processImages = (images: any): string[] => {
+  if (!images) return [IMAGE_FALLBACKS[0]];
+  
+  if (Array.isArray(images)) {
+    return images
+      .filter(img => img && typeof img === 'string')
+      .map((img, index) => getSafeImage(img, index));
+  }
+  
+  if (typeof images === 'string') {
+    try {
+      const parsed = JSON.parse(images);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter(img => img && typeof img === 'string')
+          .map((img, index) => getSafeImage(img, index));
+      }
+    } catch {
+      // If not JSON, treat as single image
+      return [getSafeImage(images, 0)];
+    }
+  }
+  
+  return [IMAGE_FALLBACKS[0]];
 };
 
 export default function ProductInsights() {
@@ -183,77 +223,6 @@ export default function ProductInsights() {
 
   const imagesRef = useRef<HTMLDivElement>(null);
 
-  // Fetch a random verified seller from database or create fallback
-  const fetchRandomSeller = async () => {
-    try {
-      // Try to get any verified seller from database
-      const { data: sellers, error } = await supabase
-        .from('suppliers')
-        .select('*')
-        .eq('verified', true)
-        .limit(1)
-        .single();
-
-      if (error || !sellers) {
-        console.log('No verified sellers found, creating fallback seller');
-        return createFallbackSeller();
-      }
-
-      return {
-        id: sellers.id,
-        user_id: sellers.user_id || `seller-${Date.now()}`,
-        company_name: sellers.company_name || 'Verified Supplier',
-        response_rate: sellers.response_rate || 85,
-        verified: sellers.verified || true,
-        business_type: sellers.business_type || 'Manufacturer',
-        year_established: sellers.year_established || 2015,
-        employees: sellers.employees || '51-200',
-        main_markets: sellers.main_markets || ['Global', 'North America', 'Europe'],
-        total_products: sellers.total_products || 128,
-        page_views: sellers.page_views || 2450,
-        inquiries: sellers.inquiries || 156,
-        online_status: sellers.online_status !== false,
-        trade_assurance: sellers.trade_assurance || true,
-        gold_supplier: sellers.gold_supplier || true,
-        assessed_supplier: sellers.assessed_supplier || true,
-        response_time: sellers.response_time || 'Within 24 hours',
-        email: sellers.email,
-        phone: sellers.phone,
-        address: sellers.address,
-        website: sellers.website,
-      };
-    } catch (error) {
-      console.error('Error fetching seller:', error);
-      return createFallbackSeller();
-    }
-  };
-
-  const createFallbackSeller = (): SupplierData => {
-    return {
-      id: 'fallback-seller-id',
-      user_id: user?.id || `fallback-user-${Date.now()}`,
-      company_name: 'Global Suppliers Inc.',
-      response_rate: 85,
-      verified: true,
-      business_type: 'Manufacturer & Exporter',
-      year_established: 2015,
-      employees: '51-200',
-      main_markets: ['Global', 'North America', 'Europe', 'Asia'],
-      total_products: 128,
-      page_views: 2450,
-      inquiries: 156,
-      online_status: true,
-      trade_assurance: true,
-      gold_supplier: true,
-      assessed_supplier: true,
-      response_time: 'Within 24 hours',
-      email: 'contact@globalsuppliers.com',
-      phone: '+1 (555) 123-4567',
-      address: '123 Trade Center, Shanghai, China',
-      website: 'https://globalsuppliers.com',
-    };
-  };
-
   useEffect(() => {
     if (id) {
       fetchProduct();
@@ -264,285 +233,150 @@ export default function ProductInsights() {
     setLoading(true);
     
     try {
-      const productType = type || 'product';
-      let productData: any = null;
-      let foundProduct = false;
-
-      // First, fetch or create a seller to ensure we have seller data
-      const sellerData = await fetchRandomSeller();
-      setSupplier(sellerData);
-
-      // Strategy 1: Try based on the type parameter
-      if (productType === 'deal') {
-        productData = await fetchFromDealsTable();
-      } else if (productType === 'product' || !type) {
-        // Try products table first
-        productData = await fetchFromProductsTable();
-        
-        // If not found and no type specified, try deals table
-        if (!productData && !type) {
-          productData = await fetchFromDealsTable();
-        }
-      }
-
-      // Strategy 2: If still not found, try all tables
-      if (!productData) {
-        console.log('Trying all tables...');
-        productData = await fetchFromAllTables();
-      }
-
+      // Try multiple strategies to find the product
+      const productData = await searchProductFromDatabase();
+      
       if (productData) {
-        foundProduct = true;
-        await processProductData(productData, sellerData);
+        await processProductData(productData);
+        await fetchRelatedProductsFromDB(productData);
+      } else {
+        // If no product found, try to get any published product
+        await fetchAnyPublishedProduct();
       }
 
-      // Strategy 3: If still not found, create a product linked to the seller
-      if (!foundProduct) {
-        console.log('No product found, creating product with seller...');
-        
-        // Try to get any published product from the database
-        const { data: fallbackProducts } = await supabase
-          .from('products')
-          .select('*')
-          .eq('published', true)
-          .limit(1)
-          .single();
-
-        if (fallbackProducts) {
-          productData = fallbackProducts;
-          foundProduct = true;
-          await processProductData(productData, sellerData);
-        } else {
-          // Create a mock product linked to the seller
-          productData = createMockProduct(sellerData);
-          foundProduct = true;
-          await processProductData(productData, sellerData);
-          
-          // Show toast message
-          toast.info('Showing a sample product. Real products will load from your database.');
-        }
-      }
-
-      // Fetch related products from database
-      await fetchRelatedProductsFromDB();
+      // Fetch reviews
+      await fetchReviews();
 
     } catch (error) {
       console.error('Error fetching product:', error);
       
-      // If we get an error, try again or show fallback
       if (retryCount < 2) {
         setRetryCount(prev => prev + 1);
       } else {
-        // After retries, create a mock product with seller
-        const sellerData = await fetchRandomSeller();
-        const mockProduct = createMockProduct(sellerData);
-        await processProductData(mockProduct, sellerData);
-        toast.error('Failed to load product. Showing sample product instead.');
+        createFallbackProduct();
+        toast.error('Showing sample product. Add real products through admin.');
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchFromProductsTable = async () => {
-    const { data, error } = await supabase
+  const searchProductFromDatabase = async () => {
+    const searchId = id?.toLowerCase();
+    if (!searchId) return null;
+
+    // Strategy 1: Try exact ID match
+    const { data: exactMatch } = await supabase
       .from('products')
-      .select('*, category:categories(name, id), seller:profiles(*)')
-      .eq('id', id)
+      .select(`
+        *,
+        category:categories(name, id),
+        seller:profiles(*)
+      `)
+      .or(`id.eq.${searchId},slug.eq.${searchId}`)
       .eq('published', true)
       .maybeSingle();
 
-    if (error) {
-      console.error('Error fetching from products:', error);
-      return null;
-    }
-    return data;
-  };
+    if (exactMatch) return exactMatch;
 
-  const fetchFromDealsTable = async () => {
-    const { data, error } = await supabase
+    // Strategy 2: Try title search
+    const { data: titleMatch } = await supabase
+      .from('products')
+      .select(`
+        *,
+        category:categories(name, id),
+        seller:profiles(*)
+      `)
+      .ilike('title', `%${searchId}%`)
+      .eq('published', true)
+      .limit(1)
+      .maybeSingle();
+
+    if (titleMatch) return titleMatch;
+
+    // Strategy 3: Try deals table
+    const { data: dealMatch } = await supabase
       .from('deals')
-      .select('*, seller:profiles(*)')
-      .eq('id', id)
+      .select(`
+        *,
+        seller:profiles(*)
+      `)
+      .or(`id.eq.${searchId},slug.eq.${searchId}`)
       .eq('is_active', true)
       .maybeSingle();
 
-    if (error) {
-      console.error('Error fetching from deals:', error);
-      return null;
-    }
-    return data;
-  };
+    if (dealMatch) return dealMatch;
 
-  const fetchFromAllTables = async () => {
-    // Try products table
-    const productData = await fetchFromProductsTable();
-    if (productData) return { ...productData, source: 'products' };
-
-    // Try deals table
-    const dealData = await fetchFromDealsTable();
-    if (dealData) return { ...dealData, source: 'deals' };
-
-    // Try featured products
-    const { data: featuredData } = await supabase
+    // Strategy 4: Try featured products
+    const { data: featuredMatch } = await supabase
       .from('featured_products')
-      .select('*, seller:profiles(*)')
-      .eq('id', id)
+      .select(`
+        *,
+        seller:profiles(*)
+      `)
+      .eq('id', searchId)
       .maybeSingle();
-    
-    if (featuredData) return { ...featuredData, source: 'featured' };
 
-    return null;
+    return featuredMatch;
   };
 
-  const createMockProduct = (seller: SupplierData): any => {
-    return {
-      id: id || FALLBACK_PRODUCT_ID,
-      title: 'Premium Wireless Headphones - Sample Product',
-      description: 'This is a sample product. To see real products, please add products through the admin panel. You can manage products, set prices, upload images, and configure all product details.',
-      images: IMAGE_FALLBACKS,
-      price: '29.99',
-      original_price: '49.99',
-      min_price: '25.00',
-      max_price: '35.00',
-      country: 'China',
-      country_flag: '🇨🇳',
-      category: 'Electronics',
-      supplier: seller.company_name,
-      seller_id: seller.user_id,
-      moq: 50,
-      supply_ability: '5000 Piece/Pieces per Month',
-      lead_time: '15-30 days',
-      payment_terms: ['T/T', 'PayPal', 'Credit Card', 'Western Union'],
-      packaging_details: 'Standard export packaging with protective foam',
-      discount: 40,
-      is_verified: true,
-      slug: 'premium-wireless-headphones',
-      type: 'product' as const,
-      specifications: {
-        'Brand Name': 'AudioTech',
-        'Model Number': 'ATH-M50xBT',
-        'Material': 'Premium Plastic & Metal',
-        'Color': 'Black, White, Blue, Red',
-        'Connectivity': 'Bluetooth 5.0',
-        'Battery Life': '40 hours',
-        'Charging Time': '2 hours',
-        'Weight': '285g',
-        'Warranty': '2 Years',
-        'Certification': 'CE, FCC, RoHS'
-      },
-      features: [
-        'Premium sound quality with noise cancellation',
-        '40-hour battery life with quick charge',
-        'Comfortable over-ear design with memory foam',
-        'Built-in microphone for hands-free calls',
-        'Foldable design for easy portability',
-        'Multi-point connection (connect to 2 devices)'
-      ],
-      certifications: ['CE', 'FCC', 'RoHS', 'REACH'],
-    };
-  };
+  const fetchAnyPublishedProduct = async () => {
+    // Get a random published product
+    const { data: randomProduct } = await supabase
+      .from('products')
+      .select(`
+        *,
+        category:categories(name, id),
+        seller:profiles(*)
+      `)
+      .eq('published', true)
+      .limit(1)
+      .maybeSingle();
 
-  const processProductData = async (data: any, fallbackSeller: SupplierData) => {
-    // Extract seller info from data or use fallback
-    let sellerInfo = fallbackSeller;
-    let productSellerId = data.seller_id || data.seller?.id || fallbackSeller.user_id;
-    
-    // Try to get supplier data from profiles or suppliers table
-    if (data.seller || data.seller_id) {
-      try {
-        const { data: supplierData } = await supabase
-          .from('suppliers')
-          .select('*')
-          .eq('user_id', productSellerId)
-          .single();
-
-        if (supplierData) {
-          sellerInfo = {
-            id: supplierData.id,
-            user_id: supplierData.user_id,
-            company_name: supplierData.company_name || data.supplier || 'Verified Supplier',
-            response_rate: supplierData.response_rate || 85,
-            verified: supplierData.verified || false,
-            business_type: supplierData.business_type || 'Manufacturer',
-            year_established: supplierData.year_established || 2015,
-            employees: supplierData.employees || '51-200',
-            main_markets: supplierData.main_markets || ['Global', 'North America', 'Europe'],
-            total_products: supplierData.total_products || 128,
-            page_views: supplierData.page_views || 2450,
-            inquiries: supplierData.inquiries || 156,
-            online_status: supplierData.online_status !== false,
-            trade_assurance: supplierData.trade_assurance || true,
-            gold_supplier: supplierData.gold_supplier || true,
-            assessed_supplier: supplierData.assessed_supplier || true,
-            response_time: supplierData.response_time || 'Within 24 hours',
-            email: supplierData.email,
-            phone: supplierData.phone,
-            address: supplierData.address,
-            website: supplierData.website,
-          };
-        }
-      } catch (error) {
-        console.log('Using fallback seller data');
-      }
-    }
-
-    setSupplier(sellerInfo);
-
-    // Process images safely
-    let processedImages: string[] = [];
-    if (Array.isArray(data.images) && data.images.length > 0) {
-      processedImages = data.images.map((img: string, index: number) => getSafeImage(img, index));
-    } else if (data.image) {
-      processedImages = [getSafeImage(data.image, 0)];
+    if (randomProduct) {
+      await processProductData(randomProduct);
+      await fetchRelatedProductsFromDB(randomProduct);
     } else {
-      processedImages = [IMAGE_FALLBACKS[0]];
+      createFallbackProduct();
     }
+  };
 
-    // Transform data to match ProductData interface
-    const transformedProduct: ProductData = {
-      id: data.id,
-      title: data.title || data.name || 'Unnamed Product',
-      description: data.description || 'No description available.',
-      images: processedImages,
-      price: data.price?.toString() || data.price_min?.toString() || 'Contact for price',
-      original_price: data.original_price?.toString(),
-      min_price: data.min_price?.toString() || data.price_min?.toString(),
-      max_price: data.max_price?.toString() || data.price_max?.toString(),
-      country: data.country || sellerInfo.address?.split(',').pop()?.trim() || 'Global',
-      country_flag: data.country_flag || '🌍',
-      category: data.category?.name || data.category || data.type || 'General',
-      category_id: data.category_id || data.category?.id,
-      supplier: data.supplier || sellerInfo.company_name,
-      seller_id: productSellerId,
-      moq: data.moq || data.minimum_order || 1,
-      unit: data.unit || 'piece',
-      supply_ability: data.supply_ability || data.capacity || 'Contact supplier for details',
-      lead_time: data.lead_time || data.delivery_time || '15-30 days',
-      payment_terms: data.payment_terms || data.payment_methods || ['T/T', 'L/C', 'Western Union', 'PayPal'],
-      packaging_details: data.packaging_details || data.packaging || 'Standard export packaging',
-      discount: data.discount || data.discount_percentage,
-      is_verified: data.is_verified || data.verified || sellerInfo.verified || false,
-      slug: data.slug || data.id,
-      type: data.type || 'product',
-      specifications: data.specifications || data.attributes || {
-        'Material': 'Various materials available',
-        'Color': 'Customizable',
-        'Size': 'Various sizes',
-        'MOQ': `${data.moq || 1} pieces`,
-      },
-      features: data.features || data.key_features || [
-        'High quality',
-        'Competitive price',
-        'Reliable supplier',
-        'Customizable options',
-      ],
-      certifications: data.certifications || [],
-    };
+  const fetchReviews = async () => {
+    if (!product) return;
 
-    setProduct(transformedProduct);
+    try {
+      const { data } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('product_id', product.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
 
-    // Set mock reviews
+      if (data && data.length > 0) {
+        const formattedReviews = data.map(review => ({
+          id: review.id,
+          user_name: review.buyer_name || 'Anonymous',
+          user_avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (review.buyer_id || 'user'),
+          rating: review.rating || 5,
+          date: new Date(review.created_at).toISOString().split('T')[0],
+          verified_order: true,
+          title: review.title || 'Great Product',
+          content: review.comment || 'No comment provided',
+          helpful_count: Math.floor(Math.random() * 20),
+          images: [],
+        }));
+        setReviews(formattedReviews);
+      } else {
+        // Create sample reviews if none exist
+        createSampleReviews();
+      }
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      createSampleReviews();
+    }
+  };
+
+  const createSampleReviews = () => {
     setReviews([
       {
         id: '1',
@@ -584,42 +418,222 @@ export default function ProductInsights() {
     ]);
   };
 
-  const fetchRelatedProductsFromDB = async () => {
-    try {
-      if (!product) return;
+  const processProductData = async (data: any) => {
+    // Process seller/supplier info
+    const sellerData = await getSellerData(data.seller_id || data.seller?.id);
+    setSupplier(sellerData);
 
-      // Try multiple strategies to find related products
+    // Process images
+    const processedImages = processImages(data.images || data.image);
+
+    // Transform data to ProductData interface
+    const transformedProduct: ProductData = {
+      id: data.id,
+      title: data.title || data.name || 'Product',
+      description: data.description || 'No description available.',
+      images: processedImages,
+      price: data.price?.toString() || data.price_min?.toString() || 'Contact',
+      original_price: data.original_price?.toString(),
+      min_price: data.min_price?.toString() || data.price_min?.toString(),
+      max_price: data.max_price?.toString() || data.price_max?.toString(),
+      country: data.country || sellerData.address?.split(',').pop()?.trim() || 'Global',
+      country_flag: data.country_flag || '🌍',
+      category: data.category?.name || data.category || 'General',
+      category_id: data.category_id || data.category?.id,
+      supplier: data.supplier || sellerData.company_name,
+      seller_id: data.seller_id || data.seller?.id || sellerData.user_id,
+      moq: data.moq || data.minimum_order || 1,
+      unit: data.unit || 'piece',
+      supply_ability: data.supply_ability || data.capacity || 'Contact supplier',
+      lead_time: data.lead_time || data.delivery_time || '15-30 days',
+      payment_terms: Array.isArray(data.payment_terms) ? data.payment_terms : 
+                    typeof data.payment_terms === 'string' ? data.payment_terms.split(',') : 
+                    ['T/T', 'L/C', 'Western Union'],
+      packaging_details: data.packaging_details || data.packaging || 'Standard packaging',
+      discount: data.discount || data.discount_percentage,
+      is_verified: data.is_verified || data.verified || sellerData.verified,
+      slug: data.slug || data.id,
+      type: data.type || 'product',
+      specifications: data.specifications || data.attributes || {},
+      features: data.features || data.key_features || [],
+      certifications: data.certifications || [],
+    };
+
+    setProduct(transformedProduct);
+    setQuantity(transformedProduct.moq || 1);
+  };
+
+  const getSellerData = async (sellerId?: string): Promise<SupplierData> => {
+    if (!sellerId) {
+      return createFallbackSeller();
+    }
+
+    try {
+      // Try to get supplier data
+      const { data: supplierData } = await supabase
+        .from('suppliers')
+        .select('*')
+        .eq('user_id', sellerId)
+        .maybeSingle();
+
+      if (supplierData) {
+        return {
+          id: supplierData.id,
+          user_id: supplierData.user_id,
+          company_name: supplierData.company_name || 'Supplier',
+          response_rate: supplierData.response_rate || 85,
+          verified: supplierData.verified || false,
+          business_type: supplierData.business_type || 'Manufacturer',
+          year_established: supplierData.year_established || 2015,
+          employees: supplierData.employees || '51-200',
+          main_markets: supplierData.main_markets || ['Global'],
+          total_products: supplierData.total_products || 0,
+          page_views: supplierData.page_views || 0,
+          inquiries: supplierData.inquiries || 0,
+          online_status: supplierData.online_status !== false,
+          trade_assurance: supplierData.trade_assurance || true,
+          gold_supplier: supplierData.gold_supplier || false,
+          assessed_supplier: supplierData.assessed_supplier || false,
+          response_time: supplierData.response_time || 'Within 24 hours',
+          email: supplierData.email,
+          phone: supplierData.phone,
+          address: supplierData.address,
+          website: supplierData.website,
+        };
+      }
+
+      // Try to get profile data as fallback
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('full_name, company_name')
+        .eq('id', sellerId)
+        .maybeSingle();
+
+      const fallbackSeller = createFallbackSeller();
+      if (profileData) {
+        fallbackSeller.company_name = profileData.company_name || profileData.full_name || 'Supplier';
+      }
+
+      return fallbackSeller;
+
+    } catch (error) {
+      console.error('Error fetching seller data:', error);
+      return createFallbackSeller();
+    }
+  };
+
+  const createFallbackSeller = (): SupplierData => {
+    return {
+      id: 'fallback-seller',
+      user_id: user?.id || 'fallback-user',
+      company_name: 'Global Suppliers Inc.',
+      response_rate: 85,
+      verified: true,
+      business_type: 'Manufacturer & Exporter',
+      year_established: 2015,
+      employees: '51-200',
+      main_markets: ['Global', 'North America', 'Europe', 'Asia'],
+      total_products: 128,
+      page_views: 2450,
+      inquiries: 156,
+      online_status: true,
+      trade_assurance: true,
+      gold_supplier: true,
+      assessed_supplier: true,
+      response_time: 'Within 24 hours',
+      email: 'contact@globalsuppliers.com',
+      phone: '+1 (555) 123-4567',
+      address: '123 Trade Center, Shanghai, China',
+      website: 'https://globalsuppliers.com',
+    };
+  };
+
+  const createFallbackProduct = async () => {
+    const sellerData = createFallbackSeller();
+    const mockProduct: ProductData = {
+      id: id || 'sample-product',
+      title: 'Premium Wireless Headphones - Sample',
+      description: 'This is a sample product. Add your real products through the admin panel.',
+      images: IMAGE_FALLBACKS,
+      price: '29.99',
+      original_price: '49.99',
+      min_price: '25.00',
+      max_price: '35.00',
+      country: 'China',
+      country_flag: '🇨🇳',
+      category: 'Electronics',
+      supplier: sellerData.company_name,
+      seller_id: sellerData.user_id,
+      moq: 50,
+      supply_ability: '5000 Piece/Pieces per Month',
+      lead_time: '15-30 days',
+      payment_terms: ['T/T', 'PayPal', 'Credit Card', 'Western Union'],
+      packaging_details: 'Standard export packaging',
+      discount: 40,
+      is_verified: true,
+      slug: 'premium-wireless-headphones-sample',
+      type: 'product',
+      specifications: {
+        'Brand': 'AudioTech',
+        'Model': 'ATH-M50xBT',
+        'Material': 'Plastic & Metal',
+        'Color': 'Black, White, Blue',
+        'Connectivity': 'Bluetooth 5.0',
+        'Battery Life': '40 hours',
+      },
+      features: [
+        'Premium sound quality',
+        '40-hour battery life',
+        'Noise cancellation',
+        'Comfortable design',
+      ],
+      certifications: ['CE', 'FCC', 'RoHS'],
+    };
+
+    setProduct(mockProduct);
+    setSupplier(sellerData);
+    createSampleReviews();
+    createFallbackRelatedProducts(sellerData);
+  };
+
+  const fetchRelatedProductsFromDB = async (currentProduct: any) => {
+    try {
       let relatedData: any[] = [];
 
-      // Strategy 1: Same category products
-      if (product.category_id) {
-        const { data: categoryProducts } = await supabase
+      // Strategy 1: Same category
+      if (currentProduct.category_id) {
+        const { data } = await supabase
           .from('products')
-          .select('*, category:categories(name), seller:profiles(*)')
-          .eq('category_id', product.category_id)
-          .neq('id', product.id)
+          .select(`
+            *,
+            category:categories(name),
+            seller:profiles(*)
+          `)
+          .eq('category_id', currentProduct.category_id)
+          .neq('id', currentProduct.id)
           .eq('published', true)
-          .limit(8);
+          .limit(6);
 
-        if (categoryProducts && categoryProducts.length > 0) {
-          relatedData = categoryProducts;
-        }
+        if (data) relatedData = data;
       }
 
-      // Strategy 2: Same seller products if category didn't return enough
-      if (relatedData.length < 4 && product.seller_id) {
-        const { data: sellerProducts } = await supabase
+      // Strategy 2: Same seller if needed
+      if (relatedData.length < 4 && currentProduct.seller_id) {
+        const { data } = await supabase
           .from('products')
-          .select('*, category:categories(name), seller:profiles(*)')
-          .eq('seller_id', product.seller_id)
-          .neq('id', product.id)
+          .select(`
+            *,
+            category:categories(name),
+            seller:profiles(*)
+          `)
+          .eq('seller_id', currentProduct.seller_id)
+          .neq('id', currentProduct.id)
           .eq('published', true)
-          .limit(8 - relatedData.length);
+          .limit(6 - relatedData.length);
 
-        if (sellerProducts) {
-          // Merge without duplicates
+        if (data) {
           const existingIds = new Set(relatedData.map(p => p.id));
-          sellerProducts.forEach(p => {
+          data.forEach(p => {
             if (!existingIds.has(p.id)) {
               relatedData.push(p);
             }
@@ -627,20 +641,23 @@ export default function ProductInsights() {
         }
       }
 
-      // Strategy 3: Recent products if still not enough
+      // Strategy 3: Recent products
       if (relatedData.length < 4) {
-        const { data: recentProducts } = await supabase
+        const { data } = await supabase
           .from('products')
-          .select('*, category:categories(name), seller:profiles(*)')
-          .neq('id', product.id)
+          .select(`
+            *,
+            category:categories(name),
+            seller:profiles(*)
+          `)
+          .neq('id', currentProduct.id)
           .eq('published', true)
           .order('created_at', { ascending: false })
-          .limit(8 - relatedData.length);
+          .limit(6 - relatedData.length);
 
-        if (recentProducts) {
-          // Merge without duplicates
+        if (data) {
           const existingIds = new Set(relatedData.map(p => p.id));
-          recentProducts.forEach(p => {
+          data.forEach(p => {
             if (!existingIds.has(p.id)) {
               relatedData.push(p);
             }
@@ -648,38 +665,23 @@ export default function ProductInsights() {
         }
       }
 
-      // Transform data and get supplier info
-      const relatedWithSuppliers = await Promise.all(
-        relatedData.slice(0, 8).map(async (item) => {
-          let supplierName = item.supplier;
-          let supplierVerified = item.verified;
-
-          // Try to get supplier data if available
-          if (item.seller_id) {
-            const { data: supplierData } = await supabase
-              .from('suppliers')
-              .select('company_name, verified')
-              .eq('user_id', item.seller_id)
-              .single();
-
-            if (supplierData) {
-              supplierName = supplierData.company_name || supplierName;
-              supplierVerified = supplierData.verified || supplierVerified;
-            }
-          }
-
+      // Transform to RelatedProduct format
+      const transformedProducts = await Promise.all(
+        relatedData.map(async (item) => {
+          const sellerInfo = await getSellerData(item.seller_id);
+          
           return {
             id: item.id,
-            title: item.title || 'Unnamed Product',
-            images: item.images ? [getSafeImage(item.images[0], 0)] : [IMAGE_FALLBACKS[0]],
-            price: item.price?.toString() || item.price_min?.toString() || 'Contact',
+            title: item.title || 'Product',
+            images: processImages(item.images),
+            price: item.price?.toString() || 'Contact',
             price_min: item.price_min,
             price_max: item.price_max,
             moq: item.moq || 1,
             unit: item.unit || 'piece',
             seller_id: item.seller_id,
-            supplier: supplierName || 'Verified Supplier',
-            is_verified: supplierVerified || false,
+            supplier: sellerInfo.company_name,
+            is_verified: sellerInfo.verified,
             country: item.country,
             slug: item.slug || item.id,
             category: item.category?.name || 'General',
@@ -687,18 +689,16 @@ export default function ProductInsights() {
         })
       );
 
-      setRelatedProducts(relatedWithSuppliers);
+      setRelatedProducts(transformedProducts);
 
     } catch (error) {
-      console.error('Error fetching related products from DB:', error);
-      // Create fallback related products
-      createFallbackRelatedProducts();
+      console.error('Error fetching related products:', error);
+      createFallbackRelatedProducts(supplier || createFallbackSeller());
     }
   };
 
-  const createFallbackRelatedProducts = () => {
-    const seller = supplier || createFallbackSeller();
-    const fallbackProducts: RelatedProduct[] = [
+  const createFallbackRelatedProducts = (sellerData: SupplierData) => {
+    const products: RelatedProduct[] = [
       {
         id: '1',
         title: 'Premium Wireless Headphones Pro',
@@ -708,8 +708,8 @@ export default function ProductInsights() {
         price_max: 39.99,
         moq: 50,
         unit: 'piece',
-        seller_id: seller.user_id,
-        supplier: seller.company_name,
+        seller_id: sellerData.user_id,
+        supplier: sellerData.company_name,
         is_verified: true,
         country: 'China',
         slug: 'premium-wireless-headphones-pro',
@@ -724,8 +724,8 @@ export default function ProductInsights() {
         price_max: 99.99,
         moq: 100,
         unit: 'piece',
-        seller_id: seller.user_id,
-        supplier: seller.company_name,
+        seller_id: sellerData.user_id,
+        supplier: sellerData.company_name,
         is_verified: true,
         country: 'China',
         slug: 'smart-watch-series-7',
@@ -740,8 +740,8 @@ export default function ProductInsights() {
         price_max: 199.99,
         moq: 10,
         unit: 'piece',
-        seller_id: seller.user_id,
-        supplier: seller.company_name,
+        seller_id: sellerData.user_id,
+        supplier: sellerData.company_name,
         is_verified: true,
         country: 'Vietnam',
         slug: 'ergonomic-office-chair',
@@ -756,90 +756,20 @@ export default function ProductInsights() {
         price_max: 49.99,
         moq: 100,
         unit: 'piece',
-        seller_id: seller.user_id,
-        supplier: seller.company_name,
+        seller_id: sellerData.user_id,
+        supplier: sellerData.company_name,
         is_verified: true,
         country: 'Taiwan',
         slug: 'multi-port-usb-c-hub',
         category: 'Computer Accessories',
       },
-      {
-        id: '5',
-        title: 'LED Desk Lamp',
-        images: [IMAGE_FALLBACKS[1]],
-        price: '24.99',
-        price_min: 24.99,
-        price_max: 34.99,
-        moq: 50,
-        unit: 'piece',
-        seller_id: seller.user_id,
-        supplier: seller.company_name,
-        is_verified: true,
-        country: 'China',
-        slug: 'led-desk-lamp',
-        category: 'Home & Office',
-      },
-      {
-        id: '6',
-        title: 'Bluetooth Speaker',
-        images: [IMAGE_FALLBACKS[2]],
-        price: '49.99',
-        price_min: 49.99,
-        price_max: 59.99,
-        moq: 100,
-        unit: 'piece',
-        seller_id: seller.user_id,
-        supplier: seller.company_name,
-        is_verified: true,
-        country: 'China',
-        slug: 'bluetooth-speaker',
-        category: 'Audio',
-      },
-      {
-        id: '7',
-        title: 'Portable Power Bank',
-        images: [IMAGE_FALLBACKS[0]],
-        price: '34.99',
-        price_min: 34.99,
-        price_max: 44.99,
-        moq: 200,
-        unit: 'piece',
-        seller_id: seller.user_id,
-        supplier: seller.company_name,
-        is_verified: true,
-        country: 'China',
-        slug: 'portable-power-bank',
-        category: 'Mobile Accessories',
-      },
-      {
-        id: '8',
-        title: 'Wireless Mouse',
-        images: [IMAGE_FALLBACKS[1]],
-        price: '19.99',
-        price_min: 19.99,
-        price_max: 29.99,
-        moq: 300,
-        unit: 'piece',
-        seller_id: seller.user_id,
-        supplier: seller.company_name,
-        is_verified: true,
-        country: 'China',
-        slug: 'wireless-mouse',
-        category: 'Computer Accessories',
-      },
     ];
 
-    setRelatedProducts(fallbackProducts.slice(0, 8));
+    setRelatedProducts(products);
   };
 
   const handleAddToCart = async () => {
-    if (!product) return;
-
-    // Validate we have seller information
-    if (!product.seller_id || !supplier) {
-      toast.error('Cannot add product to cart: Missing seller information');
-      return;
-    }
+    if (!product || !supplier) return;
 
     addItem({
       product_id: product.id,
@@ -864,19 +794,17 @@ export default function ProductInsights() {
       return;
     }
 
-    if (product?.seller_id && product.seller_id !== 'fallback-user') {
+    if (product?.seller_id && user) {
       navigate(`/messages?supplier=${product.seller_id}`);
+    } else if (!user) {
+      navigate('/auth');
     } else {
-      // For mock products, show contact info
       toast.info(`Contact ${supplier.company_name} at ${supplier.email || 'contact@supplier.com'}`);
     }
   };
 
   const handleRequestQuotation = () => {
-    if (!product || !supplier) {
-      toast.error('Cannot request quotation: Missing product or supplier information');
-      return;
-    }
+    if (!product || !supplier) return;
 
     toast.success(`Quotation request sent to ${supplier.company_name}`);
   };
@@ -916,7 +844,7 @@ export default function ProductInsights() {
 
   // Small Product Card Component
   const SmallProductCard = ({ product: item }: { product: RelatedProduct }) => (
-    <Link to={`/product-insights/product/${item.slug || item.id}`} className="group block">
+    <Link to={`/product-insights/${item.id}`} className="group block">
       <Card className="border border-gray-200 hover:border-[#FF6B35] transition-all duration-200 hover:shadow-md h-full overflow-hidden">
         <div className="relative">
           <div className="aspect-square overflow-hidden bg-gray-100">
@@ -984,7 +912,6 @@ export default function ProductInsights() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  // Add to cart logic here
                   toast.success(`Added ${item.title} to cart`);
                 }}
               >
@@ -1050,15 +977,15 @@ export default function ProductInsights() {
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      {/* Show admin hint if it's a mock product */}
-      {product.id === FALLBACK_PRODUCT_ID && (
+      {/* Show admin hint if it's a fallback product */}
+      {product.id === 'sample-product' && (
         <div className="bg-amber-50 border-b border-amber-200">
           <div className="container mx-auto px-4 py-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-amber-600" />
                 <span className="text-sm text-amber-700">
-                  Sample product shown. Add your products in the admin panel.
+                  Sample product shown. Add your real products in the admin panel.
                 </span>
               </div>
               <Button
@@ -1077,7 +1004,7 @@ export default function ProductInsights() {
       {/* Breadcrumb */}
       <div className="bg-white border-b border-gray-200">
         <div className="container mx-auto px-4 py-3">
-          <nav className="flex items-center text-sm text-gray-500">
+          <nav className="flex items-center text-sm text-gray-500 flex-wrap">
             <Link to="/" className="hover:text-[#FF6B35]">Home</Link>
             <ChevronRightIcon className="h-4 w-4 mx-2" />
             <Link to="/products" className="hover:text-[#FF6B35]">Products</Link>
@@ -1086,7 +1013,7 @@ export default function ProductInsights() {
               {product.category}
             </Link>
             <ChevronRightIcon className="h-4 w-4 mx-2" />
-            <span className="text-gray-700 truncate max-w-xs">{product.title}</span>
+            <span className="text-gray-700 truncate max-w-[200px] sm:max-w-xs">{product.title}</span>
           </nav>
         </div>
       </div>
@@ -1099,10 +1026,10 @@ export default function ProductInsights() {
             <Card className="border border-gray-200 shadow-sm">
               <CardContent className="p-4 sm:p-6">
                 <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
-                  {/* Main Image - Improved responsive sizing */}
+                  {/* Main Image */}
                   <div className="lg:w-7/12">
                     <div className="relative aspect-square sm:aspect-[4/3] lg:aspect-square rounded-lg overflow-hidden bg-gray-100 mb-3 sm:mb-4">
-                      {!imageError[selectedImage] && product.images[selectedImage] ? (
+                      {product.images[selectedImage] ? (
                         <img
                           src={getSafeImage(product.images[selectedImage], selectedImage)}
                           alt={product.title}
@@ -1137,61 +1064,80 @@ export default function ProductInsights() {
                           <Share2 className="h-4 w-4 sm:h-5 sm:w-5" />
                         </Button>
                       </div>
+                      
+                      {/* Image Navigation for Mobile */}
+                      {product.images.length > 1 && (
+                        <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-1 sm:gap-2">
+                          {product.images.map((_, index) => (
+                            <button
+                              key={index}
+                              onClick={() => setSelectedImage(index)}
+                              className={`h-1.5 sm:h-2 w-6 sm:w-8 rounded-full transition-all ${
+                                selectedImage === index 
+                                  ? 'bg-[#FF6B35]' 
+                                  : 'bg-white/50'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
                     
                     {/* Thumbnail Gallery */}
-                    <div className="relative">
-                      <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide py-1 sm:py-2" ref={imagesRef}>
-                        {product.images.map((img, index) => (
-                          <button
-                            key={index}
-                            onClick={() => setSelectedImage(index)}
-                            className={`flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 overflow-hidden ${
-                              selectedImage === index 
-                                ? 'border-[#FF6B35]' 
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            {!imageError[index] ? (
-                              <img
-                                src={getSafeImage(img, index)}
-                                alt={`Thumbnail ${index + 1}`}
-                                className="w-full h-full object-cover"
-                                onError={() => handleImageError(index)}
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                                <ImageIcon className="h-6 w-6 text-gray-400" />
-                              </div>
-                            )}
-                          </button>
-                        ))}
+                    {product.images.length > 1 && (
+                      <div className="relative">
+                        <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide py-1 sm:py-2" ref={imagesRef}>
+                          {product.images.map((img, index) => (
+                            <button
+                              key={index}
+                              onClick={() => setSelectedImage(index)}
+                              className={`flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 overflow-hidden ${
+                                selectedImage === index 
+                                  ? 'border-[#FF6B35]' 
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              {!imageError[index] ? (
+                                <img
+                                  src={getSafeImage(img, index)}
+                                  alt={`Thumbnail ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                  onError={() => handleImageError(index)}
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                                  <ImageIcon className="h-6 w-6 text-gray-400" />
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                        {product.images.length > 3 && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/80 shadow-sm h-8 w-8 sm:h-9 sm:w-9"
+                              onClick={() => scrollImages('left')}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/80 shadow-sm h-8 w-8 sm:h-9 sm:w-9"
+                              onClick={() => scrollImages('right')}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
-                      {product.images.length > 3 && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/80 shadow-sm h-8 w-8 sm:h-9 sm:w-9"
-                            onClick={() => scrollImages('left')}
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/80 shadow-sm h-8 w-8 sm:h-9 sm:w-9"
-                            onClick={() => scrollImages('right')}
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
+                    )}
                   </div>
 
-                  {/* Product Actions - Improved responsive layout */}
+                  {/* Product Actions */}
                   <div className="lg:w-5/12 space-y-4 sm:space-y-6">
                     <div>
                       <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-2 sm:mb-3">{product.title}</h1>
@@ -1265,7 +1211,7 @@ export default function ProductInsights() {
                       </div>
                     </div>
 
-                    {/* Action Buttons - Stack on mobile */}
+                    {/* Action Buttons */}
                     <div className="space-y-2 sm:space-y-3">
                       <Button 
                         className="w-full bg-[#FF6B35] hover:bg-[#FF854F] text-white text-sm sm:text-base"
@@ -1300,7 +1246,7 @@ export default function ProductInsights() {
                       </div>
                     </div>
 
-                    {/* Quick Stats - Responsive grid */}
+                    {/* Quick Stats */}
                     <div className="border-t pt-3 sm:pt-4 space-y-2 sm:space-y-3">
                       <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-between gap-2 sm:gap-0">
                         <div className="flex flex-col">
@@ -1332,32 +1278,32 @@ export default function ProductInsights() {
               </CardContent>
             </Card>
 
-            {/* Product Tabs - Mobile responsive */}
+            {/* Product Tabs */}
             <Card className="border border-gray-200 shadow-sm">
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <div className="border-b">
-                  <TabsList className="w-full justify-start h-auto p-0 bg-transparent overflow-x-auto">
+                  <TabsList className="w-full justify-start h-auto p-0 bg-transparent overflow-x-auto scrollbar-hide">
                     <TabsTrigger 
                       value="description" 
-                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm whitespace-nowrap"
                     >
                       Details
                     </TabsTrigger>
                     <TabsTrigger 
                       value="specifications" 
-                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm whitespace-nowrap"
                     >
                       Specs
                     </TabsTrigger>
                     <TabsTrigger 
                       value="reviews" 
-                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm whitespace-nowrap"
                     >
                       Reviews ({reviews.length})
                     </TabsTrigger>
                     <TabsTrigger 
                       value="shipping" 
-                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm whitespace-nowrap"
                     >
                       Shipping
                     </TabsTrigger>
@@ -1376,13 +1322,12 @@ export default function ProductInsights() {
                     {product.features && product.features.length > 0 && (
                       <div>
                         <h3 className="text-lg font-semibold mb-2 sm:mb-3">Key Features</h3>
-                        <div className="grid md:grid-cols-2 gap-4 mt-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                           {product.features.map((feature, index) => (
-                            <div key={index} className="flex items-start gap-3">
+                            <div key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
                               <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
                               <div>
-                                <h4 className="font-medium">{feature.split(':')[0]}</h4>
-                                <p className="text-sm text-gray-600">{feature.split(':')[1] || feature}</p>
+                                <p className="text-sm sm:text-base text-gray-700">{feature}</p>
                               </div>
                             </div>
                           ))}
@@ -1410,20 +1355,18 @@ export default function ProductInsights() {
                     <h3 className="text-lg font-semibold mb-2 sm:mb-4">Product Specifications</h3>
                     {product.specifications && Object.keys(product.specifications).length > 0 ? (
                       <div className="border rounded-lg overflow-hidden">
-                        <table className="w-full">
-                          <tbody>
-                            {Object.entries(product.specifications).map(([key, value], index) => (
-                              <tr key={key} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                <td className="px-3 sm:px-4 py-2 sm:py-3 border-r border-gray-200 font-medium text-gray-700 text-sm sm:text-base w-1/3">
-                                  {key}
-                                </td>
-                                <td className="px-3 sm:px-4 py-2 sm:py-3 text-gray-600 text-sm sm:text-base">
-                                  {value}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        <div className="divide-y divide-gray-200">
+                          {Object.entries(product.specifications).map(([key, value], index) => (
+                            <div key={key} className="flex flex-col sm:flex-row sm:items-center">
+                              <div className="w-full sm:w-1/3 p-3 sm:p-4 bg-gray-50 font-medium text-gray-700 text-sm sm:text-base">
+                                {key}
+                              </div>
+                              <div className="w-full sm:w-2/3 p-3 sm:p-4 text-gray-600 text-sm sm:text-base">
+                                {value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ) : (
                       <p className="text-gray-500 text-sm sm:text-base">No specifications available.</p>
@@ -1618,7 +1561,7 @@ export default function ProductInsights() {
               </Tabs>
             </Card>
 
-            {/* Related Products Section with Smaller Cards */}
+            {/* Related Products */}
             {relatedProducts.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
@@ -1635,9 +1578,9 @@ export default function ProductInsights() {
                   </Button>
                 </div>
                 
-                {/* Products Grid - Responsive with smaller cards */}
+                {/* Products Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {relatedProducts.slice(0, 8).map((item) => (
+                  {relatedProducts.map((item) => (
                     <SmallProductCard key={item.id} product={item} />
                   ))}
                 </div>
@@ -1645,11 +1588,10 @@ export default function ProductInsights() {
             )}
           </div>
 
-          {/* Right Column - Supplier Info & Quick Actions - Hide on mobile, show on lg */}
+          {/* Right Column - Supplier Info - Hidden on mobile, shown on lg */}
           <div className="lg:col-span-4 space-y-6 hidden lg:block">
-            {/* Sticky Container */}
             <div className="sticky top-24 space-y-6">
-              {/* Supplier Card - Alibaba Style */}
+              {/* Supplier Card */}
               <Card className="border border-gray-200 shadow-sm">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4 mb-4">
@@ -1658,20 +1600,20 @@ export default function ProductInsights() {
                     </div>
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg mb-1">{supplier.company_name}</h3>
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
                         {supplier.gold_supplier && (
-                          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+                          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 text-xs">
                             <Award className="h-3 w-3 mr-1" />
                             Gold Supplier
                           </Badge>
                         )}
                         {supplier.assessed_supplier && (
-                          <Badge variant="outline" className="border-blue-200 text-blue-600">
+                          <Badge variant="outline" className="border-blue-200 text-blue-600 text-xs">
                             Assessed
                           </Badge>
                         )}
                         {supplier.verified && (
-                          <Badge variant="outline" className="border-green-200 text-green-600">
+                          <Badge variant="outline" className="border-green-200 text-green-600 text-xs">
                             <CheckCircle className="h-3 w-3 mr-1" />
                             Verified
                           </Badge>
@@ -1858,10 +1800,3 @@ export default function ProductInsights() {
     </div>
   );
 }
-
-// Add missing Globe icon component
-const Globe = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-  </svg>
-);
