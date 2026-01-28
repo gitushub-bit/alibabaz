@@ -264,9 +264,20 @@ export default function ProductInsights() {
       
       // Check if this is a deal URL
       if (type === 'deal') {
-        await fetchDealWithProduct();
+        console.log('Fetching deal...');
+        const dealData = await fetchDealWithProduct();
+        
+        if (dealData) {
+          console.log('Deal data retrieved:', dealData);
+          await processDealData(dealData);
+          await fetchRelatedDealsFromDB(dealData);
+        } else {
+          console.log('No deal found, creating fallback');
+          createFallbackProduct();
+        }
       } else {
         // Regular product or unknown type
+        console.log('Fetching regular product...');
         await fetchRegularProduct();
       }
 
@@ -287,121 +298,80 @@ export default function ProductInsights() {
     }
   };
 
- const fetchDealWithProduct = async () => {
-  if (!id) return null;
+  const fetchDealWithProduct = async () => {
+    if (!id) return null;
 
-  try {
-    console.log('Fetching deal with ID:', id);
-    
-    // Fetch deal with ALL columns explicitly listed
-    const { data: dealData, error: dealError } = await supabase
-      .from('deals')
-      .select(`
-        id,
-        title,
-        image,
-        price,
-        original_price,
-        discount,
-        moq,
-        supplier,
-        is_verified,
-        is_flash_deal,
-        is_active,
-        ends_at,
-        product_id,
-        created_at,
-        updated_at
-      `)
-      .eq('id', id)
-      .maybeSingle(); // Remove .eq('is_active', true) for debugging
-
-    if (dealError) {
-      console.error('Error fetching deal:', dealError);
-      // Try one more time without any filters
-      const { data: fallbackData } = await supabase
+    try {
+      console.log('Fetching deal with ID:', id);
+      
+      // Simple query to get deal data
+      const { data: dealData, error: dealError } = await supabase
         .from('deals')
         .select('*')
         .eq('id', id)
         .maybeSingle();
-      
-      if (!fallbackData) {
-        console.log('Deal not found in database');
+
+      if (dealError) {
+        console.error('Error fetching deal:', dealError);
         return null;
       }
-      
-      return fallbackData;
-    }
 
-    if (!dealData) {
-      console.log('No deal found with ID:', id);
-      return null;
-    }
+      if (!dealData) {
+        console.log('No deal found with ID:', id);
+        return null;
+      }
 
-    console.log('Deal data found:', dealData);
+      console.log('Deal data found:', dealData);
 
-    // Check if deal is active
-    if (!dealData.is_active) {
-      console.log('Deal is inactive:', dealData.is_active);
-      toast.error('This deal is no longer active');
-      // You can still show it, or navigate away
-    }
+      // Check if deal is active
+      if (!dealData.is_active) {
+        console.log('Deal is inactive');
+        toast.error('This deal is no longer active');
+        // Continue anyway to show the deal
+      }
 
-    // Fetch product data if linked
-    let productData = null;
-    if (dealData.product_id) {
-      console.log('Fetching product:', dealData.product_id);
-      const { data: product, error: productError } = await supabase
-        .from('products')
-        .select(`
-          id,
-          title,
-          description,
-          images,
-          price_min,
-          price_max,
-          moq,
-          unit,
-          seller_id,
-          specifications,
-          features,
-          certifications,
-          category_id,
-          supply_ability,
-          lead_time,
-          payment_terms,
-          packaging_details,
-          is_verified,
-          country,
-          published
-        `)
-        .eq('id', dealData.product_id)
-        .maybeSingle();
+      // Fetch product data if linked
+      let productData = null;
+      if (dealData.product_id) {
+        console.log('Fetching product:', dealData.product_id);
+        const { data: product, error: productError } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', dealData.product_id)
+          .maybeSingle();
 
-      if (productError) {
-        console.error('Error fetching product:', productError);
-      } else {
-        productData = product;
-        console.log('Product data:', productData);
-        
-        // Only proceed if product is published
-        if (productData && !productData.published) {
-          console.log('Linked product is not published');
-          productData = null;
+        if (productError) {
+          console.error('Error fetching product:', productError);
+        } else {
+          productData = product;
+          console.log('Product data:', productData);
+          
+          // Get category if category_id exists
+          if (productData?.category_id) {
+            const { data: category } = await supabase
+              .from('categories')
+              .select('name')
+              .eq('id', productData.category_id)
+              .maybeSingle();
+            
+            if (category) {
+              productData.category = { name: category.name, id: productData.category_id };
+            }
+          }
         }
       }
+
+      return {
+        ...dealData,
+        product: productData,
+      };
+
+    } catch (error) {
+      console.error('Error in fetchDealWithProduct:', error);
+      return null;
     }
+  };
 
-    return {
-      ...dealData,
-      product: productData,
-    };
-
-  } catch (error) {
-    console.error('Error in fetchDealWithProduct:', error);
-    return null;
-  }
-};
   const fetchRegularProduct = async () => {
     try {
       const searchId = id?.toLowerCase();
@@ -410,11 +380,7 @@ export default function ProductInsights() {
       // Try to find product by ID or slug
       const { data: productData, error } = await supabase
         .from('products')
-        .select(`
-          *,
-          category:categories(name, id),
-          seller:profiles(*)
-        `)
+        .select('*')
         .or(`id.eq.${searchId},slug.eq.${searchId}`)
         .eq('published', true)
         .maybeSingle();
@@ -432,11 +398,7 @@ export default function ProductInsights() {
         // Try to find any published product
         const { data: anyProduct } = await supabase
           .from('products')
-          .select(`
-            *,
-            category:categories(name, id),
-            seller:profiles(*)
-          `)
+          .select('*')
           .eq('published', true)
           .limit(1)
           .maybeSingle();
@@ -454,140 +416,117 @@ export default function ProductInsights() {
     }
   };
 
- const processDealData = async (dealData: any) => {
-  console.log('Processing deal data:', dealData);
-  
-  if (!dealData) {
-    console.log('No deal data provided');
-    createFallbackProduct();
-    return;
-  }
-
-  // Get seller info
-  let sellerData = null;
-  const productInfo = dealData.product;
-  
-  if (productInfo?.seller_id) {
-    sellerData = await getSellerData(productInfo.seller_id);
-  } else {
-    // Create seller from deal info
-    sellerData = createFallbackSeller();
-    sellerData.company_name = dealData.supplier || 'Supplier';
-    sellerData.verified = dealData.is_verified || false;
-  }
-  
-  setSupplier(sellerData);
-
-  // Process images - use deal image first, then product images
-  let processedImages: string[];
-  if (dealData.image) {
-    processedImages = [getSafeImage(dealData.image, 0)];
-  } else if (productInfo?.images) {
-    processedImages = processImages(productInfo.images);
-  } else {
-    processedImages = IMAGE_FALLBACKS;
-  }
-
-  // Calculate discount if needed
-  let discount = dealData.discount;
-  if (!discount && dealData.price && dealData.original_price) {
-    const priceNum = parseFloat(dealData.price);
-    const originalNum = parseFloat(dealData.original_price);
-    if (!isNaN(priceNum) && !isNaN(originalNum) && originalNum > 0) {
-      discount = Math.round(((originalNum - priceNum) / originalNum) * 100);
+  const processDealData = async (dealData: any) => {
+    console.log('Processing deal data:', dealData);
+    
+    if (!dealData) {
+      console.log('No deal data provided');
+      createFallbackProduct();
+      return;
     }
-  }
 
-  // Create the product object
-  const transformedProduct: ProductData = {
-    id: productInfo?.id || dealData.id,
-    title: dealData.title || productInfo?.title || 'Deal',
-    description: productInfo?.description || 'Special promotional deal',
-    images: processedImages,
-    price: dealData.price?.toString() || productInfo?.price_min?.toString() || '0.00',
-    original_price: dealData.original_price?.toString(),
-    min_price: productInfo?.price_min?.toString(),
-    max_price: productInfo?.price_max?.toString(),
-    country: productInfo?.country || 'Global',
-    country_flag: '🌍',
-    category: productInfo?.category?.name || 'Deal',
-    category_id: productInfo?.category_id,
-    supplier: dealData.supplier || sellerData.company_name,
-    seller_id: productInfo?.seller_id || sellerData.user_id,
-    moq: dealData.moq || productInfo?.moq || 1,
-    unit: productInfo?.unit || 'piece',
-    supply_ability: productInfo?.supply_ability || 'Contact supplier',
-    lead_time: productInfo?.lead_time || '15-30 days',
-    payment_terms: productInfo?.payment_terms || ['T/T', 'L/C', 'Western Union'],
-    packaging_details: productInfo?.packaging_details || 'Standard packaging',
-    discount: discount,
-    is_verified: dealData.is_verified || productInfo?.is_verified || false,
-    slug: dealData.id,
-    type: 'deal',
-    specifications: productInfo?.specifications || {},
-    features: productInfo?.features || [],
-    certifications: productInfo?.certifications || [],
-    ends_at: dealData.ends_at,
-    is_flash_deal: dealData.is_flash_deal,
-    deal_id: dealData.id,
-    product_id: dealData.product_id,
-  };
-
-  console.log('Transformed product for display:', transformedProduct);
-  setProduct(transformedProduct);
-  setQuantity(transformedProduct.moq || 1);
-  
-  // Set countdown timer for flash deals
-  if (dealData.is_flash_deal && dealData.ends_at) {
-    const endTime = new Date(dealData.ends_at).getTime();
-    const now = Date.now();
-    const diff = endTime - now;
-    setTimeLeft(diff > 0 ? diff : 0);
-  }
-};
-
-      setProduct(transformedProduct);
-      setQuantity(transformedProduct.moq || 1);
+    // Get seller info
+    let sellerData = null;
+    const productInfo = dealData.product;
+    
+    if (productInfo?.seller_id) {
+      sellerData = await getSellerData(productInfo.seller_id);
     } else {
-      // Deal without linked product - use deal data only
-      const sellerData = createFallbackSeller();
-      sellerData.company_name = dealData.supplier || 'Deal Supplier';
+      // Create seller from deal info
+      sellerData = createFallbackSeller();
+      sellerData.company_name = dealData.supplier || 'Supplier';
       sellerData.verified = dealData.is_verified || false;
-      setSupplier(sellerData);
+    }
+    
+    setSupplier(sellerData);
 
-      const processedImages = dealData.image 
-        ? [getSafeImage(dealData.image, 0)]
-        : IMAGE_FALLBACKS;
+    // Process images - use deal image first, then product images
+    let processedImages: string[];
+    if (dealData.image) {
+      processedImages = [getSafeImage(dealData.image, 0)];
+    } else if (productInfo?.images) {
+      processedImages = processImages(productInfo.images);
+    } else {
+      processedImages = IMAGE_FALLBACKS;
+    }
 
-      const transformedProduct: ProductData = {
-        id: dealData.id,
-        title: dealData.title,
-        description: 'Special promotional deal',
-        images: processedImages,
-        price: dealData.price?.toString() || 'Contact',
-        original_price: dealData.original_price?.toString(),
-        discount: dealData.discount,
-        moq: dealData.moq || 1,
-        supplier: dealData.supplier || 'Supplier',
-        seller_id: sellerData.user_id,
-        is_verified: dealData.is_verified || false,
-        slug: dealData.id,
-        type: 'deal',
-        ends_at: dealData.ends_at,
-        is_flash_deal: dealData.is_flash_deal,
-        deal_id: dealData.id,
-      };
+    // Calculate discount if needed
+    let discount = dealData.discount;
+    if (!discount && dealData.price && dealData.original_price) {
+      const priceNum = parseFloat(dealData.price);
+      const originalNum = parseFloat(dealData.original_price);
+      if (!isNaN(priceNum) && !isNaN(originalNum) && originalNum > 0) {
+        discount = Math.round(((originalNum - priceNum) / originalNum) * 100);
+      }
+    }
 
-      setProduct(transformedProduct);
-      setQuantity(transformedProduct.moq || 1);
+    // Create the product object
+    const transformedProduct: ProductData = {
+      id: productInfo?.id || dealData.id,
+      title: dealData.title || productInfo?.title || 'Deal',
+      description: productInfo?.description || 'Special promotional deal',
+      images: processedImages,
+      price: dealData.price?.toString() || productInfo?.price_min?.toString() || '0.00',
+      original_price: dealData.original_price?.toString(),
+      min_price: productInfo?.price_min?.toString(),
+      max_price: productInfo?.price_max?.toString(),
+      country: productInfo?.country || 'Global',
+      country_flag: '🌍',
+      category: productInfo?.category?.name || 'Deal',
+      category_id: productInfo?.category_id,
+      supplier: dealData.supplier || sellerData.company_name,
+      seller_id: productInfo?.seller_id || sellerData.user_id,
+      moq: dealData.moq || productInfo?.moq || 1,
+      unit: productInfo?.unit || 'piece',
+      supply_ability: productInfo?.supply_ability || 'Contact supplier',
+      lead_time: productInfo?.lead_time || '15-30 days',
+      payment_terms: productInfo?.payment_terms || ['T/T', 'L/C', 'Western Union'],
+      packaging_details: productInfo?.packaging_details || 'Standard packaging',
+      discount: discount,
+      is_verified: dealData.is_verified || productInfo?.is_verified || false,
+      slug: dealData.id,
+      type: 'deal',
+      specifications: productInfo?.specifications || {},
+      features: productInfo?.features || [],
+      certifications: productInfo?.certifications || [],
+      ends_at: dealData.ends_at,
+      is_flash_deal: dealData.is_flash_deal,
+      deal_id: dealData.id,
+      product_id: dealData.product_id,
+    };
+
+    console.log('Transformed product for display:', transformedProduct);
+    setProduct(transformedProduct);
+    setQuantity(transformedProduct.moq || 1);
+    
+    // Set countdown timer for flash deals
+    if (dealData.is_flash_deal && dealData.ends_at) {
+      const endTime = new Date(dealData.ends_at).getTime();
+      const now = Date.now();
+      const diff = endTime - now;
+      setTimeLeft(diff > 0 ? diff : 0);
     }
   };
 
   const processRegularProductData = async (productData: any) => {
-    const sellerData = await getSellerData(productData.seller_id || productData.seller?.id);
+    const sellerData = await getSellerData(productData.seller_id);
     setSupplier(sellerData);
 
     const processedImages = processImages(productData.images);
+
+    // Get category name if category_id exists
+    let categoryName = 'General';
+    if (productData.category_id) {
+      const { data: category } = await supabase
+        .from('categories')
+        .select('name')
+        .eq('id', productData.category_id)
+        .maybeSingle();
+      
+      if (category) {
+        categoryName = category.name;
+      }
+    }
 
     const transformedProduct: ProductData = {
       id: productData.id,
@@ -600,10 +539,10 @@ export default function ProductInsights() {
       max_price: productData.max_price?.toString() || productData.price_max?.toString(),
       country: productData.country || sellerData.address?.split(',').pop()?.trim() || 'Global',
       country_flag: productData.country_flag || '🌍',
-      category: productData.category?.name || productData.category || 'General',
-      category_id: productData.category_id || productData.category?.id,
+      category: categoryName,
+      category_id: productData.category_id,
       supplier: productData.supplier || sellerData.company_name,
-      seller_id: productData.seller_id || productData.seller?.id || sellerData.user_id,
+      seller_id: productData.seller_id || sellerData.user_id,
       moq: productData.moq || productData.minimum_order || 1,
       unit: productData.unit || 'piece',
       supply_ability: productData.supply_ability || productData.capacity || 'Contact supplier',
@@ -630,23 +569,9 @@ export default function ProductInsights() {
       // Fetch other active deals
       const { data: relatedDeals, error } = await supabase
         .from('deals')
-        .select(`
-          *,
-          product:products (
-            id,
-            title,
-            images,
-            price_min,
-            price_max,
-            moq,
-            unit,
-            seller_id,
-            country
-          )
-        `)
+        .select('*')
         .neq('id', currentDeal.id)
         .eq('is_active', true)
-        .order('sort_order', { ascending: true })
         .limit(4);
 
       if (error) throw error;
@@ -656,26 +581,24 @@ export default function ProductInsights() {
           relatedDeals.map(async (deal) => {
             let sellerInfo = createFallbackSeller();
             
-            if (deal.product?.seller_id) {
-              sellerInfo = await getSellerData(deal.product.seller_id);
-            } else if (deal.supplier) {
+            if (deal.supplier) {
               sellerInfo.company_name = deal.supplier;
               sellerInfo.verified = deal.is_verified || false;
             }
             
             return {
               id: deal.id,
-              title: deal.title || deal.product?.title || 'Deal',
-              images: deal.image ? [deal.image] : processImages(deal.product?.images),
-              price: deal.price?.toString() || deal.product?.price_min?.toString() || 'Contact',
+              title: deal.title || 'Deal',
+              images: deal.image ? [deal.image] : IMAGE_FALLBACKS,
+              price: deal.price?.toString() || 'Contact',
               price_min: deal.price,
               price_max: deal.original_price,
-              moq: deal.moq || deal.product?.moq || 1,
-              unit: deal.product?.unit || 'piece',
-              seller_id: deal.product?.seller_id || '',
+              moq: deal.moq || 1,
+              unit: 'piece',
+              seller_id: '',
               supplier: sellerInfo.company_name,
               is_verified: sellerInfo.verified,
-              country: deal.product?.country || 'Global',
+              country: 'Global',
               slug: deal.id,
               category: 'Deal',
               is_deal: true,
@@ -698,14 +621,11 @@ export default function ProductInsights() {
     try {
       let relatedData: any[] = [];
 
+      // Strategy 1: Same category
       if (currentProduct.category_id) {
         const { data } = await supabase
           .from('products')
-          .select(`
-            *,
-            category:categories(name),
-            seller:profiles(*)
-          `)
+          .select('*')
           .eq('category_id', currentProduct.category_id)
           .neq('id', currentProduct.id)
           .eq('published', true)
@@ -714,14 +634,11 @@ export default function ProductInsights() {
         if (data) relatedData = data;
       }
 
+      // Strategy 2: Same seller if needed
       if (relatedData.length < 4 && currentProduct.seller_id) {
         const { data } = await supabase
           .from('products')
-          .select(`
-            *,
-            category:categories(name),
-            seller:profiles(*)
-          `)
+          .select('*')
           .eq('seller_id', currentProduct.seller_id)
           .neq('id', currentProduct.id)
           .eq('published', true)
@@ -737,14 +654,11 @@ export default function ProductInsights() {
         }
       }
 
+      // Strategy 3: Recent products
       if (relatedData.length < 4) {
         const { data } = await supabase
           .from('products')
-          .select(`
-            *,
-            category:categories(name),
-            seller:profiles(*)
-          `)
+          .select('*')
           .neq('id', currentProduct.id)
           .eq('published', true)
           .order('created_at', { ascending: false })
@@ -778,7 +692,7 @@ export default function ProductInsights() {
             is_verified: sellerInfo.verified,
             country: item.country,
             slug: item.slug || item.id,
-            category: item.category?.name || 'General',
+            category: 'General',
           };
         })
       );
