@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ChevronRight, TrendingUp, ShoppingCart, Star, MapPin, Shield, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ChevronRight, TrendingUp, ShoppingCart, Star, MapPin, Shield, ChevronLeft, ChevronRight as ChevronRightIcon, Eye } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteContent } from "@/hooks/useSiteContent";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -24,22 +24,39 @@ interface Product {
   supplier_name: string;
   rating: number;
   slug?: string;
+  seller_id?: string;
 }
 
 export const TrendingProducts = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const { content } = useSiteContent();
   const { formatPrice } = useCurrency();
   const { addItem } = useCart();
+  const navigate = useNavigate();
   
   const carouselRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Track scroll for carousel indicators
+  const handleScroll = useCallback(() => {
+    if (carouselRef.current && products.length > 0) {
+      const scrollLeft = carouselRef.current.scrollLeft;
+      const cardWidth = carouselRef.current.scrollWidth / products.length;
+      const newSlide = Math.round(scrollLeft / cardWidth);
+      setCurrentSlide(newSlide);
+    }
+  }, [products.length]);
 
   // Fetch random products from database
   const fetchRandomProducts = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
+      
+      console.log("Fetching trending products...");
       
       // Fetch 8 random products with their details
       const { data, error } = await supabase
@@ -55,9 +72,11 @@ export const TrendingProducts = () => {
           country,
           is_verified,
           category:categories(name),
-          supplier:profiles(company_name),
+          supplier:profiles(id, company_name),
           rating,
-          slug
+          slug,
+          seller_id,
+          published
         `)
         .eq("published", true)
         .order("created_at", { ascending: false })
@@ -65,6 +84,7 @@ export const TrendingProducts = () => {
 
       if (error) {
         console.error("Error fetching trending products:", error);
+        setError("Failed to load products");
         
         // Fallback: try to get any published products
         const { data: fallbackData } = await supabase
@@ -79,23 +99,30 @@ export const TrendingProducts = () => {
         return;
       }
 
-      if (data) {
+      if (data && data.length > 0) {
+        console.log(`Found ${data.length} products`);
         processProducts(data);
+      } else {
+        console.log("No products found");
+        setError("No trending products available");
+        createSampleProducts();
       }
     } catch (error) {
       console.error("Error in fetchRandomProducts:", error);
+      setError("Failed to load products");
+      createSampleProducts();
     } finally {
       setLoading(false);
     }
   }, []);
 
   const processProducts = (productsData: any[]) => {
+    console.log("Processing products data:", productsData);
+    
     const processed = productsData.map((item: any) => ({
       id: item.id,
       title: item.title || "Unnamed Product",
-      image: item.images 
-        ? (Array.isArray(item.images) ? item.images[0] : item.images)
-        : null,
+      image: getSafeImage(item.images),
       price_min: item.price_min || 0,
       price_max: item.price_max || item.price_min || 0,
       moq: item.moq || 1,
@@ -106,15 +133,134 @@ export const TrendingProducts = () => {
       supplier_name: item.supplier?.company_name || "Supplier",
       rating: item.rating || Math.floor(Math.random() * 2) + 4, // Random rating 4-5
       slug: item.slug || item.id,
+      seller_id: item.seller_id,
     }));
 
+    console.log("Processed products:", processed);
     setProducts(processed);
+  };
+
+  const getSafeImage = (images: any): string | null => {
+    if (!images) return null;
+    
+    try {
+      if (Array.isArray(images) && images.length > 0) {
+        const img = images[0];
+        if (img && typeof img === 'string') {
+          // Check if it's already a URL
+          if (img.startsWith('http') || img.startsWith('https') || img.startsWith('data:')) {
+            return img;
+          }
+          
+          // Try to get from Supabase storage
+          if (img.includes('supabase.co')) {
+            return img;
+          }
+          
+          // Try to construct a URL
+          const { data } = supabase.storage
+            .from('product-images')
+            .getPublicUrl(img);
+            
+          return data.publicUrl || null;
+        }
+      } else if (typeof images === 'string') {
+        try {
+          const parsed = JSON.parse(images);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return getSafeImage(parsed);
+          }
+        } catch {
+          return images;
+        }
+      }
+    } catch (error) {
+      console.error("Error getting safe image:", error);
+    }
+    
+    return null;
+  };
+
+  const createSampleProducts = () => {
+    const sampleProducts: Product[] = [
+      {
+        id: "sample-1",
+        title: "Premium Wireless Headphones",
+        image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop",
+        price_min: 29.99,
+        price_max: 39.99,
+        moq: 50,
+        unit: "piece",
+        country: "China",
+        is_verified: true,
+        category: "Electronics",
+        supplier_name: "Global Suppliers Inc.",
+        rating: 4.8,
+        slug: "premium-wireless-headphones"
+      },
+      {
+        id: "sample-2",
+        title: "Smart Watch Series 7",
+        image: "https://images.unsplash.com/photo-1583394838336-acd977736f90?w=400&h=400&fit=crop",
+        price_min: 89.99,
+        price_max: 99.99,
+        moq: 100,
+        unit: "piece",
+        country: "Taiwan",
+        is_verified: true,
+        category: "Wearables",
+        supplier_name: "Tech Manufacturers Ltd.",
+        rating: 4.5,
+        slug: "smart-watch-series-7"
+      },
+      {
+        id: "sample-3",
+        title: "Ergonomic Office Chair",
+        image: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=400&fit=crop",
+        price_min: 149.99,
+        price_max: 199.99,
+        moq: 10,
+        unit: "piece",
+        country: "Vietnam",
+        is_verified: true,
+        category: "Furniture",
+        supplier_name: "Comfort Furniture Co.",
+        rating: 4.7,
+        slug: "ergonomic-office-chair"
+      },
+      {
+        id: "sample-4",
+        title: "Multi-Port USB-C Hub",
+        image: "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?w=400&h=400&fit=crop",
+        price_min: 39.99,
+        price_max: 49.99,
+        moq: 100,
+        unit: "piece",
+        country: "China",
+        is_verified: true,
+        category: "Computer Accessories",
+        supplier_name: "Connect Tech Ltd.",
+        rating: 4.6,
+        slug: "multi-port-usb-c-hub"
+      }
+    ];
+    
+    setProducts(sampleProducts);
   };
 
   // Initial load
   useEffect(() => {
     fetchRandomProducts();
   }, [fetchRandomProducts]);
+
+  // Add scroll event listener
+  useEffect(() => {
+    const carousel = carouselRef.current;
+    if (carousel) {
+      carousel.addEventListener('scroll', handleScroll);
+      return () => carousel.removeEventListener('scroll', handleScroll);
+    }
+  }, [handleScroll]);
 
   const handleAddToCart = (product: Product, e: React.MouseEvent) => {
     e.preventDefault();
@@ -128,6 +274,7 @@ export const TrendingProducts = () => {
       quantity: Math.max(1, product.moq || 1),
       moq: product.moq || 1,
       unit: product.unit || "piece",
+      seller_id: product.seller_id,
       seller_name: product.supplier_name,
       supplier_company: product.supplier_name,
       supplier_verified: product.is_verified,
@@ -136,9 +283,17 @@ export const TrendingProducts = () => {
     toast.success(`Added ${product.title} to cart`);
   };
 
+  const handleProductClick = (product: Product, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Navigate to product page
+    navigate(`/product-insights/${product.slug || product.id}`);
+  };
+
   const scrollCarousel = (direction: 'left' | 'right') => {
     if (carouselRef.current) {
-      const scrollAmount = carouselRef.current.clientWidth * 0.8;
+      const scrollAmount = carouselRef.current.clientWidth * 0.85;
       carouselRef.current.scrollBy({
         left: direction === 'left' ? -scrollAmount : scrollAmount,
         behavior: 'smooth'
@@ -203,269 +358,286 @@ export const TrendingProducts = () => {
           </Link>
         </div>
 
-        {/* Desktop Grid - Responsive columns */}
-        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-8 gap-6">
-          {products.map((product) => (
-            <div
-              key={product.id}
-              className="group bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 hover:border-[#FF6B35]/30"
+        {error && !products.length ? (
+          <div className="text-center py-12">
+            <div className="text-gray-500 text-lg mb-4">{error}</div>
+            <Button 
+              onClick={fetchRandomProducts}
+              className="bg-[#FF6B35] hover:bg-[#FF854F]"
             >
-              {/* Product Image */}
-              <Link to={`/product-insights/${product.slug || product.id}`}>
-                <div className="relative h-48 overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
-                  <img
-                    src={product.image || "/placeholder.svg?height=192&width=192"}
-                    alt={product.title}
-                    className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                  />
-                  
-                  {/* Badges */}
-                  <div className="absolute top-3 left-3 flex flex-col gap-2">
-                    {product.is_verified && (
-                      <Badge className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-xs px-3 py-1 h-6 shadow-sm">
-                        <Shield className="w-3 h-3 mr-1" />
-                        Verified
-                      </Badge>
-                    )}
-                    {product.rating >= 4 && (
-                      <Badge className="bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white text-xs px-3 py-1 h-6 shadow-sm">
-                        <Star className="w-3 h-3 mr-1 fill-white" />
-                        {product.rating.toFixed(1)}
-                      </Badge>
-                    )}
-                  </div>
-                  
-                  {/* Country Flag */}
-                  <div className="absolute top-3 right-3">
-                    <Badge variant="outline" className="bg-white/95 backdrop-blur-sm text-xs px-3 py-1 h-6 border-gray-200 shadow-sm">
-                      <MapPin className="w-3 h-3 mr-1 text-gray-600" />
-                      <span className="text-gray-700">{product.country}</span>
-                    </Badge>
-                  </div>
-                </div>
-              </Link>
-
-              {/* Product Info */}
-              <div className="p-4">
-                <Link to={`/product-insights/${product.slug || product.id}`}>
-                  <h3 className="text-sm font-semibold text-gray-800 line-clamp-2 min-h-[2.5rem] group-hover:text-[#FF6B35] transition-colors mb-3">
-                    {product.title}
-                  </h3>
-                </Link>
-
-                {/* Price */}
-                <div className="mb-4">
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className="text-xl font-bold text-[#FF6B35]">
-                      ${formatPrice(product.price_min)}
-                    </span>
-                    {product.price_max && product.price_max > product.price_min && (
-                      <span className="text-sm text-gray-500">
-                        ~ ${formatPrice(product.price_max)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-gray-500">
-                      MOQ: {product.moq} {product.unit}
-                    </p>
-                    <Badge variant="outline" className="text-xs border-gray-200 bg-gray-50">
-                      {product.category}
-                    </Badge>
-                  </div>
-                </div>
-
-                {/* Supplier */}
-                <div className="flex items-center gap-2 text-xs text-gray-600 mb-4 p-2 bg-gray-50 rounded-lg">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-100 to-blue-50 flex items-center justify-center">
-                    <span className="text-blue-600 text-xs font-bold">S</span>
-                  </div>
-                  <span className="truncate flex-1">{product.supplier_name}</span>
-                </div>
-
-                {/* Add to Cart Button */}
-                <div className="flex gap-2">
-                  <Button
-                    className="flex-1 bg-gradient-to-r from-[#FF6B35] to-orange-500 hover:from-[#FF854F] hover:to-orange-600 text-white text-sm h-10 shadow-md hover:shadow-lg"
-                    onClick={(e) => handleAddToCart(product, e)}
-                  >
-                    <ShoppingCart className="w-4 h-4 mr-2" />
-                    Add to Cart
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-10 px-3 border-gray-200 hover:border-[#FF6B35] hover:text-[#FF6B35]"
-                    asChild
-                  >
-                    <Link to={`/product-insights/${product.slug || product.id}`}>
-                      View
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Mobile Carousel */}
-        <div className="md:hidden relative">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-xl font-bold text-gray-900">Trending Now</h3>
-              <p className="text-gray-600 text-sm">Swipe to browse</p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                className="rounded-full border-gray-300 hover:border-[#FF6B35]"
-                onClick={() => scrollCarousel('left')}
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="rounded-full border-gray-300 hover:border-[#FF6B35]"
-                onClick={() => scrollCarousel('right')}
-              >
-                <ChevronRightIcon className="w-5 h-5" />
-              </Button>
-            </div>
+              Try Again
+            </Button>
           </div>
-
-          <div
-            ref={carouselRef}
-            className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-4 pl-2 pr-2"
-          >
-            {products.map((product, index) => (
-              <div
-                key={product.id}
-                className="snap-start min-w-[85vw] sm:min-w-[70vw] bg-white rounded-2xl overflow-hidden shadow-xl border border-gray-100"
-              >
-                <Link to={`/product-insights/${product.slug || product.id}`}>
+        ) : (
+          <>
+            {/* Desktop Grid - Responsive columns */}
+            <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-8 gap-6">
+              {products.map((product) => (
+                <div
+                  key={product.id}
+                  className="group bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 hover:border-[#FF6B35]/30"
+                >
                   {/* Product Image */}
-                  <div className="relative h-56 overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
+                  <div 
+                    className="relative h-48 overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer"
+                    onClick={(e) => handleProductClick(product, e)}
+                  >
                     <img
-                      src={product.image || "/placeholder.svg?height=224&width=224"}
+                      src={product.image || "/placeholder.svg?height=192&width=192"}
                       alt={product.title}
-                      className="w-full h-full object-contain p-6"
+                      className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.src = "/placeholder.svg?height=192&width=192";
+                      }}
                     />
                     
                     {/* Badges */}
-                    <div className="absolute top-4 left-4 flex flex-col gap-2">
+                    <div className="absolute top-3 left-3 flex flex-col gap-2">
                       {product.is_verified && (
-                        <Badge className="bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs px-3 py-1.5 shadow-md">
+                        <Badge className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-xs px-3 py-1 h-6 shadow-sm">
                           <Shield className="w-3 h-3 mr-1" />
                           Verified
                         </Badge>
                       )}
                       {product.rating >= 4 && (
-                        <Badge className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white text-xs px-3 py-1.5 shadow-md">
+                        <Badge className="bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white text-xs px-3 py-1 h-6 shadow-sm">
                           <Star className="w-3 h-3 mr-1 fill-white" />
                           {product.rating.toFixed(1)}
                         </Badge>
                       )}
                     </div>
                     
-                    <div className="absolute top-4 right-4">
-                      <Badge variant="outline" className="bg-white/95 backdrop-blur-sm text-xs px-3 py-1.5 border-gray-200 shadow-md">
-                        <MapPin className="w-3 h-3 mr-1" />
-                        {product.country}
+                    {/* Country Flag */}
+                    <div className="absolute top-3 right-3">
+                      <Badge variant="outline" className="bg-white/95 backdrop-blur-sm text-xs px-3 py-1 h-6 border-gray-200 shadow-sm">
+                        <MapPin className="w-3 h-3 mr-1 text-gray-600" />
+                        <span className="text-gray-700">{product.country}</span>
                       </Badge>
                     </div>
                   </div>
-                </Link>
 
-                {/* Product Info */}
-                <div className="p-5">
-                  <Link to={`/product-insights/${product.slug || product.id}`}>
-                    <h3 className="text-base font-semibold text-gray-800 line-clamp-2 min-h-[3rem] mb-3">
+                  {/* Product Info */}
+                  <div className="p-4">
+                    <h3 
+                      className="text-sm font-semibold text-gray-800 line-clamp-2 min-h-[2.5rem] group-hover:text-[#FF6B35] transition-colors mb-3 cursor-pointer"
+                      onClick={(e) => handleProductClick(product, e)}
+                    >
                       {product.title}
                     </h3>
-                  </Link>
 
-                  {/* Price */}
-                  <div className="mb-4">
-                    <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-2xl font-bold text-[#FF6B35]">
-                        ${formatPrice(product.price_min)}
-                      </span>
-                      {product.price_max && product.price_max > product.price_min && (
-                        <span className="text-sm text-gray-500">
-                          ~ ${formatPrice(product.price_max)}
+                    {/* Price */}
+                    <div className="mb-4">
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <span className="text-xl font-bold text-[#FF6B35]">
+                          ${formatPrice(product.price_min)}
                         </span>
-                      )}
+                        {product.price_max && product.price_max > product.price_min && (
+                          <span className="text-sm text-gray-500">
+                            ~ ${formatPrice(product.price_max)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-500">
+                          MOQ: {product.moq} {product.unit}
+                        </p>
+                        {/* Category badge is hidden as requested */}
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-gray-500">
-                        MOQ: {product.moq} {product.unit}
-                      </p>
-                      <Badge variant="outline" className="text-sm border-gray-200 bg-gray-50">
-                        {product.category}
-                      </Badge>
-                    </div>
-                  </div>
 
-                  {/* Supplier */}
-                  <div className="flex items-center gap-3 text-sm text-gray-600 mb-5 p-3 bg-gray-50 rounded-xl">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-100 to-blue-50 flex items-center justify-center shadow-sm">
-                      <span className="text-blue-600 text-sm font-bold">S</span>
+                    {/* Supplier */}
+                    <div className="flex items-center gap-2 text-xs text-gray-600 mb-4 p-2 bg-gray-50 rounded-lg">
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-100 to-blue-50 flex items-center justify-center">
+                        <span className="text-blue-600 text-xs font-bold">S</span>
+                      </div>
+                      <span className="truncate flex-1">{product.supplier_name}</span>
                     </div>
-                    <div className="flex-1">
-                      <p className="font-medium truncate">{product.supplier_name}</p>
-                    </div>
-                  </div>
 
-                  {/* Buttons */}
-                  <div className="flex gap-3">
-                    <Button
-                      className="flex-1 bg-gradient-to-r from-[#FF6B35] to-orange-500 hover:from-[#FF854F] hover:to-orange-600 text-white text-base h-12 shadow-lg hover:shadow-xl"
-                      onClick={(e) => handleAddToCart(product, e)}
-                    >
-                      <ShoppingCart className="w-5 h-5 mr-2" />
-                      Add to Cart
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-12 px-4 border-gray-300 hover:border-[#FF6B35] hover:text-[#FF6B35] text-base"
-                      asChild
-                    >
-                      <Link to={`/product-insights/${product.slug || product.id}`}>
-                        Details
-                      </Link>
-                    </Button>
+                    {/* Add to Cart Button */}
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1 bg-gradient-to-r from-[#FF6B35] to-orange-500 hover:from-[#FF854F] hover:to-orange-600 text-white text-sm h-10 shadow-md hover:shadow-lg"
+                        onClick={(e) => handleAddToCart(product, e)}
+                      >
+                        <ShoppingCart className="w-4 h-4 mr-2" />
+                        Add to Cart
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-10 px-3 border-gray-200 hover:border-[#FF6B35] hover:text-[#FF6B35]"
+                        onClick={(e) => handleProductClick(product, e)}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          {/* Carousel Indicators */}
-          <div className="flex justify-center gap-2 mt-6">
-            {products.slice(0, 4).map((_, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  if (carouselRef.current) {
-                    const scrollAmount = carouselRef.current.clientWidth * 0.85 * index;
-                    carouselRef.current.scrollTo({
-                      left: scrollAmount,
-                      behavior: 'smooth'
-                    });
-                  }
-                }}
-                className={`w-2.5 h-2.5 rounded-full transition-all ${
-                  index === currentSlide 
-                    ? 'bg-[#FF6B35] w-8' 
-                    : 'bg-gray-300 hover:bg-gray-400'
-                }`}
-              />
-            ))}
-          </div>
-        </div>
+            {/* Mobile Carousel */}
+            <div className="md:hidden relative">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Trending Now</h3>
+                  <p className="text-gray-600 text-sm">Swipe to browse</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-full border-gray-300 hover:border-[#FF6B35]"
+                    onClick={() => scrollCarousel('left')}
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-full border-gray-300 hover:border-[#FF6B35]"
+                    onClick={() => scrollCarousel('right')}
+                  >
+                    <ChevronRightIcon className="w-5 h-5" />
+                  </Button>
+                </div>
+              </div>
+
+              <div
+                ref={carouselRef}
+                className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-4 pl-2 pr-2"
+              >
+                {products.map((product, index) => (
+                  <div
+                    key={product.id}
+                    className="snap-start min-w-[85vw] sm:min-w-[70vw] bg-white rounded-2xl overflow-hidden shadow-xl border border-gray-100"
+                  >
+                    {/* Product Image */}
+                    <div 
+                      className="relative h-56 overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer"
+                      onClick={(e) => handleProductClick(product, e)}
+                    >
+                      <img
+                        src={product.image || "/placeholder.svg?height=224&width=224"}
+                        alt={product.title}
+                        className="w-full h-full object-contain p-6"
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.src = "/placeholder.svg?height=224&width=224";
+                        }}
+                      />
+                      
+                      {/* Badges */}
+                      <div className="absolute top-4 left-4 flex flex-col gap-2">
+                        {product.is_verified && (
+                          <Badge className="bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs px-3 py-1.5 shadow-md">
+                            <Shield className="w-3 h-3 mr-1" />
+                            Verified
+                          </Badge>
+                        )}
+                        {product.rating >= 4 && (
+                          <Badge className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white text-xs px-3 py-1.5 shadow-md">
+                            <Star className="w-3 h-3 mr-1 fill-white" />
+                            {product.rating.toFixed(1)}
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <div className="absolute top-4 right-4">
+                        <Badge variant="outline" className="bg-white/95 backdrop-blur-sm text-xs px-3 py-1.5 border-gray-200 shadow-md">
+                          <MapPin className="w-3 h-3 mr-1" />
+                          {product.country}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Product Info */}
+                    <div className="p-5">
+                      <h3 
+                        className="text-base font-semibold text-gray-800 line-clamp-2 min-h-[3rem] mb-3 cursor-pointer"
+                        onClick={(e) => handleProductClick(product, e)}
+                      >
+                        {product.title}
+                      </h3>
+
+                      {/* Price */}
+                      <div className="mb-4">
+                        <div className="flex items-baseline gap-2 mb-2">
+                          <span className="text-2xl font-bold text-[#FF6B35]">
+                            ${formatPrice(product.price_min)}
+                          </span>
+                          {product.price_max && product.price_max > product.price_min && (
+                            <span className="text-sm text-gray-500">
+                              ~ ${formatPrice(product.price_max)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-gray-500">
+                            MOQ: {product.moq} {product.unit}
+                          </p>
+                          {/* Category badge is hidden as requested */}
+                        </div>
+                      </div>
+
+                      {/* Supplier */}
+                      <div className="flex items-center gap-3 text-sm text-gray-600 mb-5 p-3 bg-gray-50 rounded-xl">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-100 to-blue-50 flex items-center justify-center shadow-sm">
+                          <span className="text-blue-600 text-sm font-bold">S</span>
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium truncate">{product.supplier_name}</p>
+                        </div>
+                      </div>
+
+                      {/* Buttons */}
+                      <div className="flex gap-3">
+                        <Button
+                          className="flex-1 bg-gradient-to-r from-[#FF6B35] to-orange-500 hover:from-[#FF854F] hover:to-orange-600 text-white text-base h-12 shadow-lg hover:shadow-xl"
+                          onClick={(e) => handleAddToCart(product, e)}
+                        >
+                          <ShoppingCart className="w-5 h-5 mr-2" />
+                          Add to Cart
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="h-12 px-4 border-gray-300 hover:border-[#FF6B35] hover:text-[#FF6B35] text-base"
+                          onClick={(e) => handleProductClick(product, e)}
+                        >
+                          <Eye className="w-5 h-5 mr-2" />
+                          View
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Carousel Indicators */}
+              <div className="flex justify-center gap-2 mt-6">
+                {products.slice(0, 4).map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      if (carouselRef.current) {
+                        const scrollAmount = carouselRef.current.clientWidth * 0.85 * index;
+                        carouselRef.current.scrollTo({
+                          left: scrollAmount,
+                          behavior: 'smooth'
+                        });
+                      }
+                    }}
+                    className={`w-2.5 h-2.5 rounded-full transition-all ${
+                      index === currentSlide 
+                        ? 'bg-[#FF6B35] w-8' 
+                        : 'bg-gray-300 hover:bg-gray-400'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Mobile View All Button */}
         <div className="md:hidden text-center mt-10">
