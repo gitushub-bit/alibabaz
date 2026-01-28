@@ -46,6 +46,7 @@ import {
   Users,
   Zap,
   Globe,
+  Tag,
 } from 'lucide-react';
 
 interface ProductData {
@@ -76,6 +77,11 @@ interface ProductData {
   certifications?: string[];
   category_id?: string;
   unit?: string;
+  // Deal specific fields
+  ends_at?: string;
+  is_flash_deal?: boolean;
+  deal_id?: string;
+  product_id?: string;
 }
 
 interface SupplierData {
@@ -131,6 +137,7 @@ interface RelatedProduct {
   country?: string;
   slug?: string;
   category?: string;
+  is_deal?: boolean;
 }
 
 // Image fallbacks for broken images
@@ -145,27 +152,21 @@ const getSafeImage = (imageUrl?: string, index: number = 0): string => {
     return IMAGE_FALLBACKS[index % IMAGE_FALLBACKS.length];
   }
   
-  // Check if it's a valid URL
   if (imageUrl.startsWith('http') || imageUrl.startsWith('https') || imageUrl.startsWith('data:')) {
     return imageUrl;
   }
   
-  // Check if it's a relative path
   if (imageUrl.startsWith('/')) {
     return imageUrl;
   }
   
-  // Try to get from Supabase storage
   try {
-    // Remove any query parameters or fragments
     const cleanUrl = imageUrl.split('?')[0].split('#')[0];
     
-    // Check if it's already a Supabase URL
     if (cleanUrl.includes('supabase.co')) {
       return cleanUrl;
     }
     
-    // Try to construct the public URL
     const { data } = supabase.storage
       .from('product-images')
       .getPublicUrl(cleanUrl);
@@ -195,7 +196,6 @@ const processImages = (images: any): string[] => {
           .map((img, index) => getSafeImage(img, index));
       }
     } catch {
-      // If not JSON, treat as single image
       return [getSafeImage(images, 0)];
     }
   }
@@ -220,6 +220,7 @@ export default function ProductInsights() {
   const [activeTab, setActiveTab] = useState('description');
   const [retryCount, setRetryCount] = useState(0);
   const [imageError, setImageError] = useState<Record<number, boolean>>({});
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   const imagesRef = useRef<HTMLDivElement>(null);
 
@@ -229,22 +230,47 @@ export default function ProductInsights() {
     }
   }, [id, type, retryCount]);
 
+  // Countdown timer for flash deals
+  useEffect(() => {
+    if (product?.is_flash_deal && product.ends_at) {
+      const endTime = new Date(product.ends_at).getTime();
+      const now = Date.now();
+      const diff = endTime - now;
+      
+      if (diff > 0) {
+        setTimeLeft(diff);
+        
+        const interval = setInterval(() => {
+          const newDiff = new Date(product.ends_at!).getTime() - Date.now();
+          setTimeLeft(newDiff > 0 ? newDiff : 0);
+          
+          if (newDiff <= 0) {
+            clearInterval(interval);
+          }
+        }, 1000);
+        
+        return () => clearInterval(interval);
+      } else {
+        setTimeLeft(0);
+      }
+    }
+  }, [product?.ends_at, product?.is_flash_deal]);
+
   const fetchProduct = async () => {
     setLoading(true);
     
     try {
-      // Try multiple strategies to find the product
-      const productData = await searchProductFromDatabase();
+      console.log('Fetching product:', { id, type });
       
-      if (productData) {
-        await processProductData(productData);
-        await fetchRelatedProductsFromDB(productData);
+      // Check if this is a deal URL
+      if (type === 'deal') {
+        await fetchDealWithProduct();
       } else {
-        // If no product found, try to get any published product
-        await fetchAnyPublishedProduct();
+        // Regular product or unknown type
+        await fetchRegularProduct();
       }
 
-      // Fetch reviews
+      // Fetch reviews based on product type
       await fetchReviews();
 
     } catch (error) {
@@ -254,90 +280,406 @@ export default function ProductInsights() {
         setRetryCount(prev => prev + 1);
       } else {
         createFallbackProduct();
-        toast.error('Showing sample product. Add real products through admin.');
+        toast.error('Unable to load product. Showing sample data.');
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const searchProductFromDatabase = async () => {
-    const searchId = id?.toLowerCase();
-    if (!searchId) return null;
+  const fetchDealWithProduct = async () => {
+    try {
+      console.log('Fetching deal with ID:', id);
+      
+      // First, fetch the deal with its linked product
+      const { data: dealData, error: dealError } = await supabase
+        .from('deals')
+        .select(`
+          *,
+          product:products (
+            *,
+            category:categories(name, id),
+            seller:profiles(*)
+          )
+        `)
+        .eq('id', id)
+        .eq('is_active', true)
+        .maybeSingle();
 
-    // Strategy 1: Try exact ID match
-    const { data: exactMatch } = await supabase
-      .from('products')
-      .select(`
-        *,
-        category:categories(name, id),
-        seller:profiles(*)
-      `)
-      .or(`id.eq.${searchId},slug.eq.${searchId}`)
-      .eq('published', true)
-      .maybeSingle();
+      if (dealError) {
+        console.error('Error fetching deal:', dealError);
+        throw dealError;
+      }
 
-    if (exactMatch) return exactMatch;
+      if (!dealData) {
+        console.log('No active deal found with ID:', id);
+        toast.error('Deal not found or is inactive');
+        navigate('/products');
+        return;
+      }
 
-    // Strategy 2: Try title search
-    const { data: titleMatch } = await supabase
-      .from('products')
-      .select(`
-        *,
-        category:categories(name, id),
-        seller:profiles(*)
-      `)
-      .ilike('title', `%${searchId}%`)
-      .eq('published', true)
-      .limit(1)
-      .maybeSingle();
+      console.log('Deal data found:', dealData);
 
-    if (titleMatch) return titleMatch;
+      // Process deal data (with linked product if available)
+      await processDealData(dealData);
 
-    // Strategy 3: Try deals table
-    const { data: dealMatch } = await supabase
-      .from('deals')
-      .select(`
-        *,
-        seller:profiles(*)
-      `)
-      .or(`id.eq.${searchId},slug.eq.${searchId}`)
-      .eq('is_active', true)
-      .maybeSingle();
+      // Fetch related deals or products
+      await fetchRelatedDealsFromDB(dealData);
 
-    if (dealMatch) return dealMatch;
-
-    // Strategy 4: Try featured products
-    const { data: featuredMatch } = await supabase
-      .from('featured_products')
-      .select(`
-        *,
-        seller:profiles(*)
-      `)
-      .eq('id', searchId)
-      .maybeSingle();
-
-    return featuredMatch;
+    } catch (error) {
+      console.error('Error in fetchDealWithProduct:', error);
+      throw error;
+    }
   };
 
-  const fetchAnyPublishedProduct = async () => {
-    // Get a random published product
-    const { data: randomProduct } = await supabase
-      .from('products')
-      .select(`
-        *,
-        category:categories(name, id),
-        seller:profiles(*)
-      `)
-      .eq('published', true)
-      .limit(1)
-      .maybeSingle();
+  const fetchRegularProduct = async () => {
+    try {
+      const searchId = id?.toLowerCase();
+      if (!searchId) return;
 
-    if (randomProduct) {
-      await processProductData(randomProduct);
-      await fetchRelatedProductsFromDB(randomProduct);
+      // Try to find product by ID or slug
+      const { data: productData, error } = await supabase
+        .from('products')
+        .select(`
+          *,
+          category:categories(name, id),
+          seller:profiles(*)
+        `)
+        .or(`id.eq.${searchId},slug.eq.${searchId}`)
+        .eq('published', true)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching product:', error);
+        throw error;
+      }
+
+      if (productData) {
+        console.log('Product data found:', productData);
+        await processRegularProductData(productData);
+        await fetchRelatedProductsFromDB(productData);
+      } else {
+        // Try to find any published product
+        const { data: anyProduct } = await supabase
+          .from('products')
+          .select(`
+            *,
+            category:categories(name, id),
+            seller:profiles(*)
+          `)
+          .eq('published', true)
+          .limit(1)
+          .maybeSingle();
+
+        if (anyProduct) {
+          await processRegularProductData(anyProduct);
+          await fetchRelatedProductsFromDB(anyProduct);
+        } else {
+          createFallbackProduct();
+        }
+      }
+    } catch (error) {
+      console.error('Error in fetchRegularProduct:', error);
+      throw error;
+    }
+  };
+
+  const processDealData = async (dealData: any) => {
+    console.log('Processing deal data:', dealData);
+    
+    // If deal has linked product, use product data with deal overrides
+    if (dealData.product) {
+      const productInfo = dealData.product;
+      const sellerData = await getSellerData(productInfo.seller_id || productInfo.seller?.id);
+      setSupplier(sellerData);
+
+      // Calculate discount if not provided
+      let discount = dealData.discount;
+      if (!discount && dealData.price && dealData.original_price) {
+        discount = Math.round(((dealData.original_price - dealData.price) / dealData.original_price) * 100);
+      }
+
+      // Use deal image if available, otherwise use product images
+      const processedImages = dealData.image 
+        ? [getSafeImage(dealData.image, 0)]
+        : processImages(productInfo.images);
+
+      const transformedProduct: ProductData = {
+        id: productInfo.id,
+        title: dealData.title || productInfo.title,
+        description: productInfo.description || 'Special promotional deal',
+        images: processedImages,
+        price: dealData.price?.toString() || productInfo.price_min?.toString() || 'Contact',
+        original_price: dealData.original_price?.toString(),
+        min_price: productInfo.price_min?.toString(),
+        max_price: productInfo.price_max?.toString(),
+        country: productInfo.country || 'Global',
+        country_flag: '🌍',
+        category: productInfo.category?.name || productInfo.category || 'Deal',
+        category_id: productInfo.category_id,
+        supplier: dealData.supplier || sellerData.company_name,
+        seller_id: productInfo.seller_id || sellerData.user_id,
+        moq: dealData.moq || productInfo.moq || 1,
+        unit: productInfo.unit || 'piece',
+        supply_ability: productInfo.supply_ability || 'Contact supplier',
+        lead_time: productInfo.lead_time || '15-30 days',
+        payment_terms: productInfo.payment_terms || ['T/T', 'L/C', 'Western Union'],
+        packaging_details: productInfo.packaging_details || 'Standard packaging',
+        discount: discount,
+        is_verified: dealData.is_verified || productInfo.is_verified || false,
+        slug: dealData.id, // Use deal ID as slug
+        type: 'deal',
+        specifications: productInfo.specifications || {},
+        features: productInfo.features || [],
+        certifications: productInfo.certifications || [],
+        ends_at: dealData.ends_at,
+        is_flash_deal: dealData.is_flash_deal,
+        deal_id: dealData.id,
+        product_id: dealData.product_id,
+      };
+
+      setProduct(transformedProduct);
+      setQuantity(transformedProduct.moq || 1);
     } else {
-      createFallbackProduct();
+      // Deal without linked product - use deal data only
+      const sellerData = createFallbackSeller();
+      sellerData.company_name = dealData.supplier || 'Deal Supplier';
+      sellerData.verified = dealData.is_verified || false;
+      setSupplier(sellerData);
+
+      const processedImages = dealData.image 
+        ? [getSafeImage(dealData.image, 0)]
+        : IMAGE_FALLBACKS;
+
+      const transformedProduct: ProductData = {
+        id: dealData.id,
+        title: dealData.title,
+        description: 'Special promotional deal',
+        images: processedImages,
+        price: dealData.price?.toString() || 'Contact',
+        original_price: dealData.original_price?.toString(),
+        discount: dealData.discount,
+        moq: dealData.moq || 1,
+        supplier: dealData.supplier || 'Supplier',
+        seller_id: sellerData.user_id,
+        is_verified: dealData.is_verified || false,
+        slug: dealData.id,
+        type: 'deal',
+        ends_at: dealData.ends_at,
+        is_flash_deal: dealData.is_flash_deal,
+        deal_id: dealData.id,
+      };
+
+      setProduct(transformedProduct);
+      setQuantity(transformedProduct.moq || 1);
+    }
+  };
+
+  const processRegularProductData = async (productData: any) => {
+    const sellerData = await getSellerData(productData.seller_id || productData.seller?.id);
+    setSupplier(sellerData);
+
+    const processedImages = processImages(productData.images);
+
+    const transformedProduct: ProductData = {
+      id: productData.id,
+      title: productData.title || 'Product',
+      description: productData.description || 'No description available.',
+      images: processedImages,
+      price: productData.price?.toString() || productData.price_min?.toString() || 'Contact',
+      original_price: productData.original_price?.toString(),
+      min_price: productData.min_price?.toString() || productData.price_min?.toString(),
+      max_price: productData.max_price?.toString() || productData.price_max?.toString(),
+      country: productData.country || sellerData.address?.split(',').pop()?.trim() || 'Global',
+      country_flag: productData.country_flag || '🌍',
+      category: productData.category?.name || productData.category || 'General',
+      category_id: productData.category_id || productData.category?.id,
+      supplier: productData.supplier || sellerData.company_name,
+      seller_id: productData.seller_id || productData.seller?.id || sellerData.user_id,
+      moq: productData.moq || productData.minimum_order || 1,
+      unit: productData.unit || 'piece',
+      supply_ability: productData.supply_ability || productData.capacity || 'Contact supplier',
+      lead_time: productData.lead_time || productData.delivery_time || '15-30 days',
+      payment_terms: Array.isArray(productData.payment_terms) ? productData.payment_terms : 
+                    typeof productData.payment_terms === 'string' ? productData.payment_terms.split(',') : 
+                    ['T/T', 'L/C', 'Western Union'],
+      packaging_details: productData.packaging_details || productData.packaging || 'Standard packaging',
+      discount: productData.discount || productData.discount_percentage,
+      is_verified: productData.is_verified || productData.verified || sellerData.verified,
+      slug: productData.slug || productData.id,
+      type: productData.type || 'product',
+      specifications: productData.specifications || productData.attributes || {},
+      features: productData.features || productData.key_features || [],
+      certifications: productData.certifications || [],
+    };
+
+    setProduct(transformedProduct);
+    setQuantity(transformedProduct.moq || 1);
+  };
+
+  const fetchRelatedDealsFromDB = async (currentDeal: any) => {
+    try {
+      // Fetch other active deals
+      const { data: relatedDeals, error } = await supabase
+        .from('deals')
+        .select(`
+          *,
+          product:products (
+            id,
+            title,
+            images,
+            price_min,
+            price_max,
+            moq,
+            unit,
+            seller_id,
+            country
+          )
+        `)
+        .neq('id', currentDeal.id)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .limit(4);
+
+      if (error) throw error;
+
+      if (relatedDeals && relatedDeals.length > 0) {
+        const transformedProducts = await Promise.all(
+          relatedDeals.map(async (deal) => {
+            let sellerInfo = createFallbackSeller();
+            
+            if (deal.product?.seller_id) {
+              sellerInfo = await getSellerData(deal.product.seller_id);
+            } else if (deal.supplier) {
+              sellerInfo.company_name = deal.supplier;
+              sellerInfo.verified = deal.is_verified || false;
+            }
+            
+            return {
+              id: deal.id,
+              title: deal.title || deal.product?.title || 'Deal',
+              images: deal.image ? [deal.image] : processImages(deal.product?.images),
+              price: deal.price?.toString() || deal.product?.price_min?.toString() || 'Contact',
+              price_min: deal.price,
+              price_max: deal.original_price,
+              moq: deal.moq || deal.product?.moq || 1,
+              unit: deal.product?.unit || 'piece',
+              seller_id: deal.product?.seller_id || '',
+              supplier: sellerInfo.company_name,
+              is_verified: sellerInfo.verified,
+              country: deal.product?.country || 'Global',
+              slug: deal.id,
+              category: 'Deal',
+              is_deal: true,
+            };
+          })
+        );
+        
+        setRelatedProducts(transformedProducts);
+      } else {
+        // Fallback to regular related products
+        await fetchRelatedProductsFromDB(currentDeal.product || currentDeal);
+      }
+    } catch (error) {
+      console.error('Error fetching related deals:', error);
+      createFallbackRelatedProducts(supplier || createFallbackSeller());
+    }
+  };
+
+  const fetchRelatedProductsFromDB = async (currentProduct: any) => {
+    try {
+      let relatedData: any[] = [];
+
+      if (currentProduct.category_id) {
+        const { data } = await supabase
+          .from('products')
+          .select(`
+            *,
+            category:categories(name),
+            seller:profiles(*)
+          `)
+          .eq('category_id', currentProduct.category_id)
+          .neq('id', currentProduct.id)
+          .eq('published', true)
+          .limit(6);
+
+        if (data) relatedData = data;
+      }
+
+      if (relatedData.length < 4 && currentProduct.seller_id) {
+        const { data } = await supabase
+          .from('products')
+          .select(`
+            *,
+            category:categories(name),
+            seller:profiles(*)
+          `)
+          .eq('seller_id', currentProduct.seller_id)
+          .neq('id', currentProduct.id)
+          .eq('published', true)
+          .limit(6 - relatedData.length);
+
+        if (data) {
+          const existingIds = new Set(relatedData.map(p => p.id));
+          data.forEach(p => {
+            if (!existingIds.has(p.id)) {
+              relatedData.push(p);
+            }
+          });
+        }
+      }
+
+      if (relatedData.length < 4) {
+        const { data } = await supabase
+          .from('products')
+          .select(`
+            *,
+            category:categories(name),
+            seller:profiles(*)
+          `)
+          .neq('id', currentProduct.id)
+          .eq('published', true)
+          .order('created_at', { ascending: false })
+          .limit(6 - relatedData.length);
+
+        if (data) {
+          const existingIds = new Set(relatedData.map(p => p.id));
+          data.forEach(p => {
+            if (!existingIds.has(p.id)) {
+              relatedData.push(p);
+            }
+          });
+        }
+      }
+
+      const transformedProducts = await Promise.all(
+        relatedData.map(async (item) => {
+          const sellerInfo = await getSellerData(item.seller_id);
+          
+          return {
+            id: item.id,
+            title: item.title || 'Product',
+            images: processImages(item.images),
+            price: item.price?.toString() || 'Contact',
+            price_min: item.price_min,
+            price_max: item.price_max,
+            moq: item.moq || 1,
+            unit: item.unit || 'piece',
+            seller_id: item.seller_id,
+            supplier: sellerInfo.company_name,
+            is_verified: sellerInfo.verified,
+            country: item.country,
+            slug: item.slug || item.id,
+            category: item.category?.name || 'General',
+          };
+        })
+      );
+
+      setRelatedProducts(transformedProducts);
+
+    } catch (error) {
+      console.error('Error fetching related products:', error);
+      createFallbackRelatedProducts(supplier || createFallbackSeller());
     }
   };
 
@@ -345,10 +687,17 @@ export default function ProductInsights() {
     if (!product) return;
 
     try {
+      let productId = product.id;
+      
+      // If this is a deal, use the linked product ID for reviews
+      if (product.type === 'deal' && product.product_id) {
+        productId = product.product_id;
+      }
+
       const { data } = await supabase
         .from('reviews')
         .select('*')
-        .eq('product_id', product.id)
+        .eq('product_id', productId)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -367,7 +716,6 @@ export default function ProductInsights() {
         }));
         setReviews(formattedReviews);
       } else {
-        // Create sample reviews if none exist
         createSampleReviews();
       }
     } catch (error) {
@@ -418,58 +766,12 @@ export default function ProductInsights() {
     ]);
   };
 
-  const processProductData = async (data: any) => {
-    // Process seller/supplier info
-    const sellerData = await getSellerData(data.seller_id || data.seller?.id);
-    setSupplier(sellerData);
-
-    // Process images
-    const processedImages = processImages(data.images || data.image);
-
-    // Transform data to ProductData interface
-    const transformedProduct: ProductData = {
-      id: data.id,
-      title: data.title || data.name || 'Product',
-      description: data.description || 'No description available.',
-      images: processedImages,
-      price: data.price?.toString() || data.price_min?.toString() || 'Contact',
-      original_price: data.original_price?.toString(),
-      min_price: data.min_price?.toString() || data.price_min?.toString(),
-      max_price: data.max_price?.toString() || data.price_max?.toString(),
-      country: data.country || sellerData.address?.split(',').pop()?.trim() || 'Global',
-      country_flag: data.country_flag || '🌍',
-      category: data.category?.name || data.category || 'General',
-      category_id: data.category_id || data.category?.id,
-      supplier: data.supplier || sellerData.company_name,
-      seller_id: data.seller_id || data.seller?.id || sellerData.user_id,
-      moq: data.moq || data.minimum_order || 1,
-      unit: data.unit || 'piece',
-      supply_ability: data.supply_ability || data.capacity || 'Contact supplier',
-      lead_time: data.lead_time || data.delivery_time || '15-30 days',
-      payment_terms: Array.isArray(data.payment_terms) ? data.payment_terms : 
-                    typeof data.payment_terms === 'string' ? data.payment_terms.split(',') : 
-                    ['T/T', 'L/C', 'Western Union'],
-      packaging_details: data.packaging_details || data.packaging || 'Standard packaging',
-      discount: data.discount || data.discount_percentage,
-      is_verified: data.is_verified || data.verified || sellerData.verified,
-      slug: data.slug || data.id,
-      type: data.type || 'product',
-      specifications: data.specifications || data.attributes || {},
-      features: data.features || data.key_features || [],
-      certifications: data.certifications || [],
-    };
-
-    setProduct(transformedProduct);
-    setQuantity(transformedProduct.moq || 1);
-  };
-
   const getSellerData = async (sellerId?: string): Promise<SupplierData> => {
     if (!sellerId) {
       return createFallbackSeller();
     }
 
     try {
-      // Try to get supplier data
       const { data: supplierData } = await supabase
         .from('suppliers')
         .select('*')
@@ -502,7 +804,6 @@ export default function ProductInsights() {
         };
       }
 
-      // Try to get profile data as fallback
       const { data: profileData } = await supabase
         .from('profiles')
         .select('full_name, company_name')
@@ -596,107 +897,6 @@ export default function ProductInsights() {
     createFallbackRelatedProducts(sellerData);
   };
 
-  const fetchRelatedProductsFromDB = async (currentProduct: any) => {
-    try {
-      let relatedData: any[] = [];
-
-      // Strategy 1: Same category
-      if (currentProduct.category_id) {
-        const { data } = await supabase
-          .from('products')
-          .select(`
-            *,
-            category:categories(name),
-            seller:profiles(*)
-          `)
-          .eq('category_id', currentProduct.category_id)
-          .neq('id', currentProduct.id)
-          .eq('published', true)
-          .limit(6);
-
-        if (data) relatedData = data;
-      }
-
-      // Strategy 2: Same seller if needed
-      if (relatedData.length < 4 && currentProduct.seller_id) {
-        const { data } = await supabase
-          .from('products')
-          .select(`
-            *,
-            category:categories(name),
-            seller:profiles(*)
-          `)
-          .eq('seller_id', currentProduct.seller_id)
-          .neq('id', currentProduct.id)
-          .eq('published', true)
-          .limit(6 - relatedData.length);
-
-        if (data) {
-          const existingIds = new Set(relatedData.map(p => p.id));
-          data.forEach(p => {
-            if (!existingIds.has(p.id)) {
-              relatedData.push(p);
-            }
-          });
-        }
-      }
-
-      // Strategy 3: Recent products
-      if (relatedData.length < 4) {
-        const { data } = await supabase
-          .from('products')
-          .select(`
-            *,
-            category:categories(name),
-            seller:profiles(*)
-          `)
-          .neq('id', currentProduct.id)
-          .eq('published', true)
-          .order('created_at', { ascending: false })
-          .limit(6 - relatedData.length);
-
-        if (data) {
-          const existingIds = new Set(relatedData.map(p => p.id));
-          data.forEach(p => {
-            if (!existingIds.has(p.id)) {
-              relatedData.push(p);
-            }
-          });
-        }
-      }
-
-      // Transform to RelatedProduct format
-      const transformedProducts = await Promise.all(
-        relatedData.map(async (item) => {
-          const sellerInfo = await getSellerData(item.seller_id);
-          
-          return {
-            id: item.id,
-            title: item.title || 'Product',
-            images: processImages(item.images),
-            price: item.price?.toString() || 'Contact',
-            price_min: item.price_min,
-            price_max: item.price_max,
-            moq: item.moq || 1,
-            unit: item.unit || 'piece',
-            seller_id: item.seller_id,
-            supplier: sellerInfo.company_name,
-            is_verified: sellerInfo.verified,
-            country: item.country,
-            slug: item.slug || item.id,
-            category: item.category?.name || 'General',
-          };
-        })
-      );
-
-      setRelatedProducts(transformedProducts);
-
-    } catch (error) {
-      console.error('Error fetching related products:', error);
-      createFallbackRelatedProducts(supplier || createFallbackSeller());
-    }
-  };
-
   const createFallbackRelatedProducts = (sellerData: SupplierData) => {
     const products: RelatedProduct[] = [
       {
@@ -783,6 +983,8 @@ export default function ProductInsights() {
       seller_name: product.supplier || supplier.company_name,
       supplier_company: supplier.company_name,
       supplier_verified: supplier.verified,
+      is_deal: product.type === 'deal',
+      deal_id: product.deal_id,
     });
 
     toast.success('Added to cart!');
@@ -835,6 +1037,15 @@ export default function ProductInsights() {
     }).format(num).replace('$', '');
   };
 
+  const formatTimeLeft = (ms: number) => {
+    if (ms <= 0) return "Expired";
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+    const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+    const seconds = String(totalSeconds % 60).padStart(2, "0");
+    return `${hours}:${minutes}:${seconds}`;
+  };
+
   const calculateTotal = () => {
     if (!product || !product.price) return '0.00';
     const price = parseFloat(product.price.replace(/[^0-9.]/g, ''));
@@ -843,87 +1054,107 @@ export default function ProductInsights() {
   };
 
   // Small Product Card Component
-  const SmallProductCard = ({ product: item }: { product: RelatedProduct }) => (
-    <Link to={`/product-insights/${item.id}`} className="group block">
-      <Card className="border border-gray-200 hover:border-[#FF6B35] transition-all duration-200 hover:shadow-md h-full overflow-hidden">
-        <div className="relative">
-          <div className="aspect-square overflow-hidden bg-gray-100">
-            <img
-              src={getSafeImage(item.images[0], 0)}
-              alt={item.title}
-              className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
-              loading="lazy"
-              onError={(e) => {
-                e.currentTarget.src = IMAGE_FALLBACKS[0];
-              }}
-            />
+  const SmallProductCard = ({ product: item }: { product: RelatedProduct }) => {
+    // Determine the correct link based on whether it's a deal
+    const productLink = item.is_deal 
+      ? `/product-insights/deal/${item.id}`
+      : `/product-insights/${item.id}`;
+    
+    return (
+      <Link to={productLink} className="group block">
+        <Card className="border border-gray-200 hover:border-[#FF6B35] transition-all duration-200 hover:shadow-md h-full overflow-hidden">
+          <div className="relative">
+            <div className="aspect-square overflow-hidden bg-gray-100">
+              <img
+                src={getSafeImage(item.images[0], 0)}
+                alt={item.title}
+                className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                loading="lazy"
+                onError={(e) => {
+                  e.currentTarget.src = IMAGE_FALLBACKS[0];
+                }}
+              />
+            </div>
+            
+            {/* Deal Badge */}
+            {item.is_deal && (
+              <div className="absolute top-2 left-2">
+                <Badge className="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-0">
+                  <Tag className="h-3 w-3 mr-1" />
+                  Deal
+                </Badge>
+              </div>
+            )}
+            
+            {/* Verified Badge */}
+            {item.is_verified && (
+              <div className="absolute top-2 right-2">
+                <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-0">
+                  <Shield className="h-3 w-3 mr-1" />
+                  Verified
+                </Badge>
+              </div>
+            )}
+            
+            {item.price_min && item.price_max && item.price_max > item.price_min && (
+              <div className="absolute bottom-2 left-2">
+                <Badge variant="secondary" className="bg-blue-100 text-blue-600 text-xs">
+                  <TrendingUp className="h-3 w-3 mr-1" />
+                  Price Range
+                </Badge>
+              </div>
+            )}
           </div>
-          {item.is_verified && (
-            <div className="absolute top-2 right-2">
-              <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-0">
-                <Shield className="h-3 w-3 mr-1" />
-                Verified
-              </Badge>
-            </div>
-          )}
-          {item.price_min && item.price_max && item.price_max > item.price_min && (
-            <div className="absolute bottom-2 left-2">
-              <Badge variant="secondary" className="bg-blue-100 text-blue-600 text-xs">
-                <TrendingUp className="h-3 w-3 mr-1" />
-                Price Range
-              </Badge>
-            </div>
-          )}
-        </div>
-        <CardContent className="p-3">
-          <h3 className="text-sm font-medium line-clamp-2 mb-2 min-h-[2.5rem] group-hover:text-[#FF6B35] transition-colors">
-            {item.title}
-          </h3>
-          
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-bold text-[#FF6B35] text-base">${formatPrice(item.price)}</span>
-                {item.price_min && item.price_max && item.price_max > item.price_min && (
-                  <span className="text-xs text-gray-500 ml-1">~ ${item.price_max}</span>
+          <CardContent className="p-3">
+            <h3 className="text-sm font-medium line-clamp-2 mb-2 min-h-[2.5rem] group-hover:text-[#FF6B35] transition-colors">
+              {item.title}
+            </h3>
+            
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-[#FF6B35] text-base">${formatPrice(item.price)}</span>
+                  {item.price_min && item.price_max && item.price_max > item.price_min && (
+                    <span className="text-xs text-gray-500 ml-1">~ ${item.price_max}</span>
+                  )}
+                </div>
+                {item.moq > 1 && (
+                  <Badge variant="outline" className="text-xs border-gray-300">
+                    MOQ: {item.moq}
+                  </Badge>
                 )}
               </div>
-              {item.moq > 1 && (
-                <Badge variant="outline" className="text-xs border-gray-300">
-                  MOQ: {item.moq}
-                </Badge>
-              )}
+              
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span className="truncate max-w-[70%]">{item.supplier}</span>
+                {item.country && (
+                  <span className="flex items-center">
+                    <Globe className="h-3 w-3 mr-1" />
+                    {item.country}
+                  </span>
+                )}
+              </div>
+              
+              <div className="pt-2 border-t">
+                <Button 
+                  size="sm" 
+                  className="w-full text-xs h-7 bg-[#FF6B35] hover:bg-[#FF854F]"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toast.success(`Added ${item.title} to cart`);
+                  }}
+                >
+                  <ShoppingCart className="h-3 w-3 mr-1" />
+                  Add to Inquiry
+                </Button>
+              </div>
             </div>
-            
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span className="truncate max-w-[70%]">{item.supplier}</span>
-              {item.country && (
-                <span className="flex items-center">
-                  <Globe className="h-3 w-3 mr-1" />
-                  {item.country}
-                </span>
-              )}
-            </div>
-            
-            <div className="pt-2 border-t">
-              <Button 
-                size="sm" 
-                className="w-full text-xs h-7 bg-[#FF6B35] hover:bg-[#FF854F]"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  toast.success(`Added ${item.title} to cart`);
-                }}
-              >
-                <ShoppingCart className="h-3 w-3 mr-1" />
-                Add to Inquiry
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
-  );
+          </CardContent>
+        </Card>
+      </Link>
+    );
+  };
 
   if (loading) {
     return (
@@ -985,7 +1216,7 @@ export default function ProductInsights() {
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-amber-600" />
                 <span className="text-sm text-amber-700">
-                  Sample product shown. Add your real products in the admin panel.
+                  Sample product shown. Add your real products through the admin panel.
                 </span>
               </div>
               <Button
@@ -1043,6 +1274,17 @@ export default function ProductInsights() {
                           <p className="text-gray-500 text-sm text-center">Image not available</p>
                         </div>
                       )}
+                      
+                      {/* Deal Badge if it's a deal */}
+                      {product.type === 'deal' && (
+                        <div className="absolute top-2 left-2">
+                          <Badge className="bg-red-500 hover:bg-red-600 text-white text-xs sm:text-sm px-2 sm:px-3 py-0">
+                            <Tag className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                            Deal
+                          </Badge>
+                        </div>
+                      )}
+                      
                       <div className="absolute top-2 sm:top-4 right-2 sm:right-4 flex gap-1 sm:gap-2">
                         <Button
                           variant="secondary"
@@ -1142,6 +1384,40 @@ export default function ProductInsights() {
                     <div>
                       <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-2 sm:mb-3">{product.title}</h1>
                       
+                      {/* Flash Deal Banner */}
+                      {product.type === 'deal' && product.is_flash_deal && (
+                        <div className="mb-3 sm:mb-4">
+                          <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-lg p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="bg-red-100 p-1.5 rounded-full">
+                                <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-red-600 text-sm sm:text-base">FLASH DEAL</span>
+                                  <Badge variant="destructive" className="animate-pulse text-xs">
+                                    Limited Time
+                                  </Badge>
+                                </div>
+                                {timeLeft !== null && timeLeft > 0 ? (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
+                                    <span className="text-xs sm:text-sm text-red-600 font-medium">
+                                      Ends in: {formatTimeLeft(timeLeft)}
+                                    </span>
+                                  </div>
+                                ) : product.ends_at ? (
+                                  <span className="text-xs sm:text-sm text-red-600">Offer has ended</span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <p className="text-xs text-red-700">
+                              ⚠️ Limited-time promotional offer
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
                       {/* Price */}
                       <div className="space-y-1 sm:space-y-2 mb-3 sm:mb-4">
                         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -1149,14 +1425,16 @@ export default function ProductInsights() {
                             ${formatPrice(product.price)}
                           </span>
                           {product.original_price && (
-                            <span className="text-base sm:text-lg text-gray-400 line-through">
-                              ${formatPrice(product.original_price)}
-                            </span>
-                          )}
-                          {product.discount && product.discount > 0 && (
-                            <Badge className="bg-red-100 text-red-600 hover:bg-red-100 text-xs sm:text-sm">
-                              -{product.discount}%
-                            </Badge>
+                            <>
+                              <span className="text-base sm:text-lg text-gray-400 line-through">
+                                ${formatPrice(product.original_price)}
+                              </span>
+                              {product.discount && product.discount > 0 && (
+                                <Badge className="bg-red-100 text-red-600 hover:bg-red-100 text-xs sm:text-sm">
+                                  -{product.discount}% OFF
+                                </Badge>
+                              )}
+                            </>
                           )}
                         </div>
                         {product.min_price && product.max_price && (
@@ -1491,11 +1769,11 @@ export default function ProductInsights() {
                         <div className="space-y-2 sm:space-y-3">
                           <div>
                             <p className="text-xs sm:text-sm text-gray-500">Lead Time</p>
-                            <p className="font-medium text-sm sm:text-base">{product.lead_time}</p>
+                            <p className="font-medium text-sm sm:text-base">{product.lead_time || '15-30 days'}</p>
                           </div>
                           <div>
                             <p className="text-xs sm:text-sm text-gray-500">Supply Ability</p>
-                            <p className="font-medium text-sm sm:text-base">{product.supply_ability}</p>
+                            <p className="font-medium text-sm sm:text-base">{product.supply_ability || 'Contact supplier'}</p>
                           </div>
                           <div>
                             <p className="text-xs sm:text-sm text-gray-500">Port</p>
@@ -1523,7 +1801,7 @@ export default function ProductInsights() {
                           </div>
                           <div>
                             <p className="text-xs sm:text-sm text-gray-500">Packaging Details</p>
-                            <p className="font-medium text-sm sm:text-base">{product.packaging_details}</p>
+                            <p className="font-medium text-sm sm:text-base">{product.packaging_details || 'Standard packaging'}</p>
                           </div>
                         </div>
                       </div>
@@ -1566,13 +1844,23 @@ export default function ProductInsights() {
               <div>
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
                   <div>
-                    <h2 className="text-lg sm:text-xl font-semibold">Related Products</h2>
-                    <p className="text-sm text-gray-500">Similar products you might be interested in</p>
+                    <h2 className="text-lg sm:text-xl font-semibold">
+                      {product.type === 'deal' ? 'Related Deals' : 'Related Products'}
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      {product.type === 'deal' 
+                        ? 'Other great deals you might like' 
+                        : 'Similar products you might be interested in'
+                      }
+                    </p>
                   </div>
                   <Button 
                     variant="ghost" 
                     className="text-[#FF6B35] text-sm sm:text-base"
-                    onClick={() => navigate(`/products?category=${product.category_id}`)}
+                    onClick={() => product.type === 'deal' 
+                      ? navigate('/deals') 
+                      : navigate(`/products?category=${product.category_id}`)
+                    }
                   >
                     View All <ChevronRightIcon className="h-4 w-4 ml-1" />
                   </Button>
