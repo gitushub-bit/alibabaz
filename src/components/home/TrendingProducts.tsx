@@ -25,6 +25,7 @@ interface Product {
   rating: number;
   slug?: string;
   seller_id?: string;
+  type?: string; // Add type to handle different product types
 }
 
 export const TrendingProducts = () => {
@@ -38,7 +39,6 @@ export const TrendingProducts = () => {
   const navigate = useNavigate();
   
   const carouselRef = useRef<HTMLDivElement>(null);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Track scroll for carousel indicators
   const handleScroll = useCallback(() => {
@@ -58,7 +58,66 @@ export const TrendingProducts = () => {
       
       console.log("Fetching trending products...");
       
-      // Fetch 8 random products with their details
+      // First try to get featured products
+      const { data: featuredData, error: featuredError } = await supabase
+        .from("featured_items")
+        .select(`
+          *,
+          product:products(
+            id,
+            title,
+            images,
+            price_min,
+            price_max,
+            moq,
+            unit,
+            country,
+            is_verified,
+            category:categories(name),
+            supplier:profiles(id, company_name),
+            rating,
+            slug,
+            seller_id,
+            published,
+            type
+          )
+        `)
+        .eq("section", "trending")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .limit(8);
+
+      if (!featuredError && featuredData && featuredData.length > 0) {
+        console.log("Found featured items:", featuredData.length);
+        const processedFeatured = featuredData
+          .filter(item => item.product && item.product.published)
+          .map(item => ({
+            id: item.product.id,
+            title: item.product.title || "Unnamed Product",
+            image: getSafeImage(item.product.images) || getSafeImage(item.image),
+            price_min: item.product.price_min || item.price || 0,
+            price_max: item.product.price_max || item.original_price || item.product.price_min || 0,
+            moq: item.product.moq || item.moq || 1,
+            unit: item.product.unit || "piece",
+            country: item.product.country || "Global",
+            is_verified: item.product.is_verified || item.is_verified || false,
+            category: item.product.category?.name || item.category || "Uncategorized",
+            supplier_name: item.product.supplier?.company_name || item.supplier || "Supplier",
+            rating: item.product.rating || Math.floor(Math.random() * 2) + 4,
+            slug: item.product.slug || item.slug || item.product.id,
+            seller_id: item.product.seller_id,
+            type: item.product.type || item.type || 'product'
+          }));
+        
+        if (processedFeatured.length > 0) {
+          setProducts(processedFeatured);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fallback to regular products
+      console.log("Falling back to regular products...");
       const { data, error } = await supabase
         .from("products")
         .select(`
@@ -76,7 +135,8 @@ export const TrendingProducts = () => {
           rating,
           slug,
           seller_id,
-          published
+          published,
+          type
         `)
         .eq("published", true)
         .order("created_at", { ascending: false })
@@ -85,22 +145,12 @@ export const TrendingProducts = () => {
       if (error) {
         console.error("Error fetching trending products:", error);
         setError("Failed to load products");
-        
-        // Fallback: try to get any published products
-        const { data: fallbackData } = await supabase
-          .from("products")
-          .select("*")
-          .eq("published", true)
-          .limit(8);
-
-        if (fallbackData) {
-          processProducts(fallbackData);
-        }
+        createSampleProducts();
         return;
       }
 
       if (data && data.length > 0) {
-        console.log(`Found ${data.length} products`);
+        console.log(`Found ${data.length} regular products`);
         processProducts(data);
       } else {
         console.log("No products found");
@@ -131,9 +181,10 @@ export const TrendingProducts = () => {
       is_verified: item.is_verified || false,
       category: item.category?.name || "Uncategorized",
       supplier_name: item.supplier?.company_name || "Supplier",
-      rating: item.rating || Math.floor(Math.random() * 2) + 4, // Random rating 4-5
+      rating: item.rating || Math.floor(Math.random() * 2) + 4,
       slug: item.slug || item.id,
       seller_id: item.seller_id,
+      type: item.type || 'product'
     }));
 
     console.log("Processed products:", processed);
@@ -171,7 +222,10 @@ export const TrendingProducts = () => {
             return getSafeImage(parsed);
           }
         } catch {
-          return images;
+          // If it's a string URL, return it
+          if (images.startsWith('http') || images.startsWith('https') || images.startsWith('data:')) {
+            return images;
+          }
         }
       }
     } catch (error) {
@@ -196,7 +250,8 @@ export const TrendingProducts = () => {
         category: "Electronics",
         supplier_name: "Global Suppliers Inc.",
         rating: 4.8,
-        slug: "premium-wireless-headphones"
+        slug: "premium-wireless-headphones",
+        type: "product"
       },
       {
         id: "sample-2",
@@ -211,7 +266,8 @@ export const TrendingProducts = () => {
         category: "Wearables",
         supplier_name: "Tech Manufacturers Ltd.",
         rating: 4.5,
-        slug: "smart-watch-series-7"
+        slug: "smart-watch-series-7",
+        type: "product"
       },
       {
         id: "sample-3",
@@ -226,7 +282,8 @@ export const TrendingProducts = () => {
         category: "Furniture",
         supplier_name: "Comfort Furniture Co.",
         rating: 4.7,
-        slug: "ergonomic-office-chair"
+        slug: "ergonomic-office-chair",
+        type: "product"
       },
       {
         id: "sample-4",
@@ -241,7 +298,8 @@ export const TrendingProducts = () => {
         category: "Computer Accessories",
         supplier_name: "Connect Tech Ltd.",
         rating: 4.6,
-        slug: "multi-port-usb-c-hub"
+        slug: "multi-port-usb-c-hub",
+        type: "product"
       }
     ];
     
@@ -283,12 +341,24 @@ export const TrendingProducts = () => {
     toast.success(`Added ${product.title} to cart`);
   };
 
-  const handleProductClick = (product: Product, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleProductClick = (product: Product, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // Determine the correct URL based on product type
+    let productUrl = `/product-insights/${product.slug || product.id}`;
+    
+    // If it's a featured item or has a specific type
+    if (product.type === 'featured' || product.type === 'deal') {
+      productUrl = `/product-insights/${product.type}/${product.slug || product.id}`;
+    }
+    
+    console.log(`Navigating to: ${productUrl}`);
     
     // Navigate to product page
-    navigate(`/product-insights/${product.slug || product.id}`);
+    navigate(productUrl);
   };
 
   const scrollCarousel = (direction: 'left' | 'right') => {
@@ -376,12 +446,10 @@ export const TrendingProducts = () => {
                 <div
                   key={product.id}
                   className="group bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 hover:border-[#FF6B35]/30"
+                  onClick={() => handleProductClick(product)}
                 >
                   {/* Product Image */}
-                  <div 
-                    className="relative h-48 overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer"
-                    onClick={(e) => handleProductClick(product, e)}
-                  >
+                  <div className="relative h-48 overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer">
                     <img
                       src={product.image || "/placeholder.svg?height=192&width=192"}
                       alt={product.title}
@@ -421,7 +489,7 @@ export const TrendingProducts = () => {
                   <div className="p-4">
                     <h3 
                       className="text-sm font-semibold text-gray-800 line-clamp-2 min-h-[2.5rem] group-hover:text-[#FF6B35] transition-colors mb-3 cursor-pointer"
-                      onClick={(e) => handleProductClick(product, e)}
+                      onClick={() => handleProductClick(product)}
                     >
                       {product.title}
                     </h3>
@@ -442,7 +510,6 @@ export const TrendingProducts = () => {
                         <p className="text-xs text-gray-500">
                           MOQ: {product.moq} {product.unit}
                         </p>
-                        {/* Category badge is hidden as requested */}
                       </div>
                     </div>
 
@@ -455,7 +522,7 @@ export const TrendingProducts = () => {
                     </div>
 
                     {/* Add to Cart Button */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                       <Button
                         className="flex-1 bg-gradient-to-r from-[#FF6B35] to-orange-500 hover:from-[#FF854F] hover:to-orange-600 text-white text-sm h-10 shadow-md hover:shadow-lg"
                         onClick={(e) => handleAddToCart(product, e)}
@@ -466,7 +533,10 @@ export const TrendingProducts = () => {
                       <Button
                         variant="outline"
                         className="h-10 px-3 border-gray-200 hover:border-[#FF6B35] hover:text-[#FF6B35]"
-                        onClick={(e) => handleProductClick(product, e)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleProductClick(product, e);
+                        }}
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
@@ -511,12 +581,10 @@ export const TrendingProducts = () => {
                   <div
                     key={product.id}
                     className="snap-start min-w-[85vw] sm:min-w-[70vw] bg-white rounded-2xl overflow-hidden shadow-xl border border-gray-100"
+                    onClick={() => handleProductClick(product)}
                   >
                     {/* Product Image */}
-                    <div 
-                      className="relative h-56 overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer"
-                      onClick={(e) => handleProductClick(product, e)}
-                    >
+                    <div className="relative h-56 overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer">
                       <img
                         src={product.image || "/placeholder.svg?height=224&width=224"}
                         alt={product.title}
@@ -555,7 +623,7 @@ export const TrendingProducts = () => {
                     <div className="p-5">
                       <h3 
                         className="text-base font-semibold text-gray-800 line-clamp-2 min-h-[3rem] mb-3 cursor-pointer"
-                        onClick={(e) => handleProductClick(product, e)}
+                        onClick={() => handleProductClick(product)}
                       >
                         {product.title}
                       </h3>
@@ -576,7 +644,6 @@ export const TrendingProducts = () => {
                           <p className="text-sm text-gray-500">
                             MOQ: {product.moq} {product.unit}
                           </p>
-                          {/* Category badge is hidden as requested */}
                         </div>
                       </div>
 
@@ -591,7 +658,7 @@ export const TrendingProducts = () => {
                       </div>
 
                       {/* Buttons */}
-                      <div className="flex gap-3">
+                      <div className="flex gap-3" onClick={(e) => e.stopPropagation()}>
                         <Button
                           className="flex-1 bg-gradient-to-r from-[#FF6B35] to-orange-500 hover:from-[#FF854F] hover:to-orange-600 text-white text-base h-12 shadow-lg hover:shadow-xl"
                           onClick={(e) => handleAddToCart(product, e)}
@@ -602,7 +669,10 @@ export const TrendingProducts = () => {
                         <Button
                           variant="outline"
                           className="h-12 px-4 border-gray-300 hover:border-[#FF6B35] hover:text-[#FF6B35] text-base"
-                          onClick={(e) => handleProductClick(product, e)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleProductClick(product, e);
+                          }}
                         >
                           <Eye className="w-5 h-5 mr-2" />
                           View
