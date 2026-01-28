@@ -288,50 +288,107 @@ export default function ProductInsights() {
   };
 
   const fetchDealWithProduct = async () => {
-    try {
-      console.log('Fetching deal with ID:', id);
+  if (!id) return null;
+
+  try {
+    console.log('Fetching deal with ID:', id);
+    
+    // First, fetch the deal with a simpler query
+    const { data: dealData, error: dealError } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('id', id)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (dealError) {
+      console.error('Error fetching deal:', dealError);
+      throw dealError;
+    }
+
+    if (!dealData) {
+      console.log('No active deal found with ID:', id);
+      toast.error('Deal not found or is inactive');
+      navigate('/deals');
+      return null;
+    }
+
+    console.log('Deal data found:', dealData);
+
+    // Fetch product separately without the problematic join
+    let productData = null;
+    if (dealData.product_id) {
+      console.log('Fetching linked product:', dealData.product_id);
       
-      // First, fetch the deal with its linked product
-      const { data: dealData, error: dealError } = await supabase
-        .from('deals')
-        .select(`
-          *,
-          product:products (
-            *,
-            category:categories(name, id),
-            seller:profiles(*)
-          )
-        `)
-        .eq('id', id)
-        .eq('is_active', true)
+      // Simple product query without joins
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', dealData.product_id)
+        .eq('published', true)
         .maybeSingle();
 
-      if (dealError) {
-        console.error('Error fetching deal:', dealError);
-        throw dealError;
+      if (productError) {
+        console.error('Error fetching product:', productError);
+        // Continue without product data
+      } else if (product) {
+        // Now fetch category and seller separately
+        productData = product;
+        
+        // Fetch category if category_id exists
+        if (product.category_id) {
+          const { data: category } = await supabase
+            .from('categories')
+            .select('name, id')
+            .eq('id', product.category_id)
+            .maybeSingle();
+          
+          if (category) {
+            productData.category = category;
+          }
+        }
+        
+        // Fetch seller info - check what table actually stores seller info
+        // Based on your hint, it might be 'suppliers' or 'favorites'
+        if (product.seller_id) {
+          // Try suppliers table first (most common)
+          const { data: supplier } = await supabase
+            .from('suppliers')
+            .select('*')
+            .eq('id', product.seller_id)
+            .maybeSingle();
+          
+          if (supplier) {
+            productData.seller = supplier;
+          } else {
+            // Try profiles table with different column name
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('id, full_name, company_name')
+              .eq('id', product.seller_id)
+              .maybeSingle();
+            
+            if (profile) {
+              productData.seller = profile;
+            }
+          }
+        }
+        
+        console.log('Product data with relationships:', productData);
       }
-
-      if (!dealData) {
-        console.log('No active deal found with ID:', id);
-        toast.error('Deal not found or is inactive');
-        navigate('/products');
-        return;
-      }
-
-      console.log('Deal data found:', dealData);
-
-      // Process deal data (with linked product if available)
-      await processDealData(dealData);
-
-      // Fetch related deals or products
-      await fetchRelatedDealsFromDB(dealData);
-
-    } catch (error) {
-      console.error('Error in fetchDealWithProduct:', error);
-      throw error;
     }
-  };
 
+    // Return combined data
+    return {
+      ...dealData,
+      product: productData,
+    };
+
+  } catch (error) {
+    console.error('Error in fetchDealWithProduct:', error);
+    throw error;
+  }
+};
   const fetchRegularProduct = async () => {
     try {
       const searchId = id?.toLowerCase();
