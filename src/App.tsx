@@ -7,6 +7,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/hooks/useAuth";
 import { CartProvider } from "@/hooks/useCart";
 import { CurrencyProvider } from "@/hooks/useCurrency";
+import { Analytics } from "@vercel/analytics/react";
 
 // ✅ Analytics hooks
 import { useAnalyticsSession } from "@/hooks/useAnalyticsSession";
@@ -138,6 +139,7 @@ function App() {
                   </Routes>
                 </BrowserRouter>
 
+                <Analytics />
               </TooltipProvider>
             </CurrencyProvider>
           </CartProvider>
