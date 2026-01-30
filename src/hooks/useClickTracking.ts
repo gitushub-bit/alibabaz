@@ -1,27 +1,19 @@
-// src/hooks/useClickTracking.ts
 import { useEffect } from 'react';
 import { trackEvent } from '@/lib/analytics';
 
-export function useClickTracking() {
+export function usePageTracking() {
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target) return;
+    const start = Date.now();
+    const path = window.location.pathname;
 
-      const path = window.location.pathname;
-      const elementInfo = {
-        tag: target.tagName,
-        id: target.id || undefined,
-        classes: target.className || undefined,
-        text: target.innerText?.slice(0, 100) || undefined
-      };
+    // Track page view
+    trackEvent('page_view', { path });
 
-      const session_id = localStorage.getItem('analytics_session');
-
-      trackEvent('click', { session_id, path, element: elementInfo });
+    return () => {
+      trackEvent('exit', {
+        path,
+        metadata: { time_spent_ms: Date.now() - start }
+      });
     };
-
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
   }, []);
 }
