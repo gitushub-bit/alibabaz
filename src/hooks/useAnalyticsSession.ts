@@ -1,10 +1,12 @@
-import { useEffect } from 'react'
-import { v4 as uuid } from 'uuid'
+import { useEffect } from 'react';
 
 export function useAnalyticsSession() {
   useEffect(() => {
     if (!localStorage.getItem('analytics_session')) {
-      localStorage.setItem('analytics_session', uuid())
+      localStorage.setItem(
+        'analytics_session',
+        crypto.randomUUID()
+      );
     }
-  }, [])
+  }, []);
 }
