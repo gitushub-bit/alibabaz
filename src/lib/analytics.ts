@@ -1,34 +1,24 @@
-import { supabase } from '@/lib/supabaseClient'
-
-type AnalyticsPayload = {
-  session_id: string | null
-  path?: string
-  metadata?: Record<string, any>
-}
+// src/lib/analytics.ts
+import { supabase } from '@/lib/supabaseClient';
 
 export async function trackEvent(
   eventType: string,
-  payload: AnalyticsPayload
+  payload: Record<string, any>
 ) {
-  // 🔒 Hard guard: never write invalid rows
-  if (!payload.session_id) {
-    console.warn('Analytics skipped: missing session_id', eventType)
-    return
+  const session_id = payload.session_id || localStorage.getItem('analytics_session');
+
+  if (!session_id) {
+    console.warn('No analytics session id set, skipping event');
+    return;
   }
 
-  const { session_id, path, metadata } = payload
-
-  const { error } = await supabase
-    .from('analytics_events')
-    .insert({
-      session_id,          // ✅ explicitly set
+  try {
+    await supabase.from('analytics_events').insert({
       event_type: eventType,
-      path: path ?? null,
-      metadata: metadata ?? null,
-    })
-
-  if (error) {
-    console.error('Analytics insert failed:', error)
+      session_id,
+      ...payload
+    });
+  } catch (err) {
+    console.error('Analytics insert failed:', err);
   }
 }
-
