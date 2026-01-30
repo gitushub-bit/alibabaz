@@ -3,12 +3,12 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Building2, 
-  Package, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Users,
+  Building2,
+  Package,
+  FileText,
   Settings,
   LogOut,
   Menu,
@@ -21,7 +21,8 @@ import {
   Send,
   Image,
   Megaphone,
-  Layers
+  Layers,
+  BarChart   // ✅ FIX: added
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
@@ -45,7 +46,10 @@ const sidebarLinks: SidebarLink[] = [
   { to: '/admin/image-queue', icon: Image, label: 'Image Queue' },
   { to: '/admin/orders', icon: Package, label: 'Orders' },
   { to: '/admin/rfqs', icon: FileText, label: 'RFQs' },
+
+  // ✅ Analytics added correctly
   { to: '/admin/analytics', icon: BarChart, label: 'Analytics' },
+
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
   { to: '/admin/content', icon: Palette, label: 'Site Content' },
   { to: '/admin/integrations', icon: Plug, label: 'Integrations', superAdminOnly: true },
@@ -56,7 +60,7 @@ const sidebarLinks: SidebarLink[] = [
 export default function AdminDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, role, loading, signOut, isSuperAdmin, isAdmin } = useAuth();
+  const { user, loading, signOut, isSuperAdmin, isAdmin } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -73,22 +77,18 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!user || !isAdmin) {
-    return null;
-  }
+  if (!user || !isAdmin) return null;
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
   };
 
-  const isActive = (path: string, exact = false) => {
-    if (exact) return location.pathname === path;
-    return location.pathname.startsWith(path);
-  };
+  const isActive = (path: string, exact = false) =>
+    exact ? location.pathname === path : location.pathname.startsWith(path);
 
-  const filteredLinks = sidebarLinks.filter(link => 
-    !link.superAdminOnly || isSuperAdmin
+  const filteredLinks = sidebarLinks.filter(
+    link => !link.superAdminOnly || isSuperAdmin
   );
 
   const Sidebar = () => (
@@ -119,7 +119,7 @@ export default function AdminDashboard() {
       </div>
 
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {filteredLinks.map((link) => (
+        {filteredLinks.map(link => (
           <Link
             key={link.to}
             to={link.to}
@@ -158,12 +158,10 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen flex bg-muted/30">
-      {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 flex-col bg-background border-r">
         <Sidebar />
       </aside>
 
-      {/* Mobile Header */}
       <div className="flex-1 flex flex-col">
         <header className="md:hidden sticky top-0 z-50 bg-background border-b px-4 py-3 flex items-center justify-between">
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -176,20 +174,19 @@ export default function AdminDashboard() {
               <Sidebar />
             </SheetContent>
           </Sheet>
-          
+
           <div className="flex items-center gap-2">
             <h1 className="font-bold">Admin Panel</h1>
             {isSuperAdmin && (
               <Badge variant="secondary" className="text-[10px]">Super</Badge>
             )}
           </div>
-          
+
           <Button variant="ghost" size="icon" onClick={handleSignOut}>
             <LogOut className="h-5 w-5" />
           </Button>
         </header>
 
-        {/* Main Content */}
         <main className="flex-1 p-6 overflow-auto">
           <Outlet />
         </main>
