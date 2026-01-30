@@ -1,15 +1,17 @@
-import { useEffect } from 'react'
-import { trackEvent } from '@/lib/analytics'
-import { supabase } from '@/lib/supabaseClient'
+// src/hooks/usePageTracking.ts
+import { useEffect } from 'react';
+import { trackEvent } from '@/lib/analytics';
 
 export function usePageTracking() {
   useEffect(() => {
-    const session_id = localStorage.getItem('analytics_session')
-    const path = window.location.pathname
-    const started = Date.now()
+    const session_id = localStorage.getItem('analytics_session');
+    const path = window.location.pathname;
+    const started = Date.now();
 
-    trackEvent('page_view', { session_id, path })
+    // Track page view
+    trackEvent('page_view', { session_id, path });
 
+    // Track exit / time spent
     return () => {
       trackEvent('exit', {
         session_id,
@@ -17,7 +19,8 @@ export function usePageTracking() {
         metadata: {
           time_spent_ms: Date.now() - started
         }
-      })
-    }
-  }, [])
+      });
+    };
+  }, []);
 }
+
