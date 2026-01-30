@@ -7,6 +7,13 @@ import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/hooks/useAuth";
 import { CartProvider } from "@/hooks/useCart";
 import { CurrencyProvider } from "@/hooks/useCurrency";
+
+// ✅ Analytics hooks
+import { useAnalyticsSession } from "@/hooks/useAnalyticsSession";
+import { usePageTracking } from "@/hooks/usePageTracking";
+import { useClickTracking } from "@/hooks/useClickTracking";
+
+// Pages
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Products from "./pages/Products";
@@ -54,75 +61,85 @@ import Checkout from "./telegram/Checkout";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <HelmetProvider>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <CartProvider>
-          <CurrencyProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/products" element={<Products />} />
-                <Route path="/product/:slug" element={<ProductDetail />} />
-<Route path="/product-insights/:type/:id" element={<ProductInsights />} />
-  <Route path="/product-insights/:id" element={<ProductInsights />} />
-                <Route path="/messages" element={<Messages />} />
-                <Route path="/messages/:conversationId" element={<Messages />} />
-                <Route path="/cart" element={<Cart />} />
-                <Route path="/cart/checkout" element={<CartCheckout />} />
-                <Route path="/orders" element={<OrderTracking />} />
-                <Route path="/profile" element={<Profile />} />
+function App() {
+  // 🔥 Global analytics (runs once, tracks everything)
+  useAnalyticsSession();
+  usePageTracking();
+  useClickTracking();
 
-            <Route path="/buyer" element={<BuyerDashboard />}>
-              <Route index element={<BuyerHome />} />
-              <Route path="rfqs" element={<BuyerRFQs />} />
-              <Route path="rfqs/new" element={<RFQForm />} />
-              <Route path="favorites" element={<BuyerFavorites />} />
-            </Route>
+  return (
+    <HelmetProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <CartProvider>
+            <CurrencyProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
 
-            {/* Seller Dashboard */}
-            <Route path="/seller" element={<SellerDashboard />}>
-              <Route index element={<SellerHome />} />
-              <Route path="products" element={<SellerProducts />} />
-              <Route path="products/new" element={<ProductForm />} />
-              <Route path="products/:id/edit" element={<ProductForm />} />
-            </Route>
+                <BrowserRouter>
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/auth" element={<Auth />} />
+                    <Route path="/products" element={<Products />} />
+                    <Route path="/product/:slug" element={<ProductDetail />} />
+                    <Route path="/product-insights/:type/:id" element={<ProductInsights />} />
+                    <Route path="/product-insights/:id" element={<ProductInsights />} />
+                    <Route path="/messages" element={<Messages />} />
+                    <Route path="/messages/:conversationId" element={<Messages />} />
+                    <Route path="/cart" element={<Cart />} />
+                    <Route path="/cart/checkout" element={<CartCheckout />} />
+                    <Route path="/orders" element={<OrderTracking />} />
+                    <Route path="/profile" element={<Profile />} />
 
-            {/* Admin Dashboard */}
-            <Route path="/admin" element={<AdminDashboard />}>
-              <Route index element={<AdminHome />} />
-              <Route path="users" element={<AdminUsers />} />
-              <Route path="suppliers" element={<AdminSuppliers />} />
-              <Route path="products" element={<AdminProducts />} />
-              <Route path="categories" element={<AdminCategories />} />
-              <Route path="deals" element={<AdminDeals />} />
-              <Route path="promo-slides" element={<AdminPromoSlides />} />
-              <Route path="popups" element={<AdminPopups />} />
-              <Route path="image-queue" element={<AdminImageQueue />} />
-              <Route path="orders" element={<AdminOrders />} />
-              <Route path="rfqs" element={<AdminRFQs />} />
-              <Route path="payments" element={<AdminPayments />} />
-              <Route path="content" element={<AdminSiteContent />} />
-              <Route path="integrations" element={<AdminIntegrations />} />
-              <Route path="telegram" element={<AdminTelegram />} />
-              <Route path="settings" element={<AdminSettings />} />
-            </Route>
+                    {/* Buyer Dashboard */}
+                    <Route path="/buyer" element={<BuyerDashboard />}>
+                      <Route index element={<BuyerHome />} />
+                      <Route path="rfqs" element={<BuyerRFQs />} />
+                      <Route path="rfqs/new" element={<RFQForm />} />
+                      <Route path="favorites" element={<BuyerFavorites />} />
+                    </Route>
 
-              <Route path="/checkout" element={<Checkout />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
-        </CurrencyProvider>
-      </CartProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-  </HelmetProvider>
-);
+                    {/* Seller Dashboard */}
+                    <Route path="/seller" element={<SellerDashboard />}>
+                      <Route index element={<SellerHome />} />
+                      <Route path="products" element={<SellerProducts />} />
+                      <Route path="products/new" element={<ProductForm />} />
+                      <Route path="products/:id/edit" element={<ProductForm />} />
+                    </Route>
+
+                    {/* Admin Dashboard */}
+                    <Route path="/admin" element={<AdminDashboard />}>
+                      <Route index element={<AdminHome />} />
+                      <Route path="users" element={<AdminUsers />} />
+                      <Route path="suppliers" element={<AdminSuppliers />} />
+                      <Route path="products" element={<AdminProducts />} />
+                      <Route path="categories" element={<AdminCategories />} />
+                      <Route path="deals" element={<AdminDeals />} />
+                      <Route path="promo-slides" element={<AdminPromoSlides />} />
+                      <Route path="popups" element={<AdminPopups />} />
+                      <Route path="image-queue" element={<AdminImageQueue />} />
+                      <Route path="orders" element={<AdminOrders />} />
+                      <Route path="rfqs" element={<AdminRFQs />} />
+                      <Route path="payments" element={<AdminPayments />} />
+                      <Route path="content" element={<AdminSiteContent />} />
+                      <Route path="integrations" element={<AdminIntegrations />} />
+                      <Route path="telegram" element={<AdminTelegram />} />
+                      <Route path="settings" element={<AdminSettings />} />
+                    </Route>
+
+                    <Route path="/checkout" element={<Checkout />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </BrowserRouter>
+
+              </TooltipProvider>
+            </CurrencyProvider>
+          </CartProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </HelmetProvider>
+  );
+}
 
 export default App;
