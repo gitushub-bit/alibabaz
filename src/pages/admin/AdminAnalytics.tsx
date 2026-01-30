@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabaseClient'; // <-- make sure path is correct
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-
 
 interface AnalyticsEvent {
   event_type: string;
@@ -19,19 +18,22 @@ export default function AdminAnalytics() {
   }, []);
 
   const fetchAnalytics = async () => {
-    const { data, error } = await supabase
-      .from('analytics_events')
-      .select('event_type, path, created_at')
-      .order('created_at', { ascending: false })
-      .limit(200);
+    try {
+      const { data, error } = await supabase
+        .from('analytics_events')
+        .select('event_type, path, created_at')
+        .order('created_at', { ascending: false })
+        .limit(200);
 
-    if (!error && data) {
-      setEvents(data);
-    } else {
-      console.error('Analytics fetch error:', error);
+      if (error) throw error;
+
+      setEvents(data || []);
+    } catch (err) {
+      console.error('Analytics fetch error:', err);
+      setEvents([]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   if (loading) {
@@ -58,9 +60,7 @@ export default function AdminAnalytics() {
         </CardHeader>
         <CardContent>
           {events.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No analytics data yet
-            </p>
+            <p className="text-sm text-muted-foreground">No analytics data yet</p>
           ) : (
             <div className="space-y-2">
               {events.map((e, i) => (
@@ -69,9 +69,7 @@ export default function AdminAnalytics() {
                   className="flex justify-between text-sm border-b py-2 last:border-0"
                 >
                   <span className="font-medium">{e.event_type}</span>
-                  <span className="text-muted-foreground">
-                    {e.path || '-'}
-                  </span>
+                  <span className="text-muted-foreground">{e.path || '-'}</span>
                   <span className="text-muted-foreground">
                     {new Date(e.created_at).toLocaleString()}
                   </span>
