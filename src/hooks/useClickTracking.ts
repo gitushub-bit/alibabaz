@@ -1,19 +1,18 @@
 import { useEffect } from 'react';
 import { trackEvent } from '@/lib/analytics';
 
-export function usePageTracking() {
+export function useClickTracking() {
   useEffect(() => {
-    const start = Date.now();
-    const path = window.location.pathname;
-
-    // Track page view
-    trackEvent('page_view', { path });
-
-    return () => {
-      trackEvent('exit', {
-        path,
-        metadata: { time_spent_ms: Date.now() - start }
-      });
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target) {
+        trackEvent('click', {
+          path: window.location.pathname,
+          metadata: { tag: target.tagName, id: target.id || null, class: target.className || null }
+        });
+      }
     };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
   }, []);
 }
