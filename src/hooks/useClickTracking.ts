@@ -1,44 +1,27 @@
-import { useEffect } from 'react'
-import { trackEvent } from '@/lib/analytics'
+// src/hooks/useClickTracking.ts
+import { useEffect } from 'react';
+import { trackEvent } from '@/lib/analytics';
 
 export function useClickTracking() {
   useEffect(() => {
-    const session_id = localStorage.getItem('analytics_session')
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target) return;
 
-    const onClick = (e: MouseEvent) => {
-      const el = e.target as HTMLElement
-      trackEvent('click', {
-        session_id,
-        path: window.location.pathname,
-        element: el.tagName,
-        metadata: {
-          id: el.id,
-          class: el.className,
-          text: el.innerText?.slice(0, 100)
-        }
-      })
-    }
+      const path = window.location.pathname;
+      const elementInfo = {
+        tag: target.tagName,
+        id: target.id || undefined,
+        classes: target.className || undefined,
+        text: target.innerText?.slice(0, 100) || undefined
+      };
 
-    let maxScroll = 0
-    const onScroll = () => {
-      const scrolled =
-        (window.scrollY + window.innerHeight) /
-        document.documentElement.scrollHeight
-      maxScroll = Math.max(maxScroll, Math.round(scrolled * 100))
-    }
+      const session_id = localStorage.getItem('analytics_session');
 
-    window.addEventListener('click', onClick)
-    window.addEventListener('scroll', onScroll)
+      trackEvent('click', { session_id, path, element: elementInfo });
+    };
 
-    return () => {
-      trackEvent('scroll', {
-        session_id,
-        path: window.location.pathname,
-        metadata: { max_scroll_percent: maxScroll }
-      })
-
-      window.removeEventListener('click', onClick)
-      window.removeEventListener('scroll', onScroll)
-    }
-  }, [])
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
 }
