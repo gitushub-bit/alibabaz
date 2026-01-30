@@ -45,6 +45,7 @@ const sidebarLinks: SidebarLink[] = [
   { to: '/admin/image-queue', icon: Image, label: 'Image Queue' },
   { to: '/admin/orders', icon: Package, label: 'Orders' },
   { to: '/admin/rfqs', icon: FileText, label: 'RFQs' },
+  { to: '/admin/analytics', icon: BarChart, label: 'Analytics' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
   { to: '/admin/content', icon: Palette, label: 'Site Content' },
   { to: '/admin/integrations', icon: Plug, label: 'Integrations', superAdminOnly: true },
