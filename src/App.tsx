@@ -57,6 +57,10 @@ import AdminTelegram from "./telegram/AdminTelegram";
 import AdminPromoSlides from "./pages/admin/AdminPromoSlides";
 import AdminPopups from "./pages/admin/AdminPopups";
 import AdminImageQueue from "./pages/admin/AdminImageQueue";
+
+// ✅ NEW: Analytics Page
+import AdminAnalytics from "./pages/admin/AdminAnalytics";
+
 import Checkout from "./telegram/Checkout";
 
 const queryClient = new QueryClient();
@@ -121,6 +125,7 @@ function App() {
                       <Route path="image-queue" element={<AdminImageQueue />} />
                       <Route path="orders" element={<AdminOrders />} />
                       <Route path="rfqs" element={<AdminRFQs />} />
+                      <Route path="analytics" element={<AdminAnalytics />} /> {/* ✅ Added */}
                       <Route path="payments" element={<AdminPayments />} />
                       <Route path="content" element={<AdminSiteContent />} />
                       <Route path="integrations" element={<AdminIntegrations />} />
