@@ -55,7 +55,7 @@ export const FeaturedSuppliers = () => {
   const fetchRandomProducts = async () => {
     try {
       setLoading(true);
-      
+
       // First try to get products with images
       const { data: productsWithImages, error } = await supabase
         .from("products")
@@ -117,7 +117,7 @@ export const FeaturedSuppliers = () => {
     const processed = productsData.map((item: any) => ({
       id: item.id,
       title: item.title || "Unnamed Product",
-      image: item.images 
+      image: item.images
         ? (Array.isArray(item.images) ? item.images[0] : item.images)
         : null,
       price: item.price_min || 0,
@@ -206,13 +206,13 @@ export const FeaturedSuppliers = () => {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-800">
-              {showProducts 
-                ? "Featured Products" 
+              {showProducts
+                ? "Featured Products"
                 : content.featuredSuppliers?.title || "Featured Suppliers"}
             </h2>
             <p className="text-gray-600 mt-1">
-              {showProducts 
-                ? "Browse our handpicked selection of quality products" 
+              {showProducts
+                ? "Browse our handpicked selection of quality products"
                 : "Verified suppliers with proven track records"}
             </p>
           </div>
@@ -244,7 +244,7 @@ export const FeaturedSuppliers = () => {
             {products.map((product) => (
               <div
                 key={product.id}
-                className="group bg-white rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer border border-gray-200"
+                className="group bg-white rounded-lg overflow-hidden shadow-none hover:border-alibaba-orange transition-all duration-200 cursor-pointer border border-alibaba-border"
                 onClick={() => navigate(`/product-insights/${product.id}`)}
               >
                 {/* Product Image */}
@@ -255,7 +255,7 @@ export const FeaturedSuppliers = () => {
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
-                  
+
                   {/* Badges */}
                   <div className="absolute top-2 left-2 flex flex-col gap-1">
                     {product.is_verified && (
@@ -270,7 +270,7 @@ export const FeaturedSuppliers = () => {
                       </Badge>
                     )}
                   </div>
-                  
+
                   {product.rating && (
                     <div className="absolute top-2 right-2">
                       <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs">

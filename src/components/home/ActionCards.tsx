@@ -42,7 +42,7 @@ export const ActionCards = () => {
           <button
             key={action.path}
             onClick={() => navigate(action.path)}
-            className="action-card shrink-0 min-w-[140px] p-3 rounded-xl bg-card border border-border hover:shadow-md transition-shadow flex gap-3 items-start"
+            className="action-card shrink-0 min-w-[140px] p-3 rounded-lg bg-card border border-alibaba-border hover:shadow-sm transition-shadow flex gap-3 items-start"
           >
             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${action.color}`}>
               {action.flag ? (

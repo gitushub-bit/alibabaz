@@ -10,41 +10,50 @@ export const RFQBanner = () => {
   if (!content.rfqBanner?.enabled) return null;
 
   return (
-    <section className="py-6 px-4">
-      <div className="rounded-2xl bg-gradient-to-r from-primary to-orange-500 text-white overflow-hidden shadow-lg">
-        <div className="p-6 flex flex-col md:flex-row items-start md:items-center gap-5">
-          
-          {/* ICON */}
-          <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center">
-            <FileText className="w-7 h-7" />
+    <section className="py-8 px-4">
+      <div className="container mx-auto">
+        <div className="relative rounded-2xl overflow-hidden shadow-xl">
+          {/* Background with Gradient and Pattern */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#ff6a00] to-[#ff4500]">
+            <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_30%_50%,_white_0%,_transparent_50%)]"></div>
+            <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 10px 10px, white 1px, transparent 0)', backgroundSize: '30px 30px' }}></div>
           </div>
 
-          {/* TEXT */}
-          <div className="flex-1">
-            <h3 className="text-xl md:text-2xl font-bold">
-              {content.rfqBanner?.title || "Post a Buying Request"}
-            </h3>
-            <p className="text-sm md:text-base text-white/90 mt-2">
-              {content.rfqBanner?.description || "Tell us what you need and get quotes from verified suppliers"}
-            </p>
-          </div>
+          <div className="relative p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8">
 
-          {/* BUTTON */}
-          <div className="flex flex-col gap-2 md:items-end">
-            <Button
-              className="bg-white text-primary font-semibold hover:bg-white/90"
-              onClick={() => navigate("/products")}
-            >
-              Get Quotes <ArrowRight className="w-4 h-4 ml-1" />
-            </Button>
+            {/* Content Side */}
+            <div className="flex items-start gap-6 max-w-2xl">
+              <div className="hidden md:flex w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm items-center justify-center shrink-0 border border-white/30 shadow-inner">
+                <FileText className="w-8 h-8 text-white drop-shadow-sm" />
+              </div>
 
-            {/* Optional link for more info */}
-            <button
-              className="text-sm text-white/80 hover:text-white underline"
-              onClick={() => navigate("/buyer/rfq")}
-            >
-              Learn more
-            </button>
+              <div className="text-white">
+                <h3 className="text-2xl md:text-3xl font-bold mb-3 tracking-tight">
+                  {content.rfqBanner?.title || "Request for Quotation"}
+                </h3>
+                <p className="text-base md:text-lg text-white/90 leading-relaxed max-w-xl">
+                  {content.rfqBanner?.description || "One request, multiple quotes. customized matches for your business needs."}
+                </p>
+              </div>
+            </div>
+
+            {/* Action Side */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 shrink-0 w-full md:w-auto">
+              <Button
+                size="lg"
+                className="w-full sm:w-auto bg-white text-[#ff6a00] hover:bg-gray-50 border-0 font-bold px-8 h-12 text-base shadow-lg transition-transform hover:scale-105"
+                onClick={() => navigate("/products")}
+              >
+                Post Your Request <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+
+              <button
+                className="text-white/90 font-medium hover:text-white underline decoration-white/50 hover:decoration-white transition-all text-sm sm:text-base whitespace-nowrap"
+                onClick={() => navigate("/buyer/rfq")}
+              >
+                Learn how it works
+              </button>
+            </div>
           </div>
         </div>
       </div>

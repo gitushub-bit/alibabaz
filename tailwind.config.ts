@@ -14,9 +14,29 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Roboto",
+          "Arial",
+          "Helvetica Neue",
+          "sans-serif"
+        ],
       },
       colors: {
+        alibaba: {
+          orange: "#FF6A00",
+          orangeHover: "#E65F00",
+          textPrimary: "#222222",
+          textSecondary: "#555555",
+          textMuted: "#777777",
+          border: "#E5E5E5",
+          borderSoft: "#EEEEEE",
+          bgPage: "#F5F5F5",
+          bgCard: "#FFFFFF",
+          bgMuted: "#FAFAFA",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

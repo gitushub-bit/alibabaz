@@ -1,0 +1,7 @@
+{
+  "name": "Alibaba Clone",
+  "description": "A high-fidelity clone of the Alibaba.com homepage with AI-powered search features using Gemini.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

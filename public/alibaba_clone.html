@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Alibaba.com – Layout Clone</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        :root {
+            --ali-orange: #FF6A00;
+            --ali-border: #E6E7EB;
+            --ali-bg: #F2F3F7;
+            --ali-text: #222;
+        }
+
+        body {
+            font-family: Inter, SF Pro Text, Roboto, Helvetica Neue, Helvetica, Tahoma, Arial, PingFang SC, Microsoft YaHei;
+            background: var(--ali-bg);
+            color: var(--ali-text);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .ali-container {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 0 32px;
+        }
+
+        .ali-shadow {
+            box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
+        }
+
+        .placeholder {
+            background: #E5E7EB;
+            color: #9CA3AF;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Animation Fade-in */
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out forwards;
+        }
+
+        /* TICKER BANNER STYLES */
+        .ticker-banner {
+            width: 100%;
+            background: linear-gradient(90deg, #FFE4CC 0%, #FFD7B5 50%, #FFC999 100%);
+            overflow: hidden;
+            position: relative;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        }
+
+        .ticker-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .ticker-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 0 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .ticker-text {
+            color: #1a1a1a;
+            font-size: 16px;
+            font-weight: 500;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            line-height: 1.4;
+        }
+
+        .ai-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .fire-emoji {
+            font-size: 20px;
+            display: inline-block;
+            animation: flicker 1.5s infinite ease-in-out;
+        }
+
+        .cta-button {
+            background: #FF6A00;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 24px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px rgba(255, 106, 0, 0.3);
+            white-space: nowrap;
+            font-family: inherit;
+        }
+
+        .cta-button:hover {
+            background: #FF7A1A;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255, 106, 0, 0.4);
+        }
+
+        .cta-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(255, 106, 0, 0.3);
+        }
+
+        .arrow {
+            font-size: 18px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-block;
+        }
+
+        .cta-button:hover .arrow {
+            transform: translateX(3px);
+        }
+
+        @keyframes flicker {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.8;
+                transform: scale(1.1);
+            }
+        }
+
+        /* CATEGORIES SECTION STYLES */
+        .categories-wrapper {
+            display: flex;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        .categories-left {
+            width: 260px;
+            border-right: 1px solid #e8e8e8;
+            background: #fafafa;
+            max-height: 600px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .categories-left::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .categories-left::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .categories-left::-webkit-scrollbar-thumb {
+            background: #d0d0d0;
+            border-radius: 3px;
+        }
+
+        .categories-left::-webkit-scrollbar-thumb:hover {
+            background: #b0b0b0;
+        }
+
+        .category-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .category-item:hover {
+            background: #f0f0f0;
+            border-left-color: #ff6a00;
+        }
+
+        .category-item.active {
+            background: #fff;
+            border-left-color: #ff6a00;
+            font-weight: 600;
+        }
+
+        .category-icon {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, #e0e0e0 0%, #d0d0d0 100%);
+            border-radius: 6px;
+            flex-shrink: 0;
+        }
+
+        .category-title {
+            font-size: 14px;
+            color: #222;
+            line-height: 1.4;
+        }
+
+        .categories-right {
+            flex: 1;
+            padding: 32px 40px;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+
+        .categories-right::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .categories-right::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .categories-right::-webkit-scrollbar-thumb {
+            background: #d0d0d0;
+            border-radius: 3px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #222;
+            margin-bottom: 24px;
+            line-height: 1.3;
+        }
+
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 20px 16px;
+            margin-bottom: 48px;
+        }
+
+        .category-card {
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .category-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .category-card:hover .category-image {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        }
+
+        .category-image {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 10px;
+            background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+            border-radius: 50%;
+            transition: box-shadow 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+        }
+
+        .category-name {
+            font-size: 13px;
+            color: #333;
+            line-height: 1.4;
+            font-weight: 400;
+        }
+
+        .subsection {
+            margin-top: 48px;
+            padding-top: 32px;
+            border-top: 1px solid #e8e8e8;
+        }
+
+        .subsection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .subsection-header a {
+            font-size: 14px;
+            color: #0073e6;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .subsection-header a:hover {
+            color: #005bb5;
+            text-decoration: underline;
+        }
+
+        /* Responsive for ticker */
+        @media (max-width: 768px) {
+            .ticker-banner {
+                height: 56px;
+                padding: 0 16px;
+            }
+
+            .ticker-content {
+                flex-direction: column;
+                gap: 8px;
+                padding: 8px 16px;
+            }
+
+            .ticker-text {
+                font-size: 14px;
+                text-align: center;
+            }
+
+            .cta-button {
+                padding: 8px 20px;
+                font-size: 14px;
+            }
+
+            .category-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .category-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .category-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+
+            .categories-left {
+                width: 220px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- TICKER BANNER -->
+    <div class="ticker-banner">
+        <div class="ticker-content">
+            <div class="ticker-text">
+                Research smarter · Design easier · Source better — All-in-one with
+                <span class="ai-badge">
+                    AI Mode
+                    <span class="fire-emoji">🔥</span>
+                </span>
+            </div>
+            <button class="cta-button" onclick="window.open('https://aimode.alibaba.com/', '_blank')">
+                Try it now
+                <span class="arrow">→</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="bg-white ali-shadow sticky top-0 z-50">
+        <div class="ali-container">
+
+            <!-- utility -->
+            <div class="flex justify-end gap-6 text-xs text-gray-500 py-2">
+                <span>Deliver to: Region</span>
+                <span>English – USD</span>
+                <span class="cursor-pointer hover:text-[var(--ali-orange)]">Sign in</span>
+            </div>
+
+            <!-- logo + search -->
+            <div class="flex gap-6 items-start pb-3">
+                <div class="text-[28px] font-bold text-[var(--ali-orange)] leading-none mt-1">
+                    Alibaba.com
+                </div>
+
+                <div class="flex-1 max-w-4xl">
+
+                    <!-- search tabs -->
+                    <div class="flex justify-center gap-10 text-sm font-medium mb-2">
+                        <div class="flex items-center gap-1">
+                            <span class="font-semibold">AI Mode</span>
+                            <span class="text-[var(--ali-orange)] scale-75 align-top">*</span>
+                        </div>
+                        <span
+                            class="text-[var(--ali-orange)] border-b-2 border-[var(--ali-orange)] pb-0.5 font-bold">Products</span>
+                        <span class="text-gray-600 hover:text-[var(--ali-orange)] cursor-pointer">Manufacturers</span>
+                        <span class="text-gray-600 hover:text-[var(--ali-orange)] cursor-pointer">Worldwide</span>
+                    </div>
+
+                    <!-- search box -->
+                    <div class="flex border-2 border-[var(--ali-orange)] rounded-xl h-11 bg-white overflow-hidden">
+                        <input class="flex-1 px-4 outline-none text-sm placeholder-gray-400 text-gray-700"
+                            placeholder="Search products, suppliers..." />
+
+                        <div class="flex items-center border-l px-3 cursor-pointer hover:bg-gray-50">
+                            <span class="text-xs text-gray-500 font-medium">Image Search</span>
+                        </div>
+
+                        <button
+                            class="bg-[var(--ali-orange)] text-white px-8 font-bold text-sm hover:bg-[#e65c00] transition-colors">
+                            Search
+                        </button>
+                    </div>
+                </div>
+
+                <!-- icons -->
+                <div class="flex gap-8 pt-4 text-xs text-gray-500">
+                    <div class="flex flex-col items-center gap-1 cursor-pointer hover:text-[var(--ali-orange)] group">
+                        <div
+                            class="w-6 h-6 rounded-full border border-gray-400 flex items-center justify-center group-hover:border-[var(--ali-orange)]">
+                            <div class="w-3 h-3 bg-gray-400 rounded-full group-hover:bg-[var(--ali-orange)]"></div>
+                        </div>
+                        <span>Sign in</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1 cursor-pointer hover:text-[var(--ali-orange)]">
+                        <div class="w-6 h-6 bg-gray-300 rounded-sm"></div> <!-- Icon -->
+                        <span>Cart</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1 cursor-pointer hover:text-[var(--ali-orange)]">
+                        <div class="w-6 h-6 bg-gray-300 rounded-sm"></div> <!-- Icon -->
+                        <span>Orders</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- nav -->
+            <nav class="flex gap-8 text-xs text-gray-600 py-3 border-t font-medium">
+                <div class="flex items-center gap-2 cursor-pointer hover:text-[var(--ali-orange)]">
+                    <div class="w-3.5 h-3.5 bg-gray-400 rounded-sm"></div>
+                    <span>All categories</span>
+                </div>
+                <span class="cursor-pointer hover:text-[var(--ali-orange)]">Featured selections</span>
+                <span class="cursor-pointer hover:text-[var(--ali-orange)]">Order protections</span>
+                <span class="cursor-pointer hover:text-[var(--ali-orange)]">Buyer Central</span>
+                <span class="cursor-pointer hover:text-[var(--ali-orange)]">Help Center</span>
+                <span class="cursor-pointer hover:text-[var(--ali-orange)]">Get the App</span>
+                <span class="ml-auto cursor-pointer hover:text-[var(--ali-orange)] border-l pl-4">Become a
+                    Supplier</span>
+            </nav>
+
+        </div>
+    </header>
+
+    <!-- MAIN -->
+    <main class="ali-container py-6">
+
+        <!-- welcome -->
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-lg font-bold text-gray-800">Welcome to Alibaba.com, User</h1>
+            <div class="flex gap-6 text-sm text-gray-600 font-medium">
+                <span class="cursor-pointer hover:text-[var(--ali-orange)]">Request for Quotation</span>
+                <span class="cursor-pointer hover:text-[var(--ali-orange)]">Top Ranking</span>
+                <span class="cursor-pointer hover:text-[var(--ali-orange)]">Fast customization</span>
+            </div>
+        </div>
+
+        <!-- HERO GRID -->
+        <section class="grid grid-cols-1 lg:grid-cols-5 gap-3 h-[380px]">
+
+            <!-- categories -->
+            <div class="bg-white ali-shadow rounded-2xl p-4 text-sm flex flex-col h-full">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-gray-800">Categories for you</h3>
+                    <span class="text-xs text-gray-400">&gt;</span>
+                </div>
+                <ul class="flex-grow space-y-1 text-gray-600">
+                    <li class="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer group">
+                        <div class="w-7 h-7 rounded-full bg-gray-100 placeholder shrink-0">I</div>
+                        <span class="group-hover:text-gray-900 group-hover:font-medium">Apparel & Accessories</span>
+                    </li>
+                    <li class="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer group">
+                        <div class="w-7 h-7 rounded-full bg-gray-100 placeholder shrink-0">I</div>
+                        <span class="group-hover:text-gray-900 group-hover:font-medium">Consumer Electronics</span>
+                    </li>
+                    <li class="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer group">
+                        <div class="w-7 h-7 rounded-full bg-gray-100 placeholder shrink-0">I</div>
+                        <span class="group-hover:text-gray-900 group-hover:font-medium">Sports & Entertainment</span>
+                    </li>
+                    <li class="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer group">
+                        <div class="w-7 h-7 rounded-full bg-gray-100 placeholder shrink-0">I</div>
+                        <span class="group-hover:text-gray-900 group-hover:font-medium">Beauty</span>
+                    </li>
+                    <li class="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer group">
+                        <div class="w-7 h-7 rounded-full bg-gray-100 placeholder shrink-0">I</div>
+                        <span class="group-hover:text-gray-900 group-hover:font-medium">Luggage & Bags</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- frequent -->
+            <div
+                class="bg-white ali-shadow rounded-2xl p-4 flex flex-col hover:-translate-y-1 transition-transform cursor-pointer">
+                <span class="text-xs text-gray-500 font-medium mb-1">Frequently searched</span>
+                <strong class="text-sm font-bold text-gray-800 mb-2">New Energy Vehicles</strong>
+                <div class="flex-1 placeholder rounded-xl bg-gray-50">Image</div>
+            </div>
+
+            <div
+                class="bg-white ali-shadow rounded-2xl p-4 flex flex-col hover:-translate-y-1 transition-transform cursor-pointer">
+                <span class="text-xs text-gray-500 font-medium mb-1">Frequently searched</span>
+                <strong class="text-sm font-bold text-gray-800 mb-2">Electric Van</strong>
+                <div class="flex-1 placeholder rounded-xl bg-gray-50">Image</div>
+            </div>
+
+            <div
+                class="bg-white ali-shadow rounded-2xl p-4 flex flex-col hover:-translate-y-1 transition-transform cursor-pointer">
+                <span class="text-xs text-gray-500 font-medium mb-1">Frequently searched</span>
+                <strong class="text-sm font-bold text-gray-800 mb-2">Electric Cars</strong>
+                <div class="flex-1 placeholder rounded-xl bg-gray-50">Image</div>
+            </div>
+
+            <!-- promo -->
+            <div class="bg-orange-50 ali-shadow rounded-2xl p-5 flex flex-col text-center relative overflow-hidden">
+                <!-- Decoration -->
+                <div
+                    class="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-b from-orange-100/60 to-transparent pointer-events-none">
+                </div>
+
+                <div class="relative z-10 flex flex-col h-full">
+                    <strong class="mb-0.5 text-gray-900 text-[15px]">Promotional Supplier</strong>
+                    <span
+                        class="text-[10px] font-bold text-[var(--ali-orange)] bg-white px-1.5 py-0.5 rounded-sm self-center mb-3 border border-orange-100">Up
+                        to 10% OFF</span>
+
+                    <div class="flex-1 placeholder rounded-xl bg-white mb-3 border border-white shadow-sm">Promo</div>
+
+                    <button
+                        class="bg-white border border-gray-200 rounded-full py-2 text-sm font-bold text-gray-800 hover:bg-gray-50">
+                        Source now
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Divider -->
+        <div class="flex items-center justify-center my-8">
+            <div class="h-px bg-gray-300 w-16"></div>
+            <span class="mx-4 text-xs text-gray-400 uppercase tracking-widest font-medium">Recommended for your
+                business</span>
+            <div class="h-px bg-gray-300 w-16"></div>
+        </div>
+
+        <!-- Top Deals Section -->
+        <section class="bg-white ali-shadow rounded-2xl p-6 mb-6">
+            <div class="flex justify-between items-end mb-4">
+                <div class="flex flex-col">
+                    <div class="flex items-center gap-2">
+                        <span
+                            class="bg-[#FF4D00] text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">⚡</span>
+                        <h2 class="text-xl font-bold text-gray-900">Top Deals</h2>
+                    </div>
+                    <span class="text-gray-500 text-sm mt-1">Score the lowest prices on Alibaba.com</span>
+                </div>
+                <a href="#"
+                    class="text-sm font-semibold text-gray-800 hover:text-[var(--ali-orange)] flex items-center">View
+                    more <span class="text-xs ml-1">&gt;</span></a>
+            </div>
+
+            <div class="grid grid-cols-6 gap-4">
+                <!-- Deal Item -->
+                <div class="flex flex-col cursor-pointer group">
+                    <div class="aspect-square bg-gray-100 rounded-lg mb-2 relative placeholder">
+                        <span class="text-xs text-gray-400">Img</span>
+                        <span
+                            class="absolute top-1.5 left-1.5 bg-[#FFF0E6] text-[#FF4D00] text-[10px] font-bold px-1.5 py-0.5 rounded">-18%</span>
+                    </div>
+                    <div class="h-4 bg-gray-100 rounded w-1/2 mb-1"></div>
+                    <div class="h-3 bg-gray-50 rounded w-1/3"></div>
+                </div>
+                <!-- Deal Item -->
+                <div class="flex flex-col cursor-pointer group">
+                    <div class="aspect-square bg-gray-100 rounded-lg mb-2 relative placeholder">
+                        <span class="text-xs text-gray-400">Img</span>
+                        <span
+                            class="absolute top-1.5 left-1.5 bg-[#FFF0E6] text-[#FF4D00] text-[10px] font-bold px-1.5 py-0.5 rounded">-5%</span>
+                    </div>
+                    <div class="h-4 bg-gray-100 rounded w-1/2 mb-1"></div>
+                    <div class="h-3 bg-gray-50 rounded w-1/3"></div>
+                </div>
+                <!-- Deal Item -->
+                <div class="flex flex-col cursor-pointer group">
+                    <div class="aspect-square bg-gray-100 rounded-lg mb-2 relative placeholder">
+                        <span class="text-xs text-gray-400">Img</span>
+                    </div>
+                    <div class="h-4 bg-gray-100 rounded w-1/2 mb-1"></div>
+                    <div class="h-3 bg-gray-50 rounded w-1/3"></div>
+                </div>
+                <!-- Deal Item -->
+                <div class="flex flex-col cursor-pointer group">
+                    <div class="aspect-square bg-gray-100 rounded-lg mb-2 relative placeholder">
+                        <span class="text-xs text-gray-400">Img</span>
+                        <span
+                            class="absolute top-1.5 left-1.5 bg-[#FFF0E6] text-[#FF4D00] text-[10px] font-bold px-1.5 py-0.5 rounded">-30%</span>
+                    </div>
+                    <div class="h-4 bg-gray-100 rounded w-1/2 mb-1"></div>
+                    <div class="h-3 bg-gray-50 rounded w-1/3"></div>
+                </div>
+                <!-- Deal Item -->
+                <div class="flex flex-col cursor-pointer group">
+                    <div class="aspect-square bg-gray-100 rounded-lg mb-2 relative placeholder">
+                        <span class="text-xs text-gray-400">Img</span>
+                    </div>
+                    <div class="h-4 bg-gray-100 rounded w-1/2 mb-1"></div>
+                    <div class="h-3 bg-gray-50 rounded w-1/3"></div>
+                </div>
+                <!-- Deal Item -->
+                <div class="flex flex-col cursor-pointer group">
+                    <div class="aspect-square bg-gray-100 rounded-lg mb-2 relative placeholder">
+                        <span class="text-xs text-gray-400">Img</span>
+                    </div>
+                    <div class="h-4 bg-gray-100 rounded w-1/2 mb-1"></div>
+                    <div class="h-3 bg-gray-50 rounded w-1/3"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CATEGORIES SECTION -->
+        <section class="categories-wrapper">
+            <!-- LEFT SIDEBAR -->
+            <div class="categories-left">
+                <div class="category-item active">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Categories for you</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Apparel & Accessories</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Consumer Electronics</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Sports & Entertainment</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Beauty</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Luggage, Bags & Cases</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Home & Garden</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Sportswear & Outdoor</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Jewelry, Eyewear & Watches</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Shoes & Accessories</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Packaging & Printing</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Parents, Kids & Toys</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Personal Care & Home Care</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Health & Medical</div>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon"></div>
+                    <div class="category-title">Gifts & Crafts</div>
+                </div>
+            </div>
+
+            <!-- RIGHT CONTENT -->
+            <div class="categories-right">
+                <div class="section-title">Categories for you</div>
+
+                <div class="category-grid">
+                    <div class="category-card">
+                        <div class="category-image">🚗</div>
+                        <div class="category-name">Electric Cars</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🏍️</div>
+                        <div class="category-name">Electric Motorcycles</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">💻</div>
+                        <div class="category-name">Laptops</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🚁</div>
+                        <div class="category-name">Drones</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">⌚</div>
+                        <div class="category-name">Smart Watches</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">👰</div>
+                        <div class="category-name">Wedding Dresses</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🛴</div>
+                        <div class="category-name">Electric Scooters</div>
+                    </div>
+
+                    <div class="category-card">
+                        <div class="category-image">🚙</div>
+                        <div class="category-name">Used Cars</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🚘</div>
+                        <div class="category-name">Cars</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🏍️</div>
+                        <div class="category-name">Motorcycle</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🔧</div>
+                        <div class="category-name">Car Accessories</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">👗</div>
+                        <div class="category-name">Women's Sets</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">👠</div>
+                        <div class="category-name">Evening Dresses</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🛏️</div>
+                        <div class="category-name">Bedroom Furniture</div>
+                    </div>
+                </div>
+
+                <!-- SUBSECTION 1 -->
+                <div class="subsection">
+                    <div class="subsection-header">
+                        <div class="section-title">Apparel & Accessories</div>
+                        <a href="#">Browse featured selections →</a>
+                    </div>
+
+                    <div class="category-grid">
+                        <div class="category-card">
+                            <div class="category-image">🎖️</div>
+                            <div class="category-name">Camouflage</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🎭</div>
+                            <div class="category-name">Carnival Costume</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🏒</div>
+                            <div class="category-name">Ice Hockey</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🦺</div>
+                            <div class="category-name">Hunting Vest</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🧵</div>
+                            <div class="category-name">Garment Accessories</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">✂️</div>
+                            <div class="category-name">Trimmings</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">👔</div>
+                            <div class="category-name">Polyester Ties</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBSECTION 2 -->
+                <div class="subsection">
+                    <div class="subsection-header">
+                        <div class="section-title">Consumer Electronics</div>
+                        <a href="#">Browse featured selections →</a>
+                    </div>
+
+                    <div class="category-grid">
+                        <div class="category-card">
+                            <div class="category-image">📱</div>
+                            <div class="category-name">Smartphones</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🎧</div>
+                            <div class="category-name">Headphones</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">📷</div>
+                            <div class="category-name">Cameras</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🖥️</div>
+                            <div class="category-name">Monitors</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">⌨️</div>
+                            <div class="category-name">Keyboards</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🖱️</div>
+                            <div class="category-name">Gaming Mouse</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🔋</div>
+                            <div class="category-name">Power Banks</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUBSECTION 3 -->
+                <div class="subsection">
+                    <div class="subsection-header">
+                        <div class="section-title">Home & Garden</div>
+                        <a href="#">Browse featured selections →</a>
+                    </div>
+
+                    <div class="category-grid">
+                        <div class="category-card">
+                            <div class="category-image">🪴</div>
+                            <div class="category-name">Indoor Plants</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🕯️</div>
+                            <div class="category-name">Candles</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🖼️</div>
+                            <div class="category-name">Wall Art</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🛋️</div>
+                            <div class="category-name">Sofas</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">💡</div>
+                            <div class="category-name">LED Lights</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🧺</div>
+                            <div class="category-name">Storage Baskets</div>
+                        </div>
+                        <div class="category-card">
+                            <div class="category-image">🪞</div>
+                            <div class="category-name">Mirrors</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Category sidebar interaction
+        document.querySelectorAll('.category-item').forEach(item => {
+            item.addEventListener('click', function () {
+                document.querySelectorAll('.category-item').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Category card click handlers
+        document.querySelectorAll('.category-card').forEach(card => {
+            card.addEventListener('click', function () {
+                console.log('Category clicked:', this.querySelector('.category-name').textContent);
+            });
+        });
+    </script>
+
+    <!-- GOOGLE SIGN-IN MOCKUP (Top Right) -->
+    <div id="google-signin-mock"
+        class="fixed top-4 right-4 z-[70] bg-[#202124] text-white rounded-lg shadow-2xl w-[380px] border border-gray-600 font-sans hidden md:block animate-fade-in origin-top-right">
+        <div class="px-4 py-3 flex items-center justify-between border-b border-gray-700/50">
+            <div class="flex items-center gap-2">
+                <div class="w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                    <!-- Simplified Google Logo SVG -->
+                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none">
+                        <path
+                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                            fill="#4285F4" />
+                        <path
+                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                            fill="#34A853" />
+                        <path
+                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z"
+                            fill="#FBBC05" />
+                        <path
+                            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                            fill="#EA4335" />
+                    </svg>
+                </div>
+                <span class="text-xs font-medium text-gray-200">Sign in to alibaba.com with google.com</span>
+            </div>
+            <button onclick="document.getElementById('google-signin-mock').style.display='none'"
+                class="text-gray-400 hover:text-white">&times;</button>
+        </div>
+        <div class="p-4">
+            <div class="flex items-center gap-3 mb-4">
+                <div
+                    class="w-10 h-10 rounded-full bg-green-600 text-white flex items-center justify-center font-medium text-lg">
+                    G</div>
+                <div class="text-sm">
+                    <p class="font-medium text-white">GITUS HUB</p>
+                    <p class="text-gray-400 text-xs">gitushub@gmail.com</p>
+                </div>
+            </div>
+            <button
+                class="w-full bg-[#8ab4f8] hover:bg-[#8ab4f8]/90 text-[#202124] font-medium py-1.5 rounded-full text-sm transition-colors text-[13px]">
+                Continue as GITUS
+            </button>
+        </div>
+    </div>
+
+
+    <!-- FREE SHIPPING POPUP OVERLAY -->
+    <div id="promo-popup"
+        class="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="relative w-[480px] max-w-full">
+
+            <button onclick="document.getElementById('promo-popup').style.display='none'"
+                class="absolute -bottom-14 left-1/2 transform -translate-x-1/2 w-10 h-10 rounded-full border border-gray-400/50 bg-black/30 backdrop-blur text-white flex items-center justify-center hover:bg-white/10 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+
+            <!-- Main Modal Content -->
+            <div class="bg-white rounded-[20px] overflow-hidden shadow-2xl relative">
+
+                <!-- Truck Graphic (CSS) -->
+                <div class="absolute top-4 right-6 z-10 pointer-events-none drop-shadow-md transform rotate-1 scale-90">
+                    <div class="relative w-16 h-10">
+                        <div class="absolute right-0 bottom-0 w-12 h-8 bg-[#FF6A00] rounded-sm border border-white">
+                        </div>
+                        <div class="absolute right-12 bottom-0 w-4 h-6 bg-[#FF6A00] rounded-sm border border-white">
+                        </div>
+                        <div class="absolute right-1 bottom-1 w-2 h-2 bg-black rounded-full border border-white"></div>
+                        <div class="absolute right-10 bottom-1 w-2 h-2 bg-black rounded-full border border-white"></div>
+                        <div class="absolute right-13 bottom-3 w-3 h-2 bg-white/80"></div>
+                    </div>
+                </div>
+
+                <!-- Header (Red) -->
+                <div class="bg-[#FF0000] p-6 text-white relative">
+                    <h2 class="text-[26px] font-bold leading-tight mb-3">Don't miss out<br>FREE shipping</h2>
+
+                    <!-- Timer -->
+                    <div class="flex items-center gap-2 text-sm font-medium mt-1">
+                        <span class="text-white/90 text-xs">Ends in</span>
+                        <div class="flex gap-1 text-[#FF0000] font-bold text-sm">
+                            <span class="bg-white px-1.5 py-0.5 rounded-[4px] min-w-[26px] text-center">14</span>
+                            <span class="text-white bg-transparent px-0 py-0.5">:</span>
+                            <span class="bg-white px-1.5 py-0.5 rounded-[4px] min-w-[26px] text-center">03</span>
+                            <span class="text-white bg-transparent px-0 py-0.5">:</span>
+                            <span class="bg-white px-1.5 py-0.5 rounded-[4px] min-w-[26px] text-center">49</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Grid -->
+                <div class="p-4 grid grid-cols-3 gap-3 bg-white">
+                    <!-- Item 1 -->
+                    <div class="flex flex-col">
+                        <div class="aspect-square bg-gray-100 rounded-lg mb-2 placeholder mx-auto w-full">Item</div>
+                        <p class="text-[13px] font-bold text-gray-900 leading-tight">KES 241</p>
+                        <span
+                            class="text-[9px] font-bold text-[#FF0000] bg-[#FFF0E6] border border-[#FFD6C2] px-1 rounded-[2px] self-start mt-1 inline-block tracking-tight">FREE
+                            shipping</span>
+                    </div>
+                    <!-- Item 2 -->
+                    <div class="flex flex-col">
+                        <div class="aspect-square bg-gray-100 rounded-lg mb-2 placeholder mx-auto w-full">Item</div>
+                        <p class="text-[13px] font-bold text-gray-900 leading-tight">KES 6,670</p>
+                    </div>
+                    <!-- Item 3 -->
+                    <div class="flex flex-col">
+                        <div class="aspect-square bg-gray-100 rounded-lg mb-2 placeholder mx-auto w-full">Item</div>
+                        <p class="text-[13px] font-bold text-gray-900 leading-tight">KES 1,232</p>
+                        <span
+                            class="text-[9px] font-bold text-[#FF0000] bg-[#FFF0E6] border border-[#FFD6C2] px-1 rounded-[2px] self-start mt-1 inline-block tracking-tight">FREE
+                            shipping</span>
+                    </div>
+                </div>
+
+                <!-- Footer Action -->
+                <div class="p-4 pt-1 pb-5">
+                    <button
+                        class="w-full bg-[#111111] text-white font-bold h-11 rounded-full hover:bg-black transition-transform active:scale-[0.99] text-[15px] shadow-lg">
+                        Source now
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="bg-white mt-12 border-t">
+        <div class="ali-container py-10 text-xs text-gray-500">
+            © 1999-2026 Alibaba.com · Layout clone only
+        </div>
+    </footer>
+
+</body>
+
+</html>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronRight, Globe, RefreshCw } from "lucide-react";
+import { ChevronRight, Globe, RefreshCw, Package } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useSiteContent } from "@/hooks/useSiteContent";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -80,7 +80,7 @@ export const GlobalIndustryHubs = () => {
 
         acc[product.country].products.push({
           id: product.id,
-          image: product.image || "https://via.placeholder.com/300",
+          image: product.image || "",
           title: product.title,
           price: priceValue,
           product_id: product.product_id
@@ -122,7 +122,7 @@ export const GlobalIndustryHubs = () => {
         if (grouped[countryName].products.length < 6) {
           grouped[countryName].products.push({
             id: product.id,
-            image: product.images?.[0] || "https://via.placeholder.com/300",
+            image: product.images?.[0] || "",
             title: product.title,
             price: product.price_min || 0,
             product_id: product.id
@@ -156,39 +156,40 @@ export const GlobalIndustryHubs = () => {
   if (countryHubs.length === 0) return null;
 
   return (
-    <section className="py-8 md:py-12 bg-gradient-to-b from-muted/30 to-background">
+    <section className="py-8 md:py-12 bg-[#f4f4f4]">
       <div className="container mx-auto px-4">
-        <div className="section-header mb-6">
+        <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-2">
-            <Globe className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-            <h2 className="section-title text-lg md:text-xl lg:text-2xl">
+            <h2 className="text-xl md:text-2xl font-bold text-[#333]">
               Global Industry Hubs
             </h2>
           </div>
 
           <button
             onClick={() => navigate("/industry-hubs")}
-            className="text-sm md:text-base text-primary font-medium flex items-center gap-1 hover:underline"
+            className="text-sm font-medium text-[#666] hover:text-[#ff6a00] flex items-center gap-1 transition-colors"
           >
             Explore all <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide pb-4">
+        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
           {countryHubs.map((hub) => (
             <button
               key={hub.country}
               onClick={() =>
                 setSelectedCountry(selectedCountry === hub.country ? null : hub.country)
               }
-              className={`shrink-0 flex flex-col items-center gap-2 p-3 md:p-4 rounded-xl transition-all duration-200 min-w-[80px] md:min-w-[100px] lg:min-w-[120px] ${
-                selectedCountry === hub.country
-                  ? "bg-primary text-primary-foreground shadow-xl border border-primary"
-                  : "bg-card hover:bg-muted border border-border hover:border-primary/50"
-              }`}
+              className={`shrink-0 flex flex-col items-center justify-center gap-3 p-4 rounded-lg border transition-all duration-300 w-[140px] md:w-[160px] h-[120px] md:h-[140px] bg-white
+                ${selectedCountry === hub.country
+                  ? "border-[#ff6a00] shadow-md ring-1 ring-[#ff6a00]"
+                  : "border-gray-200 hover:border-[#ff6a00] hover:shadow-lg"
+                }`}
             >
-              <span className="text-3xl md:text-4xl lg:text-5xl">{hub.flag}</span>
-              <span className="text-xs md:text-sm font-medium text-center line-clamp-1">
+              <div className="text-5xl md:text-6xl drop-shadow-sm transition-transform duration-300 group-hover:scale-110">
+                {hub.flag}
+              </div>
+              <span className={`text-sm font-medium ${selectedCountry === hub.country ? "text-[#ff6a00]" : "text-[#333]"}`}>
                 {hub.country}
               </span>
             </button>
@@ -196,51 +197,57 @@ export const GlobalIndustryHubs = () => {
         </div>
 
         {selectedCountry && (
-          <div className="mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="flex justify-end mb-3">
+          <div className="mt-8 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex justify-end mb-4">
               <button
                 onClick={() => setSelectedCountry(null)}
-                className="text-xs text-muted-foreground hover:text-foreground"
+                className="text-sm text-[#666] hover:text-[#333] flex items-center gap-1"
               >
-                Clear
+                Close view <ChevronRight className="w-4 h-4 rotate-180" />
               </button>
             </div>
 
             {countryHubs
               .filter((hub) => hub.country === selectedCountry)
               .map((hub) => (
-                <div key={hub.country} className="bg-card rounded-xl p-4 md:p-6 border border-border">
-                  <div className="flex items-center gap-3 mb-4 md:mb-6">
-                    <span className="text-4xl md:text-5xl lg:text-6xl">{hub.flag}</span>
+                <div key={hub.country} className="bg-white rounded-xl p-6 md:p-8 border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-4 mb-8 pb-6 border-b border-gray-100">
+                    <span className="text-6xl md:text-7xl">{hub.flag}</span>
                     <div>
-                      <h3 className="font-bold text-lg md:text-xl lg:text-2xl">{hub.country}</h3>
-                      <p className="text-sm md:text-base text-muted-foreground">
+                      <h3 className="font-bold text-2xl md:text-3xl text-[#333]">{hub.country}</h3>
+                      <p className="text-base text-[#666] mt-1">
                         {hub.specialty}
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-6">
                     {hub.products.map((product) => (
-                      <Link 
-                        key={product.id} 
-                        to={`/product-insights/${product.id}`} 
+                      <Link
+                        key={product.id}
+                        to={`/product-insights/${product.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group cursor-pointer"
+                        className="group block"
                       >
-                        <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-2">
-                          <img
-                            src={product.image}
-                            alt={product.title}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                            loading="lazy"
-                          />
+                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-50 mb-3 border border-gray-100 group-hover:border-[#ff6a00] transition-colors relative">
+                          {product.image ? (
+                            <img
+                              src={product.image}
+                              alt={product.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-300">
+                              <Package size={28} />
+                            </div>
+                          )}
                         </div>
-                        <p className="text-xs md:text-sm font-medium line-clamp-1">
+                        <p className="text-sm font-medium text-[#333] line-clamp-2 mb-1 group-hover:text-[#ff6a00] transition-colors">
                           {product.title}
                         </p>
-                        <p className="text-xs md:text-sm text-primary font-semibold">
+                        <p className="text-sm font-bold text-[#333]">
                           {formatPrice(product.price)}
                         </p>
                       </Link>
@@ -252,37 +259,9 @@ export const GlobalIndustryHubs = () => {
         )}
 
         {!selectedCountry && (
-          <div className="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
-            {countryHubs.slice(0, 5).map((hub) => (
-              <button
-                key={hub.country}
-                onClick={() => setSelectedCountry(hub.country)}
-                className="bg-card rounded-xl p-4 md:p-5 border border-border hover:border-primary/50 transition-all text-left group"
-              >
-                <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-                  <span className="text-2xl md:text-3xl lg:text-4xl">{hub.flag}</span>
-                  <div className="min-w-0">
-                    <h4 className="font-semibold text-sm md:text-base truncate">{hub.country}</h4>
-                    <p className="text-xs md:text-sm text-muted-foreground line-clamp-1">
-                      {hub.specialty}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-1 md:gap-2">
-                  {hub.products.slice(0, 3).map((product, idx) => (
-                    <div key={idx} className="w-10 h-10 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded overflow-hidden">
-                      <img
-                        src={product.image}
-                        alt={product.title}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                        loading="lazy"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </button>
-            ))}
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Show expanded details for first few countries as preview if needed, or keeping it clean with just the flags above */}
+            {/* Currently hiding this section to keep it clean as per "professional" design, allowing user to click flags to explore */}
           </div>
         )}
       </div>

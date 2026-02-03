@@ -173,65 +173,67 @@ export const FeaturedCategories = () => {
   };
 
   return (
-    <section className="py-6 px-4">
-      <div className="section-header">
-        <h2 className="section-title">
-          {content.featuredCategories?.title || "Browse Categories"}
-        </h2>
+    <section className="py-8 md:py-12 bg-white">
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-xl md:text-2xl font-bold text-[#333]">
+            {content.featuredCategories?.title || "Browse Categories"}
+          </h2>
 
-        <button
-          onClick={() => setShowAll(!showAll)}
-          className="text-sm text-primary font-medium flex items-center gap-1 hover:underline"
-        >
-          {showAll ? "Show less" : "View all"} <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="text-sm font-medium text-[#666] hover:text-[#ff6a00] flex items-center gap-1 transition-colors"
+          >
+            {showAll ? "Show less" : "View all"} <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
 
-      <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 md:gap-4">
-        {displayedCategories.map((category) => {
-          const IconComponent = iconMap[category.name] || Package;
-          const colorClass = colorMap[category.name] || "bg-primary/10 text-primary";
+        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-4 md:gap-6">
+          {displayedCategories.map((category) => {
+            const IconComponent = iconMap[category.name] || Package;
 
-          return (
-            <button
-              key={category.id}
-              onClick={() => handleCategoryClick(category)}
-              className="flex flex-col items-center gap-1.5 md:gap-2 group"
-            >
-              <div
-                className={`w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center ${colorClass} transition-transform group-hover:scale-110`}
+            return (
+              <button
+                key={category.id}
+                onClick={() => handleCategoryClick(category)}
+                className="flex flex-col items-center gap-3 group w-full"
               >
-                {category.image_url ? (
-                  <img
-                    src={category.image_url}
-                    alt={category.name}
-                    className="w-full h-full object-cover rounded-xl"
-                  />
-                ) : (
-                  <IconComponent className="w-5 h-5 md:w-6 md:h-6" />
-                )}
-              </div>
+                <div
+                  className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-[#f4f4f4] flex items-center justify-center 
+                             group-hover:bg-[#ff6a00] group-hover:text-white transition-all duration-300 ease-out"
+                >
+                  {category.image_url ? (
+                    <img
+                      src={category.image_url}
+                      alt={category.name}
+                      className="w-full h-full object-cover rounded-full"
+                    />
+                  ) : (
+                    <IconComponent className="w-6 h-6 md:w-8 md:h-8 text-[#666] group-hover:text-white transition-colors" />
+                  )}
+                </div>
 
-              <span className="text-[10px] md:text-xs font-medium text-foreground text-center line-clamp-2 leading-tight">
-                {category.name}
-              </span>
-            </button>
-          );
-        })}
+                <span className="text-xs md:text-sm font-medium text-[#333] text-center line-clamp-2 leading-tight group-hover:text-[#ff6a00] transition-colors h-8 md:h-10 flex items-center">
+                  {category.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Category Products Modal (Desktop only) */}
+        {selectedCategory && (
+          <CategoryProductsModal
+            isOpen={isModalOpen}
+            onClose={() => {
+              setIsModalOpen(false);
+              setSelectedCategory(null);
+            }}
+            categoryId={selectedCategory.id}
+            categoryName={selectedCategory.name}
+          />
+        )}
       </div>
-
-      {/* Category Products Modal (Desktop only) */}
-      {selectedCategory && (
-        <CategoryProductsModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setSelectedCategory(null);
-          }}
-          categoryId={selectedCategory.id}
-          categoryName={selectedCategory.name}
-        />
-      )}
     </section>
   );
 };

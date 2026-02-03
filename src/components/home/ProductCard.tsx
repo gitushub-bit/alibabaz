@@ -50,8 +50,8 @@ export const ProductCard = ({
     const fetchReviews = async () => {
       if (!slug) return;
 
-      const { data, error } = await supabase
-        .from("reviews")
+      const { data, error } = await (supabase
+        .from("reviews") as any)
         .select("rating")
         .eq("product_id", slug)
         .order("created_at", { ascending: false });
@@ -59,10 +59,13 @@ export const ProductCard = ({
       if (error) {
         console.error("Error fetching reviews:", error);
       } else {
-        setReviews(data || []);
-        if (data && data.length > 0) {
-          const totalRating = data.reduce((acc: number, review: any) => acc + review.rating, 0);
-          setAverageRating(totalRating / data.length);
+        // Cast data to avoid deep type instantiation issues with Supabase types
+        const reviewsData = data as { rating: number }[];
+
+        setReviews(reviewsData || []);
+        if (reviewsData && reviewsData.length > 0) {
+          const totalRating = reviewsData.reduce((acc, review) => acc + review.rating, 0);
+          setAverageRating(totalRating / reviewsData.length);
         }
       }
     };
@@ -82,11 +85,11 @@ export const ProductCard = ({
   const CardContent = () => (
     <div className="flex flex-col h-full">
       {/* IMAGE */}
-      <div className="relative aspect-square overflow-hidden rounded-xl bg-muted">
+      <div className="relative aspect-square overflow-hidden bg-muted">
         <img
           src={image}
           alt={title}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
         />
 
@@ -111,7 +114,7 @@ export const ProductCard = ({
 
           <div className="flex flex-col mt-2">
             <div className="flex items-baseline gap-2">
-              <span className="text-lg font-bold text-primary">
+              <span className="text-lg font-bold text-alibaba-orange">
                 {formatPriceOnly(priceNum)}
               </span>
               {originalPriceNum && (
@@ -179,7 +182,7 @@ export const ProductCard = ({
   );
 
   const cardClass =
-    "product-card group cursor-pointer rounded-xl shadow-card hover:shadow-card-hover transition-all duration-300 bg-card h-full";
+    "product-card group cursor-pointer rounded-lg border border-alibaba-border hover:border-alibaba-orange transition-all duration-200 bg-white h-full overflow-hidden";
 
   const linkProps = openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {};
 

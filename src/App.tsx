@@ -24,8 +24,10 @@ import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
 import Cart from "./pages/Cart";
 import CartCheckout from "./telegram/CartCheckout";
+
 import OrderTracking from "./pages/OrderTracking";
 import Profile from "./pages/Profile";
+import AddressBook from "./pages/AddressBook";
 
 // Buyer Dashboard
 import BuyerDashboard from "./pages/dashboard/BuyerDashboard";
@@ -82,7 +84,7 @@ function App() {
                 <Toaster />
                 <Sonner />
 
-                <BrowserRouter>
+                <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                   <Routes>
                     <Route path="/" element={<Index />} />
                     <Route path="/auth" element={<Auth />} />
@@ -94,7 +96,9 @@ function App() {
                     <Route path="/messages/:conversationId" element={<Messages />} />
                     <Route path="/cart" element={<Cart />} />
                     <Route path="/cart/checkout" element={<CartCheckout />} />
+
                     <Route path="/orders" element={<OrderTracking />} />
+                    <Route path="/address-book" element={<AddressBook />} />
                     <Route path="/profile" element={<Profile />} />
 
                     {/* Buyer Dashboard */}

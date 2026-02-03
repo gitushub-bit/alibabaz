@@ -137,10 +137,10 @@ export const Footer = () => {
     <div className="container mx-auto px-4 py-12">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
         {settings.sections.map(section => <div key={section.id}>
-          <h3 className="font-semibold mb-4">{section.title}</h3>
-          <ul className="space-y-2">
+          <h3 className="font-bold mb-3 text-sm text-foreground">{section.title}</h3>
+          <ul className="space-y-1.5">
             {section.links.map(l => <li key={l.label}>
-              <Link to={l.href} className="text-sm text-muted-foreground hover:text-foreground">
+              <Link to={l.href} className="text-xs text-alibaba-textSecondary hover:text-alibaba-orange hover:underline transition-colors">
                 {l.label}
               </Link>
             </li>)}

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alibaba Ticker Banner Clone</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Inter, SF Pro Text, Roboto, Helvetica Neue, Helvetica, Tahoma, Arial, sans-serif;
+            background: #f4f4f4;
+        }
+
+        /* Ticker Banner */
+        .ticker-banner {
+            width: 100%;
+            background: linear-gradient(90deg, #FFE4CC 0%, #FFD7B5 50%, #FFC999 100%);
+            overflow: hidden;
+            position: relative;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Subtle pattern overlay */
+        .ticker-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .ticker-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 0 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .ticker-text {
+            color: #1a1a1a;
+            font-size: 16px;
+            font-weight: 500;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            line-height: 1.4;
+        }
+
+        .ai-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .fire-emoji {
+            font-size: 20px;
+            display: inline-block;
+            animation: flicker 1.5s infinite ease-in-out;
+        }
+
+        .cta-button {
+            background: #FF6A00;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 24px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px rgba(255, 106, 0, 0.3);
+            white-space: nowrap;
+            font-family: inherit;
+        }
+
+        .cta-button:hover {
+            background: #FF7A1A;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255, 106, 0, 0.4);
+        }
+
+        .cta-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(255, 106, 0, 0.3);
+        }
+
+        .arrow {
+            font-size: 18px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-block;
+        }
+
+        .cta-button:hover .arrow {
+            transform: translateX(3px);
+        }
+
+        @keyframes flicker {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.8;
+                transform: scale(1.1);
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .ticker-banner {
+                height: 56px;
+                padding: 0 16px;
+            }
+
+            .ticker-content {
+                flex-direction: column;
+                gap: 8px;
+                padding: 8px 16px;
+            }
+
+            .ticker-text {
+                font-size: 14px;
+                text-align: center;
+            }
+
+            .cta-button {
+                padding: 8px 20px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .ticker-text {
+                font-size: 13px;
+            }
+
+            .fire-emoji {
+                font-size: 18px;
+            }
+        }
+
+        /* Demo container */
+        .demo-container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .demo-section {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .demo-section h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .demo-section p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .code-block {
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Ticker Banner -->
+    <div class="ticker-banner">
+        <div class="ticker-content">
+            <div class="ticker-text">
+                Research smarter · Design easier · Source better — All-in-one with
+                <span class="ai-badge">
+                    AI Mode
+                    <span class="fire-emoji">🔥</span>
+                </span>
+            </div>
+            <button class="cta-button" onclick="handleCTAClick()">
+                Try it now
+                <span class="arrow">→</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Demo Content -->
+    <div class="demo-container">
+        <div class="demo-section">
+            <h2>🎯 Alibaba Ticker Banner Clone</h2>
+            <p><strong>Features:</strong></p>
+            <ul style="margin-left: 20px; color: #666; line-height: 1.8;">
+                <li>Warm gradient background (peach/orange tones)</li>
+                <li>Centered layout with responsive design</li>
+                <li>Animated fire emoji with flicker effect</li>
+                <li>Interactive CTA button with hover animations</li>
+                <li>Subtle pattern overlay for depth</li>
+                <li>Mobile-optimized layout</li>
+            </ul>
+        </div>
+
+        <div class="demo-section">
+            <h2>🎨 Customization</h2>
+            <p><strong>Change the gradient colors:</strong></p>
+            <div class="code-block">
+                .ticker-banner {
+                background: linear-gradient(90deg, #YOUR_COLOR_1, #YOUR_COLOR_2);
+                }
+            </div>
+
+            <p style="margin-top: 20px;"><strong>Change the button color:</strong></p>
+            <div class="code-block">
+                .cta-button {
+                background: #YOUR_BUTTON_COLOR;
+                }
+            </div>
+
+            <p style="margin-top: 20px;"><strong>Update the message:</strong></p>
+            <div class="code-block">
+                &lt;div class="ticker-text"&gt;
+                Your custom message here
+                &lt;/div&gt;
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>📱 Responsive Behavior</h2>
+            <p>The banner automatically adapts to different screen sizes:</p>
+            <ul style="margin-left: 20px; color: #666; line-height: 1.8;">
+                <li><strong>Desktop:</strong> Horizontal layout with text and button side-by-side</li>
+                <li><strong>Tablet:</strong> Slightly reduced padding and font sizes</li>
+                <li><strong>Mobile:</strong> Stacked vertical layout for better readability</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function handleCTAClick() {
+            // Replace with your actual URL
+            console.log('CTA clicked! Redirecting to AI Mode...');
+            window.open('https://aimode.alibaba.com/', '_blank');
+        }
+
+        // Optional: Add keyboard accessibility
+        document.querySelector('.cta-button').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleCTAClick();
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -82,110 +82,80 @@ export const HeroBanner = () => {
   };
   if (!content.heroBanner?.enabled) return null;
   return <section className="bg-background py-4 md:py-6 border-primary-foreground">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+    <div className="max-w-6xl mx-auto px-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-          {/* Floating Category Button (Tablet + Desktop) */}
-          <div className="hidden md:flex">
-            <button onClick={() => setShowCategories(true)} className="fixed left-4 bottom-6 z-50 flex items-center gap-2 px-4 py-2 rounded-full bg-white shadow-lg border border-border hover:bg-muted transition">
-              <Menu className="w-4 h-4" />
-              <span className="text-sm font-medium">All Categories</span>
+        {/* Center: Frequently Searched / Promo */}
+        <div className="lg:col-span-9">
+          <div className="bg-muted/30 rounded-xl p-4 mb-4 border border-alibaba-border/50">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <span className="text-lg font-bold text-alibaba-textPrimary">Welcome to Alibaba.com</span>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <button onClick={() => navigate("/products")} className="flex items-center gap-1 hover:text-alibaba-orange transition-colors">
+                  <Target className="h-4 w-4" />
+                  Browse Products
+                </button>
+                <span className="text-muted-foreground hidden md:inline">|</span>
+                <button onClick={() => navigate("/products?category=top-selling")} className="flex items-center gap-1 hover:text-alibaba-orange transition-colors">
+                  <Sparkles className="h-4 w-4" />
+                  Top Selling
+                </button>
+                <span className="text-muted-foreground hidden md:inline">|</span>
+                <button onClick={() => navigate("/products?category=new-arrivals")} className="flex items-center gap-1 hover:text-alibaba-orange transition-colors">
+                  <Zap className="h-4 w-4" />
+                  New Arrivals
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="relative">
+            <button className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-background shadow-lg border border-border hover:bg-muted" onClick={() => scrollCarousel("left")}>
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div ref={carouselRef} className="flex gap-4 overflow-x-auto scrollbar-hide py-2 px-2 md:px-4">
+              {frequentlySearched.map((item, index) => <div key={index} onClick={() => navigate(`/products?category=${item.slug}`)} className="shrink-0 w-[220px] sm:w-[240px] md:w-[260px] bg-white rounded-lg border border-alibaba-border overflow-hidden cursor-pointer hover:border-alibaba-orange transition-colors shadow-sm">
+                <div className="p-3">
+                  <p className="text-xs text-muted-foreground">Trending</p>
+                  <p className="font-semibold">{item.title}</p>
+                </div>
+                <div className="aspect-[4/3] bg-muted">
+                  <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                </div>
+              </div>)}
+            </div>
+
+            <button className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-background shadow-lg border border-border hover:bg-muted" onClick={() => scrollCarousel("right")}>
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
+        </div>
 
-          {/* Category Modal */}
-          {showCategories && <div className="fixed inset-0 z-50 flex items-center justify-center">
-              <div className="absolute inset-0 bg-black/40" onClick={() => setShowCategories(false)} />
-              <div className="relative w-[90%] max-w-md bg-background rounded-xl shadow-lg border border-border">
-                <div className="flex items-center justify-between p-4 border-b border-border">
-                  <h3 className="font-bold">All Categories</h3>
-                  <button onClick={() => setShowCategories(false)} className="p-2 rounded-full hover:bg-muted">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="p-4 space-y-2">
-                  {categories.map(cat => <button key={cat.id} onClick={() => {
-                setShowCategories(false);
-                handleCategoryClick(cat.slug);
-              }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted transition">
-                      {cat.name}
-                    </button>)}
-                </div>
-              </div>
-            </div>}
-
-          {/* Center: Frequently Searched */}
-          <div className="lg:col-span-6">
-            <div className="bg-muted/30 rounded-xl p-4 mb-4">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <span className="text-lg font-semibold">Welcome to Alibaba.com</span>
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <button onClick={() => navigate("/products")} className="flex items-center gap-1 hover:text-primary transition-colors">
-                    <Target className="h-4 w-4" />
-                    Browse Products
-                  </button>
-                  <span className="text-muted-foreground hidden md:inline">|</span>
-                  <button onClick={() => navigate("/products?category=top-selling")} className="flex items-center gap-1 hover:text-primary transition-colors">
-                    <Sparkles className="h-4 w-4" />
-                    Top Selling
-                  </button>
-                  <span className="text-muted-foreground hidden md:inline">|</span>
-                  <button onClick={() => navigate("/products?category=new-arrivals")} className="flex items-center gap-1 hover:text-primary transition-colors">
-                    <Zap className="h-4 w-4" />
-                    New Arrivals
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="relative">
-              <button className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-background shadow-lg border border-border hover:bg-muted" onClick={() => scrollCarousel("left")}>
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-
-              <div ref={carouselRef} className="flex gap-4 overflow-x-auto scrollbar-hide py-2 px-2 md:px-8">
-                {frequentlySearched.map((item, index) => <div key={index} onClick={() => navigate(`/products?category=${item.slug}`)} className="shrink-0 w-[220px] sm:w-[240px] md:w-[260px] bg-card rounded-xl border border-border overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
-                    <div className="p-3">
-                      <p className="text-xs text-muted-foreground">Trending</p>
-                      <p className="font-semibold">{item.title}</p>
-                    </div>
-                    <div className="aspect-[4/3] bg-muted">
-                      <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
-                    </div>
-                  </div>)}
-              </div>
-
-              <button className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-background shadow-lg border border-border hover:bg-muted" onClick={() => scrollCarousel("right")}>
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Right: Promo Carousel */}
-          <div className="lg:col-span-3">
-            <div className="relative h-full min-h-[220px] rounded-xl overflow-hidden">
-              {promoSlides.map((slide, index) => <div key={index} className={`absolute inset-0 transition-opacity duration-500 ${index === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-                  <div className="absolute inset-0 bg-cover bg-center" style={{
+        {/* Right: Promo Carousel */}
+        <div className="lg:col-span-3">
+          <div className="relative h-full min-h-[220px] rounded-xl overflow-hidden">
+            {promoSlides.map((slide, index) => <div key={index} className={`absolute inset-0 transition-opacity duration-500 ${index === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+              <div className="absolute inset-0 bg-cover bg-center" style={{
                 backgroundImage: `url(${slide.image})`
               }} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                    <h3 className="text-lg font-bold">{slide.title}</h3>
-                    <p className="text-sm text-white/80 mb-3">{slide.subtitle}</p>
-                    <Button size="sm" variant="secondary" className="rounded-full" onClick={() => navigate(`/products?category=${slide.categorySlug}`)}>
-                      {slide.cta}
-                    </Button>
-                  </div>
-                </div>)}
-
-              <div className="absolute bottom-2 right-4 flex gap-1.5">
-                {promoSlides.map((_, index) => <button key={index} onClick={() => setCurrentSlide(index)} className={`w-2 h-2 rounded-full transition-colors ${index === currentSlide ? "bg-white" : "bg-white/50"}`} />)}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                <h3 className="text-lg font-bold">{slide.title}</h3>
+                <p className="text-sm text-white/80 mb-3">{slide.subtitle}</p>
+                <Button size="sm" variant="secondary" className="rounded-full" onClick={() => navigate(`/products?category=${slide.categorySlug}`)}>
+                  {slide.cta}
+                </Button>
               </div>
+            </div>)}
+
+            <div className="absolute bottom-2 right-4 flex gap-1.5">
+              {promoSlides.map((_, index) => <button key={index} onClick={() => setCurrentSlide(index)} className={`w-2 h-2 rounded-full transition-colors ${index === currentSlide ? "bg-white" : "bg-white/50"}`} />)}
             </div>
           </div>
-
         </div>
+
       </div>
-    </section>;
+    </div>
+  </section>;
 };

@@ -172,7 +172,7 @@ export const TrendingProducts = () => {
             to={`/product-insights/featured/${product.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="product-card group snap-start min-w-[170px] md:min-w-auto"
+            className="product-card group snap-start min-w-[170px] md:min-w-[200px] bg-white border border-alibaba-border rounded-lg hover:border-alibaba-orange transition-colors duration-200 overflow-hidden"
           >
             <div className="relative aspect-square overflow-hidden">
               <img

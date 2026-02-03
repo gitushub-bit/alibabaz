@@ -13,6 +13,7 @@ interface AuthContextType {
   isAdmin: boolean;
   signUp: (email: string, password: string, role: AppRole, fullName: string, companyName?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -33,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
+
         // Defer role fetch with setTimeout to prevent deadlock
         if (session?.user) {
           setTimeout(() => {
@@ -78,14 +79,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (
-    email: string, 
-    password: string, 
-    role: AppRole, 
-    fullName: string, 
+    email: string,
+    password: string,
+    role: AppRole,
+    fullName: string,
     companyName?: string
   ) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -98,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     });
-    
+
     return { error: error as Error | null };
   };
 
@@ -107,7 +108,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password
     });
-    
+
+    return { error: error as Error | null };
+  };
+
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/`
+      }
+    });
+
     return { error: error as Error | null };
   };
 
@@ -119,16 +131,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      session, 
-      role, 
-      loading, 
+    <AuthContext.Provider value={{
+      user,
+      session,
+      role,
+      loading,
       isSuperAdmin,
       isAdmin,
-      signUp, 
-      signIn, 
-      signOut 
+      signUp,
+      signIn,
+      signInWithGoogle,
+      signOut
     }}>
       {children}
     </AuthContext.Provider>

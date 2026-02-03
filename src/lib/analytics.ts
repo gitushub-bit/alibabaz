@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from "@/integrations/supabase/client";
 
 export async function trackEvent(
   eventType: string,
@@ -12,7 +12,7 @@ export async function trackEvent(
   }
 
   try {
-    const { error } = await supabase.from('analytics_events').insert({
+    const { error } = await (supabase.from('analytics_events' as any) as any).insert({
       event_type: eventType,
       session_id,
       path: payload.path || window.location.pathname,

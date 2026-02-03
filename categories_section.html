@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Alibaba Categories Section - Clone</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Inter, SF Pro Text, Roboto, Helvetica Neue, Helvetica, Tahoma, Arial, PingFang SC, Microsoft YaHei;
+            background: #f4f4f4;
+            padding: 20px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* MAIN WRAPPER */
+        .categories-wrapper {
+            display: flex;
+            max-width: 1440px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+        }
+
+        /* LEFT SIDEBAR */
+        .categories-left {
+            width: 260px;
+            border-right: 1px solid #e8e8e8;
+            background: #fafafa;
+            max-height: 600px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        /* Custom scrollbar */
+        .categories-left::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .categories-left::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .categories-left::-webkit-scrollbar-thumb {
+            background: #d0d0d0;
+            border-radius: 3px;
+        }
+
+        .categories-left::-webkit-scrollbar-thumb:hover {
+            background: #b0b0b0;
+        }
+
+        .category-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .category-item:hover {
+            background: #f0f0f0;
+            border-left-color: #ff6a00;
+        }
+
+        .category-item.active {
+            background: #fff;
+            border-left-color: #ff6a00;
+            font-weight: 600;
+        }
+
+        .category-icon {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, #e0e0e0 0%, #d0d0d0 100%);
+            border-radius: 6px;
+            flex-shrink: 0;
+        }
+
+        .category-title {
+            font-size: 14px;
+            color: #222;
+            line-height: 1.4;
+        }
+
+        /* RIGHT CONTENT */
+        .categories-right {
+            flex: 1;
+            padding: 32px 40px;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+
+        .categories-right::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .categories-right::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .categories-right::-webkit-scrollbar-thumb {
+            background: #d0d0d0;
+            border-radius: 3px;
+        }
+
+        /* SECTION TITLE */
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #222;
+            margin-bottom: 24px;
+            line-height: 1.3;
+        }
+
+        /* GRID */
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 20px 16px;
+            margin-bottom: 48px;
+        }
+
+        .category-card {
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .category-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .category-card:hover .category-image {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        }
+
+        .category-image {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 10px;
+            background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+            border-radius: 50%;
+            transition: box-shadow 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+        }
+
+        .category-name {
+            font-size: 13px;
+            color: #333;
+            line-height: 1.4;
+            font-weight: 400;
+        }
+
+        /* SUBSECTION */
+        .subsection {
+            margin-top: 48px;
+            padding-top: 32px;
+            border-top: 1px solid #e8e8e8;
+        }
+
+        .subsection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .subsection-header a {
+            font-size: 14px;
+            color: #0073e6;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .subsection-header a:hover {
+            color: #005bb5;
+            text-decoration: underline;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 1200px) {
+            .category-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .category-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+
+            .categories-left {
+                width: 220px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .categories-wrapper {
+                flex-direction: column;
+            }
+
+            .categories-left {
+                width: 100%;
+                max-height: 200px;
+                border-right: none;
+                border-bottom: 1px solid #e8e8e8;
+            }
+
+            .category-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+
+            .categories-right {
+                padding: 24px 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .category-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 16px 12px;
+            }
+
+            .category-image {
+                width: 60px;
+                height: 60px;
+                font-size: 24px;
+            }
+
+            .category-name {
+                font-size: 12px;
+            }
+        }
+
+        /* DEMO BADGE */
+        .demo-badge {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ff6a00;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(255, 106, 0, 0.3);
+            z-index: 1000;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="demo-badge">🎯 Alibaba Clone</div>
+
+    <div class="categories-wrapper">
+
+        <!-- LEFT PANEL -->
+        <div class="categories-left">
+            <div class="category-item active">
+                <div class="category-icon"></div>
+                <div class="category-title">Categories for you</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Apparel & Accessories</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Consumer Electronics</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Sports & Entertainment</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Beauty</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Luggage, Bags & Cases</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Home & Garden</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Sportswear & Outdoor</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Jewelry, Eyewear & Watches</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Shoes & Accessories</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Packaging & Printing</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Parents, Kids & Toys</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Personal Care & Home Care</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Health & Medical</div>
+            </div>
+            <div class="category-item">
+                <div class="category-icon"></div>
+                <div class="category-title">Gifts & Crafts</div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="categories-right">
+
+            <div class="section-title">Categories for you</div>
+
+            <div class="category-grid">
+                <div class="category-card">
+                    <div class="category-image">🚗</div>
+                    <div class="category-name">Electric Cars</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">🏍️</div>
+                    <div class="category-name">Electric Motorcycles</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">💻</div>
+                    <div class="category-name">Laptops</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">🚁</div>
+                    <div class="category-name">Drones</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">⌚</div>
+                    <div class="category-name">Smart Watches</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">👰</div>
+                    <div class="category-name">Wedding Dresses</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">🛴</div>
+                    <div class="category-name">Electric Scooters</div>
+                </div>
+
+                <div class="category-card">
+                    <div class="category-image">🚙</div>
+                    <div class="category-name">Used Cars</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">🚘</div>
+                    <div class="category-name">Cars</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">🏍️</div>
+                    <div class="category-name">Motorcycle</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">🔧</div>
+                    <div class="category-name">Car Accessories</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">👗</div>
+                    <div class="category-name">Women's Sets</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">👠</div>
+                    <div class="category-name">Evening Dresses</div>
+                </div>
+                <div class="category-card">
+                    <div class="category-image">🛏️</div>
+                    <div class="category-name">Bedroom Furniture</div>
+                </div>
+            </div>
+
+            <!-- SUBSECTION 1 -->
+            <div class="subsection">
+                <div class="subsection-header">
+                    <div class="section-title">Apparel & Accessories</div>
+                    <a href="#">Browse featured selections →</a>
+                </div>
+
+                <div class="category-grid">
+                    <div class="category-card">
+                        <div class="category-image">🎖️</div>
+                        <div class="category-name">Camouflage</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🎭</div>
+                        <div class="category-name">Carnival Costume</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🏒</div>
+                        <div class="category-name">Ice Hockey</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🦺</div>
+                        <div class="category-name">Hunting Vest</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🧵</div>
+                        <div class="category-name">Garment Accessories</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">✂️</div>
+                        <div class="category-name">Trimmings</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">👔</div>
+                        <div class="category-name">Polyester Ties</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUBSECTION 2 -->
+            <div class="subsection">
+                <div class="subsection-header">
+                    <div class="section-title">Consumer Electronics</div>
+                    <a href="#">Browse featured selections →</a>
+                </div>
+
+                <div class="category-grid">
+                    <div class="category-card">
+                        <div class="category-image">📱</div>
+                        <div class="category-name">Smartphones</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🎧</div>
+                        <div class="category-name">Headphones</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">📷</div>
+                        <div class="category-name">Cameras</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🖥️</div>
+                        <div class="category-name">Monitors</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">⌨️</div>
+                        <div class="category-name">Keyboards</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🖱️</div>
+                        <div class="category-name">Gaming Mouse</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🔋</div>
+                        <div class="category-name">Power Banks</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUBSECTION 3 -->
+            <div class="subsection">
+                <div class="subsection-header">
+                    <div class="section-title">Home & Garden</div>
+                    <a href="#">Browse featured selections →</a>
+                </div>
+
+                <div class="category-grid">
+                    <div class="category-card">
+                        <div class="category-image">🪴</div>
+                        <div class="category-name">Indoor Plants</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🕯️</div>
+                        <div class="category-name">Candles</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🖼️</div>
+                        <div class="category-name">Wall Art</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🛋️</div>
+                        <div class="category-name">Sofas</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">💡</div>
+                        <div class="category-name">LED Lights</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🧺</div>
+                        <div class="category-name">Storage Baskets</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-image">🪞</div>
+                        <div class="category-name">Mirrors</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Add click handlers for category items
+        document.querySelectorAll('.category-item').forEach(item => {
+            item.addEventListener('click', function () {
+                // Remove active class from all items
+                document.querySelectorAll('.category-item').forEach(i => i.classList.remove('active'));
+                // Add active class to clicked item
+                this.classList.add('active');
+            });
+        });
+
+        // Add click handlers for category cards
+        document.querySelectorAll('.category-card').forEach(card => {
+            card.addEventListener('click', function () {
+                console.log('Category clicked:', this.querySelector('.category-name').textContent);
+            });
+        });
+    </script>
+
+</body>
+
+</html>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient'; // <-- make sure path is correct
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -19,8 +19,9 @@ export default function AdminAnalytics() {
 
   const fetchAnalytics = async () => {
     try {
-      const { data, error } = await supabase
-        .from('analytics_events')
+      const { data, error } = await (supabase
+        .from('analytics_events' as any) as any)
+
         .select('event_type, path, created_at')
         .order('created_at', { ascending: false })
         .limit(200);

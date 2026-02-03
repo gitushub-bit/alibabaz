@@ -13,12 +13,18 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
 import { useCurrency } from '@/hooks/useCurrency';
 import { toast } from '@/hooks/use-toast';
-import { 
-  Filter, SlidersHorizontal, Grid3X3, List, Shield, Star, 
+import {
+  Filter, SlidersHorizontal, Grid3X3, List, Shield, Star,
   Heart, MapPin, Clock, TrendingUp, ChevronRight, Search,
   Package, Truck, MessageCircle, ShoppingCart
 } from 'lucide-react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
+import { Footer } from "@/components/layout/Footer";
+import { TopDeals } from "@/components/home/TopDeals";
+import { GlobalIndustryHubs } from "@/components/home/GlobalIndustryHubs";
+import { RFQBanner } from "@/components/home/RFQBanner";
+import { FeaturedSuppliers } from "@/components/home/FeaturedSuppliers";
+import { TrendingProducts } from "@/components/home/TrendingProducts";
 
 interface Product {
   id: string;
@@ -73,7 +79,7 @@ export default function Products() {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
   const ITEMS_PER_PAGE = 20;
-  
+
   const query = searchParams.get('q') || '';
   const categorySlug = searchParams.get('category') || '';
   const sortBy = searchParams.get('sort') || 'best-match';
@@ -99,18 +105,18 @@ export default function Products() {
       .select('id, name, slug')
       .is('parent_id', null)
       .order('name');
-    
+
     if (data) setCategories(data);
   };
 
   const fetchFavorites = async () => {
     if (!user) return;
-    
+
     const { data } = await supabase
       .from('favorites')
       .select('product_id')
       .eq('user_id', user.id);
-    
+
     if (data) {
       setFavorites(new Set(data.map(f => f.product_id)));
     }
@@ -179,7 +185,7 @@ export default function Products() {
       if (productsData) {
         // Fetch supplier and profile info
         const sellerIds = [...new Set(productsData.map(p => p.seller_id))];
-        
+
         if (sellerIds.length > 0) {
           const [suppliersRes, profilesRes] = await Promise.all([
             supabase.from('suppliers').select('user_id, verified, year_established, response_rate').in('user_id', sellerIds),
@@ -260,7 +266,7 @@ export default function Products() {
     e.stopPropagation();
 
     const profile = profiles.get(product.seller_id);
-    
+
     addItem({
       product_id: product.id,
       title: product.title,
@@ -285,11 +291,10 @@ export default function Products() {
         <h3 className="font-semibold mb-3 text-foreground">Categories</h3>
         <div className="space-y-1 max-h-64 overflow-y-auto">
           <button
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-              !categorySlug 
-                ? 'bg-primary/10 text-primary font-medium' 
-                : 'hover:bg-muted text-muted-foreground'
-            }`}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!categorySlug
+              ? 'bg-primary/10 text-primary font-medium'
+              : 'hover:bg-muted text-muted-foreground'
+              }`}
             onClick={() => updateFilter('category', '')}
           >
             All Categories
@@ -297,11 +302,10 @@ export default function Products() {
           {categories.map((cat) => (
             <button
               key={cat.id}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                categorySlug === cat.slug 
-                  ? 'bg-primary/10 text-primary font-medium' 
-                  : 'hover:bg-muted text-muted-foreground'
-              }`}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${categorySlug === cat.slug
+                ? 'bg-primary/10 text-primary font-medium'
+                : 'hover:bg-muted text-muted-foreground'
+                }`}
               onClick={() => updateFilter('category', cat.slug)}
             >
               {cat.name}
@@ -309,7 +313,7 @@ export default function Products() {
           ))}
         </div>
       </div>
-      
+
       {/* Supplier Type */}
       <div>
         <h3 className="font-semibold mb-3 text-foreground">Supplier Features</h3>
@@ -367,18 +371,17 @@ export default function Products() {
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               loading="lazy"
             />
-            
+
             {/* Favorite Button */}
             <button
               onClick={(e) => toggleFavorite(product.id, e)}
               className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-white transition-colors z-10"
             >
-              <Heart 
-                className={`h-4 w-4 transition-colors ${
-                  favorites.has(product.id) 
-                    ? 'fill-red-500 text-red-500' 
-                    : 'text-muted-foreground'
-                }`} 
+              <Heart
+                className={`h-4 w-4 transition-colors ${favorites.has(product.id)
+                  ? 'fill-red-500 text-red-500'
+                  : 'text-muted-foreground'
+                  }`}
               />
             </button>
 
@@ -452,9 +455,9 @@ export default function Products() {
 
             {/* Quick Actions */}
             <div className="flex gap-2 pt-2">
-              <Button 
-                size="sm" 
-                variant="outline" 
+              <Button
+                size="sm"
+                variant="outline"
                 className="flex-1 h-8 text-xs"
                 onClick={(e) => handleAddToInquiry(product, e)}
               >
@@ -487,7 +490,7 @@ export default function Products() {
   return (
     <div className="min-h-screen bg-muted/30 pb-20 md:pb-0">
       <Header />
-      
+
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-4 overflow-x-auto whitespace-nowrap scrollbar-hide">
@@ -506,11 +509,10 @@ export default function Products() {
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-3 -mx-3 px-3 sm:hidden">
           <button
             onClick={() => updateFilter('category', '')}
-            className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              !categorySlug 
-                ? 'bg-primary text-primary-foreground' 
-                : 'bg-card border border-border text-muted-foreground'
-            }`}
+            className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${!categorySlug
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-card border border-border text-muted-foreground'
+              }`}
           >
             All
           </button>
@@ -518,11 +520,10 @@ export default function Products() {
             <button
               key={cat.id}
               onClick={() => updateFilter('category', cat.slug)}
-              className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                categorySlug === cat.slug 
-                  ? 'bg-primary text-primary-foreground' 
-                  : 'bg-card border border-border text-muted-foreground'
-              }`}
+              className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${categorySlug === cat.slug
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-card border border-border text-muted-foreground'
+                }`}
             >
               {cat.name}
             </button>
@@ -539,7 +540,7 @@ export default function Products() {
               {products.length} products found
             </p>
           </div>
-          
+
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Sort Dropdown */}
             <Select value={sortBy} onValueChange={(v) => updateFilter('sort', v)}>
@@ -584,6 +585,9 @@ export default function Products() {
               <SheetContent side="left" className="w-[280px]">
                 <SheetHeader>
                   <SheetTitle>Filters</SheetTitle>
+                  <SheetDescription>
+                    Filter your product search
+                  </SheetDescription>
                 </SheetHeader>
                 <div className="mt-6">
                   <FilterSidebar />
@@ -616,11 +620,10 @@ export default function Products() {
               </div>
             ) : (
               <>
-                <div className={`grid gap-3 md:gap-4 ${
-                  viewMode === 'grid' 
-                    ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' 
-                    : 'grid-cols-1'
-                }`}>
+                <div className={`grid gap-3 md:gap-4 ${viewMode === 'grid'
+                  ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                  : 'grid-cols-1'
+                  }`}>
                   {products.map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}
@@ -628,8 +631,8 @@ export default function Products() {
 
                 {hasMore && (
                   <div className="text-center mt-8">
-                    <Button 
-                      onClick={loadMore} 
+                    <Button
+                      onClick={loadMore}
                       disabled={loadingMore}
                       variant="outline"
                       size="lg"
