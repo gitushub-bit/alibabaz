@@ -2,7 +2,7 @@ import { Trophy, MessageSquare, Tag } from "lucide-react";
 
 export const FeaturedSelections = () => {
     return (
-        <div className="mt-6 mb-8 px-4">
+        <div className="hidden sm:block mt-6 mb-8 px-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-7xl mx-auto">
 
                 <div className="border border-[#e6e6e6] rounded-xl py-10 flex flex-col items-center hover:border-[#ccc] transition-colors cursor-pointer bg-white">

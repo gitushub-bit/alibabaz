@@ -407,6 +407,31 @@ export default function AlibabaHeader() {
                     </div>
                 </div>
 
+                {/* MOBILE SEARCH (Non-Home Only) */}
+                {!isHomePage && (
+                    <div className="md:hidden px-4 pb-3 -mt-1 bg-white border-b border-[#E8E8E8]">
+                        <div className="flex items-center w-full bg-white border border-[#FF6600] rounded-full overflow-hidden h-[40px]">
+                            <input
+                                type="text"
+                                placeholder="Search products..."
+                                className="flex-1 px-4 text-sm outline-none w-full"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                            />
+                            <button className="px-3 text-gray-400 hover:text-[#FF6600]" onClick={() => fileInputRef.current?.click()}>
+                                <Camera size={18} />
+                            </button>
+                            <button
+                                onClick={handleSearch}
+                                className="bg-[#FF6600] text-white px-4 h-full font-bold text-sm"
+                            >
+                                <Search size={18} />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* 3. SECONDARY NAV ROW */}
                 <div className="w-full hidden md:flex items-center justify-between px-[60px] h-[36px] bg-white border-t border-[#f4f4f4]">
                     <div className="flex items-center gap-[28px]">
@@ -448,12 +473,12 @@ export default function AlibabaHeader() {
                     <div className="max-w-[1000px] mx-auto flex flex-col items-center w-full px-4">
 
                         {/* Tabs */}
-                        <div className="flex items-center justify-center space-x-6 md:space-x-12 mb-8 h-[48px]">
+                        <div className="flex items-center justify-between w-full md:w-auto md:justify-center gap-2 md:gap-12 mb-4 md:mb-8 h-[40px] md:h-[48px] overflow-x-auto scrollbar-hide px-2">
                             {["AI Mode", "Products", "Manufacturers", "Worldwide"].map((tab) => (
-                                <div key={tab} className="flex items-center">
+                                <div key={tab} className="flex-shrink-0 flex items-center">
                                     <div
                                         onClick={() => setActiveTab(tab)}
-                                        className={`cursor-pointer px-1 md:text-[22px] lg:text-[28px] font-bold border-b-[4px] transition-all pb-1 flex items-center group ${activeTab === tab
+                                        className={`cursor-pointer whitespace-nowrap px-1 text-[15px] sm:text-[18px] md:text-[22px] lg:text-[28px] font-bold border-b-[3px] md:border-b-[4px] transition-all pb-1 flex items-center group ${activeTab === tab
                                             ? (tab === "AI Mode" ? 'text-black border-transparent' : 'text-[#FF6600] border-[#FF6600]')
                                             : 'text-[#333] border-transparent hover:text-gray-600'
                                             }`}
@@ -461,14 +486,14 @@ export default function AlibabaHeader() {
                                         {tab === "AI Mode" ? (
                                             <div className="flex items-center">
                                                 <span>AI Mode</span>
-                                                <div className="relative ml-1 -top-1">
-                                                    <span className="text-[#FF6600] text-xl">✨</span>
-                                                    <span className="absolute -top-1.5 -right-3 text-[#FF6600] text-[8px] font-black uppercase tracking-tighter">AI</span>
+                                                <div className="relative ml-0.5 md:ml-1 -top-1">
+                                                    <span className="text-[#FF6600] text-lg md:text-xl">✨</span>
+                                                    <span className="absolute -top-1 -right-2 md:-right-3 text-[#FF6600] text-[7px] md:text-[8px] font-black uppercase tracking-tighter">AI</span>
                                                 </div>
                                             </div>
                                         ) : tab}
                                     </div>
-                                    {tab === "AI Mode" && <div className="hidden md:block text-gray-200 text-3xl font-light opacity-50 select-none ml-12">|</div>}
+                                    {tab === "AI Mode" && <div className="hidden md:block text-gray-200 text-3xl font-light opacity-50 select-none ml-6 md:ml-12">|</div>}
                                 </div>
                             ))}
                         </div>

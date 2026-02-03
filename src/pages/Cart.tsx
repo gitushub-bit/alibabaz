@@ -10,12 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { 
-  ShoppingCart, 
-  Trash2, 
-  Plus, 
-  Minus, 
-  ArrowRight, 
+import {
+  ShoppingCart,
+  Trash2,
+  Plus,
+  Minus,
+  ArrowRight,
   Package,
   MessageCircle,
   Store
@@ -116,7 +116,7 @@ export default function Cart() {
                         className="w-20 h-20 object-cover rounded-lg"
                       />
                       <div className="flex-1 min-w-0">
-                        <Link 
+                        <Link
                           to={`/product/${item.product_id}`}
                           className="font-medium text-sm hover:text-primary line-clamp-2"
                         >
@@ -128,32 +128,32 @@ export default function Cart() {
                         <p className="text-xs text-muted-foreground">
                           MOQ: {item.moq} {item.unit}(s)
                         </p>
-                        
+
                         <div className="flex items-center gap-2 mt-2">
                           <div className="flex items-center border rounded-lg">
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8"
+                              className="h-10 w-10 md:h-8 md:w-8"
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
                               disabled={item.quantity <= item.moq}
                             >
-                              <Minus className="h-3 w-3" />
+                              <Minus className="h-4 w-4 md:h-3 md:w-3" />
                             </Button>
                             <Input
                               type="number"
                               value={item.quantity}
                               onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || item.moq)}
-                              className="h-8 w-16 text-center border-0"
+                              className="h-10 md:h-8 w-16 text-center border-0 p-0"
                               min={item.moq}
                             />
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8"
+                              className="h-10 w-10 md:h-8 md:w-8"
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
                             >
-                              <Plus className="h-3 w-3" />
+                              <Plus className="h-4 w-4 md:h-3 md:w-3" />
                             </Button>
                           </div>
                           <span className="text-sm font-medium">
@@ -165,15 +165,15 @@ export default function Cart() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive"
+                          className="h-10 w-10 md:h-8 md:w-8 text-destructive"
                           onClick={() => removeItem(item.id)}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-5 w-5 md:h-4 md:w-4" />
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-xs"
+                          className="text-xs h-10 md:h-8 px-3"
                           onClick={() => handleCheckout(item.product_id)}
                         >
                           Buy Now
@@ -203,7 +203,7 @@ export default function Cart() {
                   ))}
                 </div>
                 <Separator />
-                
+
                 {/* Total with conversion */}
                 <div className="space-y-1">
                   <div className="flex justify-between font-bold text-lg">
@@ -216,14 +216,14 @@ export default function Cart() {
                     </p>
                   )}
                 </div>
-                
+
                 <p className="text-xs text-muted-foreground">
                   * Final pricing may vary based on shipping and quantity negotiations
                 </p>
-                
+
                 <div className="space-y-2 pt-2">
-                  <Button 
-                    className="w-full" 
+                  <Button
+                    className="w-full"
                     onClick={() => {
                       if (!user) {
                         navigate('/auth?redirect=/cart/checkout');

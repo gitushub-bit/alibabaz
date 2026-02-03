@@ -158,8 +158,8 @@ export const WelcomeSection = () => {
                     </div>
                 </div>
 
-                <div className="flex gap-4 h-[380px]">
-                    {/* Left Sidebar - Categories */}
+                <div className="flex flex-col xl:flex-row gap-4 xl:h-[380px]">
+                    {/* Left Sidebar - Categories (Desktop Only) */}
                     <div className="w-[220px] hidden lg:block shrink-0 h-full relative" onMouseLeave={() => setHoveredCategory(null)}>
                         <div className="bg-gray-50 rounded-2xl p-2 h-full flex flex-col relative z-20">
                             {/* 'Categories for you' Header */}
@@ -231,22 +231,22 @@ export const WelcomeSection = () => {
                     </div>
 
                     {/* Right Content - Trending Products + Carousel */}
-                    <div className="flex-1 flex gap-4 h-full">
+                    <div className="flex-1 flex flex-col-reverse xl:flex-row gap-4 w-full xl:w-auto h-auto xl:h-full">
 
                         {/* Trending Products Section */}
-                        <div className="flex-1 min-w-0 h-full">
-                            <div className="flex gap-3 h-full">
+                        <div className="w-full xl:flex-1 min-w-0">
+                            <div className="flex gap-3 overflow-x-auto pb-4 xl:pb-0 snap-x scrollbar-hide h-[200px] xl:h-full">
                                 {trendingProducts.map((product, i) => (
-                                    <div key={i} className="bg-white border border-gray-200 rounded-2xl overflow-hidden w-[220px] flex-shrink-0 cursor-pointer hover:shadow-lg transition-shadow group h-full flex flex-col">
+                                    <div key={i} className="bg-white border border-gray-200 rounded-2xl overflow-hidden w-[160px] sm:w-[220px] flex-shrink-0 cursor-pointer hover:shadow-lg transition-shadow group h-full flex flex-col snap-start">
                                         <div className="p-3 pb-2 flex-shrink-0">
                                             <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">{product.label}</span>
-                                            <h3 className="text-[14px] font-bold text-[#111] mt-0.5">{product.title}</h3>
+                                            <h3 className="text-[13px] sm:text-[14px] font-bold text-[#111] mt-0.5 line-clamp-2">{product.title}</h3>
                                         </div>
-                                        <div className="flex-1 bg-gray-50">
+                                        <div className="flex-1 bg-gray-50 relative">
                                             <img
                                                 src={product.img}
                                                 alt={product.title}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                             />
                                         </div>
                                     </div>
@@ -255,8 +255,8 @@ export const WelcomeSection = () => {
                         </div>
 
                         {/* Promotional Carousel */}
-                        <div className="w-[300px] hidden xl:block shrink-0 h-full">
-                            <div className="relative h-full rounded-2xl overflow-hidden">
+                        <div className="w-full xl:w-[300px] shrink-0 h-[200px] sm:h-[280px] xl:h-full mb-4 xl:mb-0">
+                            <div className="relative h-full rounded-2xl overflow-hidden shadow-sm border border-gray-100/50">
                                 {promoSlides.map((slide, index) => (
                                     <div
                                         key={index}
@@ -270,39 +270,39 @@ export const WelcomeSection = () => {
                                         />
 
                                         {/* Gradient Overlay */}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent" />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
 
                                         {/* Content */}
-                                        <div className="absolute inset-0 flex flex-col items-center justify-between p-6 text-white">
-                                            <div className="flex-1 flex items-center justify-center text-center">
+                                        <div className="absolute inset-0 flex flex-col items-center justify-between p-6 text-white text-center">
+                                            <div className="flex-1 flex items-center justify-center">
                                                 <div>
-                                                    <h3 className="text-[22px] font-bold leading-tight mb-2">
+                                                    <h3 className="text-[18px] sm:text-[22px] font-bold leading-tight mb-2 drop-shadow-md">
                                                         {slide.title}
                                                     </h3>
-                                                    <p className="text-[13px] text-white/90 leading-relaxed">
+                                                    <p className="text-[12px] sm:text-[13px] text-white/90 leading-relaxed drop-shadow-sm max-w-[240px] mx-auto">
                                                         {slide.subtitle}
                                                     </p>
                                                 </div>
                                             </div>
 
                                             {/* Centered Button */}
-                                            <button className="bg-white text-[#111] text-[13px] font-bold px-8 py-2.5 rounded-full hover:bg-gray-100 transition-colors mb-8">
+                                            <button className="bg-white/95 text-[#111] text-[13px] font-bold px-8 py-2.5 rounded-full hover:bg-white transition-colors mb-2 md:mb-8 shadow-lg transform active:scale-95">
                                                 {slide.cta}
                                             </button>
                                         </div>
                                     </div>
                                 ))}
 
-                                {/* Navigation Arrows */}
+                                {/* Navigation Arrows - Hidden on mobile for cleaner look */}
                                 <button
                                     onClick={() => setCurrentSlide((prev) => (prev - 1 + promoSlides.length) % promoSlides.length)}
-                                    className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full p-2 z-10 transition-colors"
+                                    className="hidden sm:block absolute left-3 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full p-2 z-10 transition-colors"
                                 >
                                     <ChevronLeft size={20} className="text-white" />
                                 </button>
                                 <button
                                     onClick={() => setCurrentSlide((prev) => (prev + 1) % promoSlides.length)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full p-2 z-10 transition-colors"
+                                    className="hidden sm:block absolute right-3 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full p-2 z-10 transition-colors"
                                 >
                                     <ChevronRight size={20} className="text-white" />
                                 </button>
@@ -313,7 +313,7 @@ export const WelcomeSection = () => {
                                         <button
                                             key={index}
                                             onClick={() => setCurrentSlide(index)}
-                                            className={`w-2 h-2 rounded-full transition-all ${index === currentSlide ? "bg-white w-6" : "bg-white/50"
+                                            className={`h-1.5 rounded-full transition-all shadow-sm ${index === currentSlide ? "bg-white w-6" : "bg-white/50 w-1.5"
                                                 }`}
                                         />
                                     ))}
