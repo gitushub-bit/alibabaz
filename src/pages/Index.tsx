@@ -3,7 +3,6 @@ import AlibabaHeader from "@/components/layout/AlibabaHeader";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Footer } from "@/components/layout/Footer";
 import { WelcomeSection } from "@/components/home/WelcomeSection";
-import { FreeShippingBanner } from "@/components/home/FreeShippingBanner";
 import { FlashSale } from "@/components/home/FlashSale";
 import { BestSellers } from "@/components/home/BestSellers";
 import { UpcomingDeals } from "@/components/home/UpcomingDeals";
@@ -24,9 +23,6 @@ const Index = () => {
       <main>
         {/* Hero Section */}
         <WelcomeSection />
-
-        {/* Free Shipping Promotional Banner */}
-        <FreeShippingBanner />
 
         {/* Flash Sale - High Priority */}
         <FlashSale />
