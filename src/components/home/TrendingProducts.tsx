@@ -1,77 +1,107 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ChevronRight, TrendingUp } from "lucide-react";
+import { ChevronRight, TrendingUp, Shield } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteContent } from "@/hooks/useSiteContent";
 import { useCurrency } from "@/hooks/useCurrency";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface TrendingMetadata {
-  priceRange?: string;
-  moq?: string;
-  supplier?: string;
-  verified?: boolean;
-}
-
-interface TrendingItem {
+interface Product {
   id: string;
   title: string;
-  image: string | null;
-  metadata: TrendingMetadata;
+  slug: string;
+  images: string[] | null;
+  price_min: number | null;
+  price_max: number | null;
+  moq: number | null;
+  unit: string | null;
+  verified: boolean | null;
+  seller_id: string;
+}
+
+interface SupplierInfo {
+  user_id: string;
+  verified: boolean | null;
+}
+
+interface ProfileInfo {
+  user_id: string;
+  company_name: string | null;
+  full_name: string | null;
 }
 
 export const TrendingProducts = () => {
-  const [products, setProducts] = useState<TrendingItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [suppliers, setSuppliers] = useState<Map<string, SupplierInfo>>(new Map());
+  const [profiles, setProfiles] = useState<Map<string, ProfileInfo>>(new Map());
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
   const { content } = useSiteContent();
-  const { formatPrice } = useCurrency();
-  const limit = content.trendingProducts?.itemCount || 8;
+  const { formatPriceOnly } = useCurrency();
+  const limit = content.trendingProducts?.itemCount || 12;
 
   const carouselRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
-  // fetch function
+  // Fetch products from database
   const fetchProducts = useCallback(async (pageNumber: number) => {
-    const { data } = await supabase
-      .from("featured_items")
-      .select("*")
-      .eq("section", "trending")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true })
-      .range((pageNumber - 1) * limit, pageNumber * limit - 1);
+    try {
+      const { data: productsData, error } = await supabase
+        .from("products")
+        .select("id, title, slug, images, price_min, price_max, moq, unit, verified, seller_id")
+        .eq("published", true)
+        .order("created_at", { ascending: false })
+        .range((pageNumber - 1) * limit, pageNumber * limit - 1);
 
-    if (data?.length) {
-      setProducts((prev) => {
-        const newItems = data.map((item: any) => ({
-          ...item,
-          metadata:
-            typeof item.metadata === "string"
-              ? JSON.parse(item.metadata)
-              : item.metadata || {},
-        }));
+      if (error) throw error;
 
-        // Filter out duplicates based on ID
-        const existingIds = new Set(prev.map(p => p.id));
-        const uniqueNewItems = newItems.filter((item: TrendingItem) => !existingIds.has(item.id));
+      if (productsData?.length) {
+        // Fetch supplier and profile info
+        const sellerIds = [...new Set(productsData.map(p => p.seller_id))];
 
-        return [...prev, ...uniqueNewItems];
-      });
-      setHasMore(data.length === limit);
-    } else {
+        if (sellerIds.length > 0) {
+          const [suppliersRes, profilesRes] = await Promise.all([
+            supabase.from('suppliers').select('user_id, verified').in('user_id', sellerIds),
+            supabase.from('profiles').select('user_id, company_name, full_name').in('user_id', sellerIds)
+          ]);
+
+          if (suppliersRes.data) {
+            const supplierMap = new Map(suppliersRes.data.map(s => [s.user_id, s]));
+            setSuppliers(prev => new Map([...prev, ...supplierMap]));
+          }
+
+          if (profilesRes.data) {
+            const profileMap = new Map(profilesRes.data.map(p => [p.user_id, p]));
+            setProfiles(prev => new Map([...prev, ...profileMap]));
+          }
+        }
+
+        setProducts((prev) => {
+          // Filter out duplicates based on ID
+          const existingIds = new Set(prev.map(p => p.id));
+          const uniqueNewItems = productsData.filter((item) => !existingIds.has(item.id));
+          return [...prev, ...uniqueNewItems];
+        });
+        setHasMore(productsData.length === limit);
+      } else {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error('Error fetching trending products:', error);
       setHasMore(false);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [limit]);
 
-  // initial load
+  // Initial load
   useEffect(() => {
     fetchProducts(1);
   }, [fetchProducts]);
 
-  // infinite scroll
+  // Infinite scroll
   useEffect(() => {
     if (!hasMore) return;
 
@@ -92,38 +122,11 @@ export const TrendingProducts = () => {
     observerRef.current.observe(lastCard);
   }, [products, hasMore]);
 
-  // load next page
+  // Load next page
   useEffect(() => {
     if (page === 1) return;
     fetchProducts(page);
   }, [page, fetchProducts]);
-
-  // auto refresh
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const { data } = await supabase
-        .from("featured_items")
-        .select("*")
-        .eq("section", "trending")
-        .eq("is_active", true)
-        .order("random()")
-        .limit(limit);
-
-      if (data) {
-        setProducts(
-          data.map((item: any) => ({
-            ...item,
-            metadata:
-              typeof item.metadata === "string"
-                ? JSON.parse(item.metadata)
-                : item.metadata || {},
-          }))
-        );
-      }
-    }, 30000); // refresh every 30 seconds
-
-    return () => clearInterval(interval);
-  }, [limit]);
 
   if (!content.trendingProducts?.enabled) return null;
 
@@ -166,49 +169,57 @@ export const TrendingProducts = () => {
         ref={carouselRef}
         className="mt-4 flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide"
       >
-        {products.map((product) => (
-          <Link
-            key={product.id}
-            to={`/product-insights/featured/${product.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="product-card group snap-start min-w-[170px] md:min-w-[200px] bg-white border border-alibaba-border rounded-lg hover:border-alibaba-orange transition-colors duration-200 overflow-hidden"
-          >
-            <div className="relative aspect-square overflow-hidden">
-              <img
-                src={product.image || "/images/placeholder.png"}
-                alt={product.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-              />
-            </div>
-            <div className="p-3">
-              <h3 className="text-sm font-medium text-foreground line-clamp-2 mb-1">
-                {product.title}
-              </h3>
-              <p className="text-primary font-semibold text-sm mb-1">
-                {product.metadata?.priceRange
-                  ? product.metadata.priceRange.includes('-')
-                    ? product.metadata.priceRange
-                    : formatPrice(parseFloat(product.metadata.priceRange.replace(/[^0-9.]/g, '')) || 0)
-                  : "Contact for price"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                MOQ: {product.metadata?.moq || "N/A"}
-              </p>
-              <div className="flex items-center gap-1 mt-2">
-                <span className="text-xs text-muted-foreground truncate">
-                  {product.metadata?.supplier || "Unknown"}
-                </span>
-                {product.metadata?.verified && (
-                  <span className="shrink-0 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                    <span className="text-primary-foreground text-[8px]">✓</span>
-                  </span>
+        {products.map((product) => {
+          const supplier = suppliers.get(product.seller_id);
+          const profile = profiles.get(product.seller_id);
+
+          return (
+            <Link
+              key={product.id}
+              to={`/product/${product.slug}`}
+              className="product-card group snap-start min-w-[170px] md:min-w-[200px] bg-white border border-alibaba-border rounded-lg hover:border-alibaba-orange transition-colors duration-200 overflow-hidden"
+            >
+              <div className="relative aspect-square overflow-hidden bg-muted">
+                <img
+                  src={product.images?.[0] || "/placeholder.svg"}
+                  alt={product.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                />
+                {product.verified && (
+                  <div className="absolute top-2 left-2 flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded text-xs font-medium">
+                    <Shield className="h-3 w-3" />
+                  </div>
                 )}
               </div>
-            </div>
-          </Link>
-        ))}
+              <div className="p-3">
+                <h3 className="text-sm font-medium text-foreground line-clamp-2 mb-1">
+                  {product.title}
+                </h3>
+                <p className="text-primary font-semibold text-sm mb-1">
+                  {product.price_min && product.price_max
+                    ? `${formatPriceOnly(product.price_min)} - ${formatPriceOnly(product.price_max)}`
+                    : product.price_min
+                      ? `From ${formatPriceOnly(product.price_min)}`
+                      : "Contact for price"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  MOQ: {product.moq || 1} {product.unit || 'piece'}
+                </p>
+                <div className="flex items-center gap-1 mt-2">
+                  <span className="text-xs text-muted-foreground truncate">
+                    {profile?.company_name || profile?.full_name || "Seller"}
+                  </span>
+                  {supplier?.verified && (
+                    <span className="shrink-0 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                      <span className="text-primary-foreground text-[8px]">✓</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Link>
+          );
+        })}
       </div>
 
       {hasMore && (

@@ -135,7 +135,10 @@ export default function AlibabaHeader() {
                         <span className="text-[#FF6600] text-xl ml-1">✨</span>
                         <span className="absolute -top-1 -right-3 text-[#FF6600] text-[8px] font-black uppercase tracking-tighter">AI</span>
                     </div>
-                    <button className="hidden md:block bg-[#FF6600] text-white px-6 py-[8px] rounded-full text-[14px] font-extrabold hover:bg-[#E65C00] transition-colors ml-8">
+                    <button
+                        onClick={() => navigate('/ai-mode')}
+                        className="hidden md:block bg-[#FF6600] text-white px-6 py-[8px] rounded-full text-[14px] font-extrabold hover:bg-[#E65C00] transition-colors ml-8"
+                    >
                         Try it now →
                     </button>
                 </div>
@@ -160,7 +163,7 @@ export default function AlibabaHeader() {
                     </div>
 
                     {/* MIDDLE: Compact Search (Non-Home Only) */}
-                    {!isHomePage && (
+                    {!isHomePage && location.pathname !== "/worldwide" && (
                         <div className="hidden md:flex flex-1 max-w-xl mx-8">
                             <div className="flex items-center w-full bg-white border-2 border-[#FF6600] rounded-full overflow-hidden h-[40px]">
                                 <input
@@ -408,7 +411,7 @@ export default function AlibabaHeader() {
                 </div>
 
                 {/* MOBILE SEARCH (Non-Home Only) */}
-                {!isHomePage && (
+                {!isHomePage && location.pathname !== "/worldwide" && (
                     <div className="md:hidden px-4 pb-3 -mt-1 bg-white border-b border-[#E8E8E8]">
                         <div className="flex items-center w-full bg-white border border-[#FF6600] rounded-full overflow-hidden h-[40px]">
                             <input
@@ -477,7 +480,15 @@ export default function AlibabaHeader() {
                             {["AI Mode", "Products", "Manufacturers", "Worldwide"].map((tab) => (
                                 <div key={tab} className="flex-shrink-0 flex items-center">
                                     <div
-                                        onClick={() => setActiveTab(tab)}
+                                        onClick={() => {
+                                            if (tab === "AI Mode") {
+                                                navigate('/ai-mode');
+                                            } else if (tab === "Worldwide") {
+                                                navigate('/worldwide');
+                                            } else {
+                                                setActiveTab(tab);
+                                            }
+                                        }}
                                         className={`cursor-pointer whitespace-nowrap px-1 text-[15px] sm:text-[18px] md:text-[22px] lg:text-[28px] font-bold border-b-[3px] md:border-b-[4px] transition-all pb-1 flex items-center group ${activeTab === tab
                                             ? (tab === "AI Mode" ? 'text-black border-transparent' : 'text-[#FF6600] border-[#FF6600]')
                                             : 'text-[#333] border-transparent hover:text-gray-600'

@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const TickerBanner = () => {
   const [currentBanner, setCurrentBanner] = useState(0);
+  const navigate = useNavigate();
 
   const banners = [
     {
@@ -15,7 +17,7 @@ const TickerBanner = () => {
         </>
       ),
       buttonText: "Try it now",
-      buttonLink: "https://aimode.alibaba.com/",
+      buttonLink: "/ai-mode",
     },
     {
       text: (
@@ -75,7 +77,14 @@ const TickerBanner = () => {
         <div className="ticker-text">{banners[currentBanner].text}</div>
         <button
           className="cta-button"
-          onClick={() => window.open(banners[currentBanner].buttonLink, "_blank")}
+          onClick={() => {
+            const link = banners[currentBanner].buttonLink;
+            if (link.startsWith('/')) {
+              navigate(link);
+            } else {
+              if (link !== '#') window.open(link, "_blank");
+            }
+          }}
         >
           {banners[currentBanner].buttonText}
           <span className="arrow">→</span>

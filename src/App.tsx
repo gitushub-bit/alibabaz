@@ -28,6 +28,10 @@ import CartCheckout from "./telegram/CartCheckout";
 import OrderTracking from "./pages/OrderTracking";
 import Profile from "./pages/Profile";
 import AddressBook from "./pages/AddressBook";
+import HelpCenter from "./pages/HelpCenter";
+import Settings from "./pages/Settings";
+import AIMode from "./pages/AIMode";
+import Worldwide from "./pages/Worldwide";
 
 // Buyer Dashboard
 import BuyerDashboard from "./pages/dashboard/BuyerDashboard";
@@ -65,6 +69,7 @@ import AdminImageQueue from "./pages/admin/AdminImageQueue";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 
 import Checkout from "./telegram/Checkout";
+import { AIAssistant } from "@/components/ai/AIAssistant";
 
 const queryClient = new QueryClient();
 
@@ -100,6 +105,10 @@ function App() {
                     <Route path="/orders" element={<OrderTracking />} />
                     <Route path="/address-book" element={<AddressBook />} />
                     <Route path="/profile" element={<Profile />} />
+                    <Route path="/help" element={<HelpCenter />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/ai-mode" element={<AIMode />} />
+                    <Route path="/worldwide" element={<Worldwide />} />
 
                     {/* Buyer Dashboard */}
                     <Route path="/buyer" element={<BuyerDashboard />}>
@@ -141,6 +150,7 @@ function App() {
                     <Route path="/checkout" element={<Checkout />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
+                  <AIAssistant />
                 </BrowserRouter>
 
                 <Analytics />

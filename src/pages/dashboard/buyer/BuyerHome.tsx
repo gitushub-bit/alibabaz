@@ -46,8 +46,8 @@ export default function BuyerHome() {
 
   const statCards = [
     { label: 'My RFQs', value: stats.rfqs, icon: FileText, href: '/buyer/rfqs', color: 'text-blue-500' },
-    { label: 'Conversations', value: stats.messages, icon: MessageCircle, href: '/buyer/messages', color: 'text-green-500' },
-    { label: 'Orders', value: stats.orders, icon: ShoppingCart, href: '/buyer/orders', color: 'text-purple-500' },
+    { label: 'Conversations', value: stats.messages, icon: MessageCircle, href: '/messages', color: 'text-green-500' },
+    { label: 'Orders', value: stats.orders, icon: ShoppingCart, href: '/orders', color: 'text-purple-500' },
     { label: 'Favorites', value: stats.favorites, icon: Heart, href: '/buyer/favorites', color: 'text-red-500' },
   ];
 

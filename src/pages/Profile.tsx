@@ -14,7 +14,7 @@ import { toast } from '@/hooks/use-toast';
 import { LocalizationSelector } from '@/components/profile/LocalizationSelector';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { countries, getCountryByName } from '@/data/countries';
-import { 
+import {
   ChevronLeft,
   ChevronRight,
   User,
@@ -68,7 +68,7 @@ export default function ProfilePage() {
   const { user, loading: authLoading, isAdmin, role, signOut } = useAuth();
   const { itemCount } = useCart();
   const { countryCode, setCountryCode, getCountryFlag, currency } = useCurrency();
-  
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +82,7 @@ export default function ProfilePage() {
         navigate('/admin');
         return;
       }
-      
+
       if (user) {
         fetchProfileData();
       } else {
@@ -93,16 +93,16 @@ export default function ProfilePage() {
 
   const fetchProfileData = async () => {
     if (!user) return;
-    
+
     setLoading(true);
-    
+
     // Fetch profile
     const { data: profileData } = await supabase
       .from('profiles')
       .select('*')
       .eq('user_id', user.id)
       .single();
-    
+
     if (profileData) {
       setProfile(profileData);
       // Sync country from profile to currency context
@@ -121,23 +121,23 @@ export default function ProfilePage() {
         .select('verified')
         .eq('user_id', user.id)
         .single();
-      
+
       if (supplierData) {
         setSupplier(supplierData);
       }
     }
-    
+
     // Fetch counts
     const [ordersRes, favoritesRes, messagesRes] = await Promise.all([
       supabase.from('orders').select('id', { count: 'exact', head: true }).eq('buyer_id', user.id),
       supabase.from('favorites').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       supabase.from('messages').select('id', { count: 'exact', head: true }).eq('sender_id', user.id).eq('read', false),
     ]);
-    
+
     setOrdersCount(ordersRes.count || 0);
     setFavoritesCount(favoritesRes.count || 0);
     setMessagesCount(messagesRes.count || 0);
-    
+
     setLoading(false);
   };
 
@@ -149,12 +149,12 @@ export default function ProfilePage() {
 
   const handleCountryChange = async (country: { code: string; name: string }) => {
     if (!user) return;
-    
+
     const { error } = await supabase
       .from('profiles')
       .update({ country: country.name })
       .eq('user_id', user.id);
-    
+
     if (error) {
       toast({ title: 'Error updating country', variant: 'destructive' });
     } else {
@@ -208,7 +208,7 @@ export default function ProfilePage() {
     {
       icon: <HelpCircle className="h-5 w-5 text-muted-foreground" />,
       label: 'Help Center',
-      onClick: () => toast({ title: 'Help Center', description: 'Contact support for assistance' }),
+      onClick: () => navigate('/help'),
     },
   ];
 
@@ -258,7 +258,7 @@ export default function ProfilePage() {
       <div className="hidden md:block">
         <Header />
       </div>
-      
+
       <main className="container mx-auto max-w-lg md:max-w-2xl lg:max-w-4xl">
         {/* Profile Section */}
         <div className="bg-background p-4 md:p-6 md:mt-6 md:rounded-lg md:shadow-sm">
@@ -278,7 +278,7 @@ export default function ProfilePage() {
                 </div>
               )}
             </div>
-            
+
             {user ? (
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -322,13 +322,13 @@ export default function ProfilePage() {
               <div className="flex-1 flex flex-col gap-2">
                 <p className="text-muted-foreground text-sm">Sign in to access your account</p>
                 <div className="flex gap-2">
-                  <Button 
+                  <Button
                     className="bg-primary hover:bg-primary/90 text-primary-foreground"
                     onClick={() => navigate('/auth')}
                   >
                     Sign In
                   </Button>
-                  <Button 
+                  <Button
                     variant="outline"
                     onClick={() => navigate('/auth?mode=signup')}
                   >
@@ -343,21 +343,21 @@ export default function ProfilePage() {
         {/* Quick Stats */}
         {user && (
           <div className="grid grid-cols-3 gap-2 p-4 md:p-0 md:mt-4">
-            <button 
+            <button
               onClick={() => navigate('/orders')}
               className="bg-background p-4 rounded-lg text-center hover:bg-muted/50 transition-colors md:shadow-sm"
             >
               <p className="text-2xl font-bold text-primary">{ordersCount}</p>
               <p className="text-xs text-muted-foreground">Orders</p>
             </button>
-            <button 
+            <button
               onClick={() => navigate('/buyer/favorites')}
               className="bg-background p-4 rounded-lg text-center hover:bg-muted/50 transition-colors md:shadow-sm"
             >
               <p className="text-2xl font-bold text-primary">{favoritesCount}</p>
               <p className="text-xs text-muted-foreground">Favorites</p>
             </button>
-            <button 
+            <button
               onClick={() => navigate('/messages')}
               className="bg-background p-4 rounded-lg text-center hover:bg-muted/50 transition-colors md:shadow-sm"
             >
@@ -470,15 +470,15 @@ export default function ProfilePage() {
               </p>
               <p className="text-xs text-muted-foreground">protects your orders</p>
             </div>
-            <img 
-              src={logo} 
-              alt="Trade Assurance" 
+            <img
+              src={logo}
+              alt="Trade Assurance"
               className="h-12 w-12 object-contain"
             />
           </div>
         </div>
       </main>
-      
+
       <BottomNav />
     </div>
   );

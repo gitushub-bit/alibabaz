@@ -1,4 +1,4 @@
-import { Search, Camera, ShoppingCart, User, Menu, MessageSquare, Globe, X, ImageIcon } from "lucide-react";
+import { Search, Camera, ShoppingCart, User, Menu, MessageSquare, Globe, X, ImageIcon, HelpCircle, Smartphone, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -251,16 +251,31 @@ export const Header = () => {
             <Link to="/products?featured=true" className="hover:text-primary transition-colors">
               Featured Selections
             </Link>
-            <Link to="/buyer/rfq/new" className="hover:text-primary transition-colors">
+            <Link to="/buyer/rfqs/new" className="hover:text-primary transition-colors">
               Order Protections
             </Link>
           </div>
 
           <div className="flex items-center gap-6 whitespace-nowrap text-muted-foreground">
-            <Link to="#" className="hover:text-primary transition-colors">Connect on WhatsApp</Link>
-            <Link to="/help" className="hover:text-primary transition-colors">Help Center</Link>
-            <Link to="#" className="hover:text-primary transition-colors">App & Extension</Link>
-            <Link to="/seller" className="hover:text-primary transition-colors">Sell on our platform</Link>
+            <a href="https://wa.me/1234567890" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
+              <MessageSquare className="h-3 w-3" />
+              Connect on WhatsApp
+            </a>
+            <Link to="/help" className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
+              <HelpCircle className="h-3 w-3" />
+              Help Center
+            </Link>
+            <button
+              onClick={() => toast({ title: "Coming Soon", description: "Mobile app and browser extension are under development." })}
+              className="flex items-center gap-1 hover:text-primary transition-colors bg-transparent border-0 p-0 text-xs h-auto font-normal cursor-pointer"
+            >
+              <Smartphone className="h-3 w-3" />
+              App & Extension
+            </button>
+            <Link to="/seller" className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
+              <Store className="h-3 w-3" />
+              Sell on our platform
+            </Link>
           </div>
         </div>
 

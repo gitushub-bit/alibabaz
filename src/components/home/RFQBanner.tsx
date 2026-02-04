@@ -49,7 +49,7 @@ export const RFQBanner = () => {
 
               <button
                 className="text-white/90 font-medium hover:text-white underline decoration-white/50 hover:decoration-white transition-all text-sm sm:text-base whitespace-nowrap"
-                onClick={() => navigate("/buyer/rfq")}
+                onClick={() => navigate("/buyer/rfqs")}
               >
                 Learn how it works
               </button>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import {
   X,
@@ -48,7 +49,7 @@ export const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
   const MenuItem = ({ icon: Icon, label, onClick, link, className = "" }: any) => (
     <button
       onClick={() => link ? handleNavigation(link) : onClick?.()}
-      className={`w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left group ${className}`}
+      className={`w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors text-left group ${className}`}
     >
       <div className="flex items-center gap-3">
         {Icon && <Icon className="h-5 w-5 text-gray-500 group-hover:text-[#FF6600]" />}
@@ -130,7 +131,7 @@ export const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
             <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-widest">Sourcing</div>
             <MenuItem icon={Menu} label="All categories" onClick={() => handleNavigation('/products')} />
             <MenuItem icon={Star} label="Featured selections" link="/products?featured=true" />
-            <MenuItem icon={ShieldCheck} label="Order protections" link="/buyer/rfq/new" />
+            <MenuItem icon={ShieldCheck} label="Order protections" link="/buyer/rfqs/new" />
           </div>
 
           <div className="h-2 bg-gray-50 border-t border-b border-gray-100"></div>
@@ -138,8 +139,8 @@ export const MobileMenu = ({ isOpen, onClose }: MobileMenuProps) => {
           <div className="py-2">
             <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-widest">Services</div>
             <MenuItem icon={MessageCircle} label="Connect on WhatsApp" onClick={() => window.open('https://wa.me/1234567890', '_blank')} />
-            <MenuItem icon={HelpCircle} label="Help Center" link="#" />
-            <MenuItem icon={Smartphone} label="App & extension" link="#" />
+            <MenuItem icon={HelpCircle} label="Help Center" link="/help" />
+            <MenuItem icon={Smartphone} label="App & extension" onClick={() => toast({ title: "Coming Soon", description: "Mobile app is under development." })} />
             <MenuItem icon={Store} label="Sell on Alibaba.com" link="/seller" />
           </div>
 

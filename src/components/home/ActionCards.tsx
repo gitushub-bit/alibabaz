@@ -21,7 +21,7 @@ export const ActionCards = () => {
       icon: Target,
       label: t("home.requestQuotation"),
       color: "bg-destructive/10 text-destructive",
-      path: "/buyer/rfq/new",
+      path: "/buyer/rfqs/new",
     },
     {
       icon: Globe,
