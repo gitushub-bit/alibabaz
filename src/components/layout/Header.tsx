@@ -235,49 +235,7 @@ export const Header = () => {
           </div>
         </div>
 
-        {/* ================= SUBTITLE ROW ================= */}
-        <div className="mt-1 hidden md:flex items-center justify-between text-xs px-4 md:px-6 lg:px-8 pb-3">
-          <div className="flex items-center gap-6 whitespace-nowrap">
-            <div
-              onMouseEnter={handleMegaMenuEnter}
-              onMouseLeave={handleMegaMenuLeave}
-              className="relative py-1"
-            >
-              <button className="hover:text-primary transition-colors font-medium flex items-center gap-1">
-                <Menu className="h-4 w-4" />
-                All Categories
-              </button>
-            </div>
-            <Link to="/products?featured=true" className="hover:text-primary transition-colors">
-              Featured Selections
-            </Link>
-            <Link to="/buyer/rfqs/new" className="hover:text-primary transition-colors">
-              Order Protections
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-6 whitespace-nowrap text-muted-foreground">
-            <a href="https://wa.me/1234567890" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
-              <MessageSquare className="h-3 w-3" />
-              Connect on WhatsApp
-            </a>
-            <Link to="/help" className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
-              <HelpCircle className="h-3 w-3" />
-              Help Center
-            </Link>
-            <button
-              onClick={() => toast({ title: "Coming Soon", description: "Mobile app and browser extension are under development." })}
-              className="flex items-center gap-1 hover:text-primary transition-colors bg-transparent border-0 p-0 text-xs h-auto font-normal cursor-pointer"
-            >
-              <Smartphone className="h-3 w-3" />
-              App & Extension
-            </button>
-            <Link to="/seller" className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
-              <Store className="h-3 w-3" />
-              Sell on our platform
-            </Link>
-          </div>
-        </div>
+        {/* ================= SUBTITLE ROW - REMOVED TO FIX DOUBLE HEADER ISSUE ================= */}
 
         <MegaMenu
           isOpen={showMegaMenu}

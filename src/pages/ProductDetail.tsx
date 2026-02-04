@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
 import { useCurrency } from '@/hooks/useCurrency';
-import { Header } from '@/components/layout/Header';
+import AlibabaHeader from '@/components/layout/AlibabaHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -107,7 +107,7 @@ export default function ProductDetail() {
   const { user } = useAuth();
   const { addItem } = useCart();
   const { formatPrice, formatPriceOnly } = useCurrency();
-  
+
   const [product, setProduct] = useState<Product | null>(null);
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -140,7 +140,7 @@ export default function ProductDetail() {
           .eq('user_id', user.id)
           .eq('product_id', product.id)
           .single();
-        
+
         if (isMounted) setIsFavorite(!!data);
       };
 
@@ -166,7 +166,7 @@ export default function ProductDetail() {
         price_min: product.price_min || 0,
         price_max: product.price_max || 0,
       };
-      
+
       const stored = localStorage.getItem('browsingHistory');
       const history = stored ? JSON.parse(stored) : [];
       const filtered = history.filter((h: any) => h.id !== product.id);
@@ -243,10 +243,10 @@ export default function ProductDetail() {
   };
 
   const submitReview = async () => {
-    toast({ 
-      title: 'Reviews unavailable', 
-      description: 'Reviews can only be submitted for completed orders.', 
-      variant: 'destructive' 
+    toast({
+      title: 'Reviews unavailable',
+      description: 'Reviews can only be submitted for completed orders.',
+      variant: 'destructive'
     });
   };
 
@@ -263,7 +263,7 @@ export default function ProductDetail() {
       });
       return;
     }
-    
+
     addItem({
       product_id: product.id,
       title: product.title,
@@ -275,8 +275,8 @@ export default function ProductDetail() {
       seller_id: product.seller_id,
       seller_name: profile?.company_name || profile?.full_name || 'Seller',
     });
-    
-    toast({ 
+
+    toast({
       title: 'Added to inquiry basket',
       description: 'You can view and manage your inquiry items in the cart'
     });
@@ -287,7 +287,7 @@ export default function ProductDetail() {
       navigate('/auth?redirect=' + encodeURIComponent(`/product/${slug}`));
       return;
     }
-    
+
     if (!product) return;
     navigate(`/checkout?product=${product.id}&qty=${quantity}`);
   };
@@ -297,7 +297,7 @@ export default function ProductDetail() {
       navigate('/auth');
       return;
     }
-    
+
     if (!product) return;
 
     if (isFavorite) {
@@ -306,14 +306,14 @@ export default function ProductDetail() {
         .delete()
         .eq('user_id', user.id)
         .eq('product_id', product.id);
-      
+
       setIsFavorite(false);
       toast({ title: 'Removed from favorites' });
     } else {
       await supabase
         .from('favorites')
         .insert({ user_id: user.id, product_id: product.id });
-      
+
       setIsFavorite(true);
       toast({ title: 'Added to favorites' });
     }
@@ -324,7 +324,7 @@ export default function ProductDetail() {
       navigate('/auth');
       return;
     }
-    
+
     if (!product) return;
 
     const { data: existing } = await supabase
@@ -353,8 +353,8 @@ export default function ProductDetail() {
     if (newConv) {
       navigate(`/messages/${newConv.id}`);
     } else {
-      toast({ 
-        title: 'Error', 
+      toast({
+        title: 'Error',
         description: 'Could not start conversation',
         variant: 'destructive'
       });
@@ -368,7 +368,7 @@ export default function ProductDetail() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
-        <Header />
+        <AlibabaHeader />
         <main className="container mx-auto px-4 py-6">
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2">
@@ -409,8 +409,8 @@ export default function ProductDetail() {
         <meta property="og:type" content="product" />
       </Helmet>
 
-      <Header />
-      
+      <AlibabaHeader />
+
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* Breadcrumb - Mobile responsive */}
         <div className="mb-4 sm:mb-6 text-xs sm:text-sm text-gray-600 overflow-x-auto whitespace-nowrap pb-1">
@@ -436,7 +436,7 @@ export default function ProductDetail() {
                         alt={product.title}
                         className="w-full h-auto max-h-[280px] sm:max-h-[350px] md:max-h-[400px] object-contain"
                       />
-                      
+
                       {images.length > 1 && (
                         <>
                           <Button
@@ -458,7 +458,7 @@ export default function ProductDetail() {
                         </>
                       )}
                     </div>
-                    
+
                     {/* Thumbnail Gallery - Mobile scrollable */}
                     {images.length > 1 && (
                       <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1 sm:pb-2 scrollbar-thin">
@@ -466,16 +466,15 @@ export default function ProductDetail() {
                           <button
                             key={i}
                             onClick={() => setCurrentImageIndex(i)}
-                            className={`flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 border-2 rounded overflow-hidden ${
-                              i === currentImageIndex 
-                                ? 'border-orange-500' 
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
+                            className={`flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 border-2 rounded overflow-hidden ${i === currentImageIndex
+                              ? 'border-orange-500'
+                              : 'border-gray-200 hover:border-gray-300'
+                              }`}
                           >
-                            <img 
-                              src={img} 
-                              alt="" 
-                              className="w-full h-full object-cover" 
+                            <img
+                              src={img}
+                              alt=""
+                              className="w-full h-full object-cover"
                             />
                           </button>
                         ))}
@@ -509,7 +508,7 @@ export default function ProductDetail() {
                           <Heart className={`h-4 w-4 sm:h-5 sm:w-5 ${isFavorite ? 'fill-orange-500 text-orange-500' : ''}`} />
                         </Button>
                       </div>
-                      
+
                       {/* Verification Badges - Wrap on mobile */}
                       <div className="flex flex-wrap gap-1 sm:gap-2 mb-3 sm:mb-4">
                         {product.verified && (
@@ -541,7 +540,7 @@ export default function ProductDetail() {
                             </span>
                           )}
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm">
                           <div>
                             <span className="text-gray-600">MOQ:</span>
@@ -600,14 +599,14 @@ export default function ProductDetail() {
 
                       {/* Action Buttons - Stack on mobile */}
                       <div className="flex flex-col sm:grid sm:grid-cols-2 gap-2 sm:gap-3">
-                        <Button 
+                        <Button
                           onClick={handleBuyNow}
                           className="bg-orange-500 hover:bg-orange-600 text-white font-medium h-11 sm:h-12 text-sm sm:text-base"
                         >
                           <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
                           Order Now
                         </Button>
-                        <Button 
+                        <Button
                           variant="outline"
                           onClick={handleAddToCart}
                           className="border-orange-500 text-orange-500 hover:bg-orange-50 h-11 sm:h-12 text-sm sm:text-base"
@@ -642,26 +641,26 @@ export default function ProductDetail() {
             <Card className="border border-gray-200 shadow-sm">
               <Tabs defaultValue="description" className="w-full">
                 <TabsList className="w-full flex flex-wrap md:flex-nowrap justify-start border-b rounded-none bg-transparent h-auto p-0 overflow-x-auto scrollbar-thin">
-                  <TabsTrigger 
-                    value="description" 
+                  <TabsTrigger
+                    value="description"
                     className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm whitespace-nowrap"
                   >
                     Details
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="specs" 
+                  <TabsTrigger
+                    value="specs"
                     className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm whitespace-nowrap"
                   >
                     Specs
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="reviews" 
+                  <TabsTrigger
+                    value="reviews"
                     className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm whitespace-nowrap"
                   >
                     Reviews ({reviews.length})
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="shipping" 
+                  <TabsTrigger
+                    value="shipping"
                     className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm whitespace-nowrap"
                   >
                     Shipping
@@ -674,7 +673,7 @@ export default function ProductDetail() {
                     <p className="text-gray-700 leading-relaxed text-sm sm:text-base">
                       {product.description || 'No description available.'}
                     </p>
-                    
+
                     {/* Features List - Stack on mobile */}
                     <div className="grid sm:grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-6">
                       <div className="flex items-start gap-2 sm:gap-3">
@@ -715,21 +714,19 @@ export default function ProductDetail() {
                     <div className="flex gap-1 sm:gap-2 border-b overflow-x-auto scrollbar-thin">
                       <button
                         onClick={() => setActiveSpecTab('details')}
-                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
-                          activeSpecTab === 'details'
-                            ? 'border-b-2 border-orange-500 text-orange-500'
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
+                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${activeSpecTab === 'details'
+                          ? 'border-b-2 border-orange-500 text-orange-500'
+                          : 'text-gray-600 hover:text-gray-900'
+                          }`}
                       >
                         General Details
                       </button>
                       <button
                         onClick={() => setActiveSpecTab('technical')}
-                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${
-                          activeSpecTab === 'technical'
-                            ? 'border-b-2 border-orange-500 text-orange-500'
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
+                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${activeSpecTab === 'technical'
+                          ? 'border-b-2 border-orange-500 text-orange-500'
+                          : 'text-gray-600 hover:text-gray-900'
+                          }`}
                       >
                         Technical Specs
                       </button>
@@ -764,11 +761,10 @@ export default function ProductDetail() {
                             {[1, 2, 3, 4, 5].map((star) => (
                               <Star
                                 key={star}
-                                className={`h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 ${
-                                  star <= Math.floor(avgRating)
-                                    ? 'fill-amber-500 text-amber-500'
-                                    : 'fill-gray-300 text-gray-300'
-                                }`}
+                                className={`h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 ${star <= Math.floor(avgRating)
+                                  ? 'fill-amber-500 text-amber-500'
+                                  : 'fill-gray-300 text-gray-300'
+                                  }`}
                               />
                             ))}
                           </div>
@@ -778,7 +774,7 @@ export default function ProductDetail() {
                           Based on <span className="font-semibold">{reviews.length} verified reviews</span>
                         </p>
                       </div>
-                      
+
                       <div className="bg-white rounded-lg px-4 py-3 sm:px-6 sm:py-4 shadow-sm border w-full md:w-auto">
                         <div className="text-xs sm:text-sm font-medium text-gray-500">Overall Rating</div>
                         <div className="text-2xl sm:text-3xl font-bold text-gray-900">{avgRating.toFixed(1)}/5.0</div>
@@ -814,11 +810,10 @@ export default function ProductDetail() {
                                     className="p-0.5 sm:p-1 hover:scale-110 transition-transform"
                                   >
                                     <Star
-                                      className={`h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 ${
-                                        star <= rating
-                                          ? 'fill-amber-500 text-amber-500'
-                                          : 'fill-gray-300 text-gray-300'
-                                      }`}
+                                      className={`h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 ${star <= rating
+                                        ? 'fill-amber-500 text-amber-500'
+                                        : 'fill-gray-300 text-gray-300'
+                                        }`}
                                     />
                                   </button>
                                 ))}
@@ -905,8 +900,8 @@ export default function ProductDetail() {
                         ) : (
                           <div className="space-y-3 sm:space-y-4">
                             {reviews.map((review) => (
-                              <Card 
-                                key={review.id} 
+                              <Card
+                                key={review.id}
                                 className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200 bg-white"
                               >
                                 <CardContent className="p-3 sm:p-4 md:p-6">
@@ -931,8 +926,8 @@ export default function ProductDetail() {
                                             })}
                                           </p>
                                           <span className="text-gray-300 hidden sm:inline">•</span>
-                                          <Badge 
-                                            variant="outline" 
+                                          <Badge
+                                            variant="outline"
                                             className="text-xs border-green-200 text-green-700 bg-green-50"
                                           >
                                             <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
@@ -949,11 +944,10 @@ export default function ProductDetail() {
                                           {[1, 2, 3, 4, 5].map((star) => (
                                             <Star
                                               key={star}
-                                              className={`h-4 w-4 sm:h-5 sm:w-5 ${
-                                                star <= review.rating
-                                                  ? 'fill-amber-500 text-amber-500'
-                                                  : 'fill-gray-300 text-gray-300'
-                                              }`}
+                                              className={`h-4 w-4 sm:h-5 sm:w-5 ${star <= review.rating
+                                                ? 'fill-amber-500 text-amber-500'
+                                                : 'fill-gray-300 text-gray-300'
+                                                }`}
                                             />
                                           ))}
                                         </div>
@@ -961,21 +955,21 @@ export default function ProductDetail() {
                                           {review.rating}.0/5.0
                                         </span>
                                       </div>
-                                      
+
                                       <p className="text-gray-700 leading-relaxed text-sm sm:text-base">
                                         {review.comment}
                                       </p>
-                                      
+
                                       {/* Review Actions */}
                                       <div className="flex items-center gap-2 sm:gap-4 pt-2 sm:pt-3">
-                                        <button 
+                                        <button
                                           onClick={() => console.log('Helpful clicked')}
                                           className="flex items-center gap-1 text-xs sm:text-sm text-gray-600 hover:text-orange-600 transition-colors"
                                         >
                                           <ThumbsUp className="h-3 w-3 sm:h-4 sm:w-4" />
                                           <span>Helpful ({Math.floor(Math.random() * 20)})</span>
                                         </button>
-                                        <button 
+                                        <button
                                           onClick={() => console.log('Reply clicked')}
                                           className="flex items-center gap-1 text-xs sm:text-sm text-gray-600 hover:text-orange-600 transition-colors"
                                         >
@@ -1080,9 +1074,9 @@ export default function ProductDetail() {
             </Card>
 
             {/* Similar Products */}
-            <SimilarProducts 
-              categoryId={product.category_id} 
-              currentProductId={product.id} 
+            <SimilarProducts
+              categoryId={product.category_id}
+              currentProductId={product.id}
             />
 
             {/* Recommended Products */}
@@ -1175,7 +1169,7 @@ export default function ProductDetail() {
 
                   {/* Action Buttons - Stack on mobile */}
                   <div className="space-y-2 sm:space-y-3 pt-3 sm:pt-4 border-t">
-                    <Button 
+                    <Button
                       className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm sm:text-base"
                       onClick={startConversation}
                       disabled={user?.id === product.seller_id}
@@ -1183,7 +1177,7 @@ export default function ProductDetail() {
                       <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
                       Contact Supplier
                     </Button>
-                    <Button 
+                    <Button
                       variant="outline"
                       className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 text-sm sm:text-base"
                       onClick={() => {
@@ -1196,7 +1190,7 @@ export default function ProductDetail() {
                     >
                       Send Inquiry
                     </Button>
-                    <Button 
+                    <Button
                       variant="ghost"
                       className="w-full text-gray-600 hover:text-blue-600 text-sm sm:text-base"
                       onClick={() => navigate(`/supplier/${product.seller_id}`)}
@@ -1298,7 +1292,7 @@ export default function ProductDetail() {
           </div>
         </div>
       </main>
-      
+
       <BottomNav />
     </div>
   );

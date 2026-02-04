@@ -72,7 +72,7 @@ export const MegaMenu = ({
 
   return (
     <div
-      className="fixed inset-0 top-[40px] z-[9999] bg-white animate-in fade-in duration-200"
+      className="fixed inset-0 top-[72px] z-[9999] bg-white animate-in fade-in duration-200"
       onMouseLeave={onMouseLeave || onClose}
       onMouseEnter={onMouseEnter}
     >

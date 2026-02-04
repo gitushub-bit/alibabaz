@@ -70,8 +70,15 @@ export const FlashSale = () => {
         return { hours, minutes, seconds };
     };
 
+    // Realistic B2B wholesale discounts: 15-35%
+    const getRealisticDiscount = (productId: string) => {
+        // Use product ID to generate consistent but varied discounts
+        const hash = productId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const discounts = [15, 20, 25, 30, 35]; // Realistic wholesale discounts
+        return discounts[hash % discounts.length];
+    };
+
     const time = formatTime(timeLeft);
-    const getDiscount = (price: number) => Math.floor(40 + (price % 30)); // 40-70% discount
 
     if (loading) {
         return (
@@ -132,8 +139,12 @@ export const FlashSale = () => {
                 {/* Products Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {products.map((product) => {
-                        const discount = getDiscount(product.price_min || 0);
-                        const originalPrice = (product.price_min || 0) / (1 - discount / 100);
+                        const discountPercent = getRealisticDiscount(product.id);
+                        const currentPrice = product.price_min || 0;
+                        // Calculate original price: current price is after discount
+                        // currentPrice = originalPrice * (1 - discount/100)
+                        // originalPrice = currentPrice / (1 - discount/100)
+                        const originalPrice = currentPrice / (1 - discountPercent / 100);
 
                         return (
                             <Link
@@ -152,7 +163,7 @@ export const FlashSale = () => {
 
                                     {/* Discount Badge */}
                                     <div className="absolute top-2 right-2 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
-                                        -{discount}%
+                                        -{discountPercent}%
                                     </div>
 
                                     {/* Flash Sale Badge */}
@@ -180,12 +191,15 @@ export const FlashSale = () => {
                                     <div className="space-y-1">
                                         <div className="flex items-baseline gap-2">
                                             <span className="text-xl font-bold text-red-600">
-                                                {formatPriceOnly(product.price_min || 0)}
+                                                {formatPriceOnly(currentPrice)}
                                             </span>
                                             <span className="text-xs text-gray-400 line-through">
                                                 {formatPriceOnly(originalPrice)}
                                             </span>
                                         </div>
+                                        <p className="text-xs text-green-600 font-medium">
+                                            Save {formatPriceOnly(originalPrice - currentPrice)}
+                                        </p>
                                     </div>
 
                                     {/* Wholesale Information */}

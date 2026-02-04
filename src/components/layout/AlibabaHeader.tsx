@@ -22,6 +22,7 @@ import { MobileMenu } from "./MobileMenu";
 import logo from "@/assets/logo.png";
 import { toast } from "@/hooks/use-toast";
 import { countries } from "@/data/countries";
+import { SearchAutocomplete } from "@/components/product/SearchAutocomplete";
 
 /* ─── STYLES & CONSTANTS ─── */
 const C = {
@@ -72,9 +73,15 @@ export default function AlibabaHeader() {
     const rightNav = ["Connect on WhatsApp", "Help Center", "App & extension", "Sell on Alibaba.com"];
 
     // ─── HANDLERS ───
-    const handleSearch = () => {
-        if (!searchQuery.trim()) return;
-        navigate(`/products?q=${encodeURIComponent(searchQuery)}`);
+    const handleSearch = (term?: string) => {
+        const queryToUse = typeof term === 'string' ? term : searchQuery;
+        if (!queryToUse.trim()) return;
+
+        if (typeof term === 'string') {
+            setSearchQuery(term);
+        }
+
+        navigate(`/products?q=${encodeURIComponent(queryToUse)}`);
     };
 
     const handleMegaMenuEnter = () => {
@@ -166,19 +173,19 @@ export default function AlibabaHeader() {
                     {!isHomePage && location.pathname !== "/worldwide" && (
                         <div className="hidden md:flex flex-1 max-w-xl mx-8">
                             <div className="flex items-center w-full bg-white border-2 border-[#FF6600] rounded-full overflow-hidden h-[40px]">
-                                <input
-                                    type="text"
+                                <SearchAutocomplete
                                     placeholder="Search products..."
-                                    className="flex-1 px-4 text-sm outline-none"
+                                    className="flex-1 px-4 text-sm outline-none w-full bg-transparent h-full"
+                                    containerClassName="flex-1 h-full flex items-center"
                                     value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                                    onChange={setSearchQuery}
+                                    onSearch={handleSearch}
                                 />
                                 <button className="px-3 text-gray-400 hover:text-[#FF6600]" onClick={() => fileInputRef.current?.click()}>
                                     <Camera size={18} />
                                 </button>
                                 <button
-                                    onClick={handleSearch}
+                                    onClick={() => handleSearch()}
                                     className="bg-[#FF6600] text-white px-6 h-full font-bold text-sm hover:bg-[#E65C00]"
                                 >
                                     Search
@@ -190,6 +197,13 @@ export default function AlibabaHeader() {
                     {/* RIGHT: Utilities */}
                     <div className="flex items-center gap-4 md:gap-[24px]">
 
+                        {/* Extra Links for One-Header Layout */}
+                        <div className="hidden xl:flex items-center gap-5 text-[13px] font-bold text-[#555]">
+                            <Link to="/help" className="hover:text-[#FF6600] transition-colors">Help</Link>
+                            <div className="w-[1px] h-3 bg-gray-300"></div>
+                            <Link to="/seller" className="hover:text-[#FF6600] transition-colors">Sell</Link>
+                        </div>
+
 
 
 
@@ -199,8 +213,8 @@ export default function AlibabaHeader() {
                             if (!open) setLocationView('form'); // Reset view on close
                         }}>
                             <PopoverTrigger asChild>
-                                <div className="hidden md:flex flex-col items-start cursor-pointer group hover:opacity-80 transition-all leading-none">
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Deliver to:</span>
+                                <div className="hidden md:flex flex-row items-center gap-2 cursor-pointer group hover:opacity-80 transition-all leading-none">
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Deliver to:</span>
                                     <div className="flex items-center gap-1.5">
                                         <img
                                             src={`https://flagcdn.com/w20/${countryCode.toLowerCase()}.png`}
@@ -426,7 +440,7 @@ export default function AlibabaHeader() {
                                 <Camera size={18} />
                             </button>
                             <button
-                                onClick={handleSearch}
+                                onClick={() => handleSearch()}
                                 className="bg-[#FF6600] text-white px-4 h-full font-bold text-sm"
                             >
                                 <Search size={18} />
@@ -436,30 +450,7 @@ export default function AlibabaHeader() {
                 )}
 
                 {/* 3. SECONDARY NAV ROW */}
-                <div className="w-full hidden md:flex items-center justify-between px-[60px] h-[36px] bg-white border-t border-[#f4f4f4]">
-                    <div className="flex items-center gap-[28px]">
-                        {/* Mega Menu Trigger */}
-                        <div
-                            className="flex items-center gap-[6px] cursor-pointer group h-full"
-                            onMouseEnter={handleMegaMenuEnter}
-                            onMouseLeave={handleMegaMenuLeave}
-                        >
-                            <Menu size={16} className="text-[#666]" />
-                            <span style={{ fontSize: 13, color: C.textSecondary }} className="group-hover:text-[#FF6600]">All categories</span>
-                        </div>
-
-                        <Link to="/products?featured=true" className="text-[13px] text-[#666] hover:text-[#FF6600]">Featured selections</Link>
-                        <Link to="/buyer/rfq/new" className="text-[13px] text-[#666] hover:text-[#FF6600]">Order protections</Link>
-                    </div>
-
-                    <div className="flex items-center gap-[28px]">
-                        {rightNav.map((item, i) => (
-                            <span key={i} style={{ fontSize: 13, color: C.textSecondary }} className="cursor-pointer hover:text-[#FF6600]">
-                                {item}
-                            </span>
-                        ))}
-                    </div>
-                </div>
+                {/* 3. SECONDARY NAV ROW - REMOVED (Merged into Main Header) */}
             </div>
 
             <MegaMenu
@@ -477,7 +468,7 @@ export default function AlibabaHeader() {
 
                         {/* Tabs */}
                         <div className="flex items-center justify-between w-full md:w-auto md:justify-center gap-2 md:gap-12 mb-4 md:mb-8 h-[40px] md:h-[48px] overflow-x-auto scrollbar-hide px-2">
-                            {["AI Mode", "Products", "Manufacturers", "Worldwide"].map((tab) => (
+                            {["AI Mode", "Products", "Worldwide"].map((tab) => (
                                 <div key={tab} className="flex-shrink-0 flex items-center">
                                     <div
                                         onClick={() => {
@@ -513,11 +504,10 @@ export default function AlibabaHeader() {
                         <div className="w-full max-w-[860px] relative">
                             <div className="bg-white rounded-[24px] shadow-[0_4px_24px_rgba(255,102,0,0.08)] border-[1.5px] border-[#FF6600] p-4 md:p-5 flex flex-col h-[140px] md:h-[160px]">
                                 {/* Input */}
-                                <input
-                                    type="text"
+                                <SearchAutocomplete
                                     value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                                    onChange={setSearchQuery}
+                                    onSearch={handleSearch}
                                     placeholder={activeTab === "AI Mode" ? "Ask anything..." : "Search products..."}
                                     className="w-full text-[16px] md:text-[18px] outline-none text-gray-800 placeholder-gray-400 font-medium bg-transparent pt-1 px-1"
                                 />
@@ -560,7 +550,7 @@ export default function AlibabaHeader() {
 
                                     {/* Search Button */}
                                     <button
-                                        onClick={handleSearch}
+                                        onClick={() => handleSearch()}
                                         className="bg-gradient-to-r from-[#FF9800] to-[#FF5722] text-white flex items-center space-x-2 px-6 md:px-10 h-[48px] md:h-[54px] rounded-full hover:shadow-lg hover:scale-[1.02] transition-all active:scale-[0.98] shadow-md ml-auto"
                                     >
                                         <div className="relative">

@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
 import { useCurrency } from '@/hooks/useCurrency';
-import { Header } from '@/components/layout/Header';
+import AlibabaHeader from '@/components/layout/AlibabaHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -229,7 +229,7 @@ export default function ProfilePage() {
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-background pb-20 md:pb-0">
-        <Header />
+        <AlibabaHeader />
         <main className="container mx-auto max-w-lg">
           <div className="p-4 space-y-4">
             <Skeleton className="h-24 w-full" />
@@ -256,7 +256,7 @@ export default function ProfilePage() {
 
       {/* Desktop Header */}
       <div className="hidden md:block">
-        <Header />
+        <AlibabaHeader />
       </div>
 
       <main className="container mx-auto max-w-lg md:max-w-2xl lg:max-w-4xl">

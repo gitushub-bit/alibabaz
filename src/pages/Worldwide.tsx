@@ -187,7 +187,7 @@ export default function Worldwide() {
 
                     {/* Page Tabs Navigation */}
                     <div className="flex items-center gap-8 md:gap-14 mb-8 overflow-x-auto scrollbar-hide px-2 w-full justify-center">
-                        {["AI Mode", "Products", "Manufacturers", "Worldwide"].map((tab) => (
+                        {["AI Mode", "Products", "Worldwide"].map((tab) => (
                             <div key={tab} className="flex-shrink-0 relative group">
                                 <button
                                     onClick={() => {
