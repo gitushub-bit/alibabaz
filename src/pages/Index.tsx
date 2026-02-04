@@ -4,10 +4,9 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { Footer } from "@/components/layout/Footer";
 import { WelcomeSection } from "@/components/home/WelcomeSection";
 import { FlashSale } from "@/components/home/FlashSale";
-import { BestSellers } from "@/components/home/BestSellers";
 import { UpcomingDeals } from "@/components/home/UpcomingDeals";
+import { BestSellers } from "@/components/home/BestSellers";
 import { CustomerFavorites } from "@/components/home/CustomerFavorites";
-import { TopDeals } from "@/components/home/TopDeals";
 import { TrendingProducts } from "@/components/home/TrendingProducts";
 import { FeaturedCategories } from "@/components/home/FeaturedCategories";
 import { GlobalIndustryHubs } from "@/components/home/GlobalIndustryHubs";
@@ -24,34 +23,31 @@ const Index = () => {
         {/* Hero Section */}
         <WelcomeSection />
 
-        {/* Flash Sale - High Priority */}
+        {/* Flash Sale - Time-Sensitive Offers */}
         <FlashSale />
-
-        {/* Best Sellers - Social Proof */}
-        <BestSellers />
-
-        {/* Customer Favorites - Community Picks */}
-        <CustomerFavorites />
 
         {/* Upcoming Deals - Build Anticipation */}
         <UpcomingDeals />
 
-        {/* Top Deals - Existing Component */}
-        <TopDeals />
+        {/* Top Performing Products */}
+        <BestSellers />
 
-        {/* Trending Products - Discovery */}
+        {/* Trending Globally */}
+        <CustomerFavorites />
+
+        {/* Trending Products - Latest Additions */}
         <TrendingProducts />
 
-        {/* Featured Categories - Simplified */}
+        {/* Featured Categories - Browse by Industry */}
         <FeaturedCategories />
 
-        {/* Global Industry Hubs */}
+        {/* Global Industry Hubs - International Sourcing */}
         <GlobalIndustryHubs />
 
-        {/* RFQ Banner */}
+        {/* RFQ Banner - Request for Quotation */}
         <RFQBanner />
 
-        {/* Featured Suppliers */}
+        {/* Featured Suppliers - Verified Partners */}
         <FeaturedSuppliers />
       </main>
 

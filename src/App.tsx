@@ -70,6 +70,7 @@ import AdminAnalytics from "./pages/admin/AdminAnalytics";
 
 import Checkout from "./telegram/Checkout";
 import { AIAssistant } from "@/components/ai/AIAssistant";
+import { FloatingCart } from "@/components/layout/FloatingCart";
 
 const queryClient = new QueryClient();
 
@@ -90,6 +91,7 @@ function App() {
                 <Sonner />
 
                 <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                  <FloatingCart />
                   <Routes>
                     <Route path="/" element={<Index />} />
                     <Route path="/auth" element={<Auth />} />

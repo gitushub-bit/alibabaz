@@ -196,8 +196,8 @@ export default function Worldwide() {
                                         else navigate('/');
                                     }}
                                     className={`relative text-[18px] md:text-[22px] font-bold pb-2 transition-all duration-200 ${tab === "Worldwide"
-                                            ? "text-[#FF6600]"
-                                            : "text-[#333] hover:text-[#555]"
+                                        ? "text-[#FF6600]"
+                                        : "text-[#333] hover:text-[#555]"
                                         }`}>
                                     {tab}
                                     {tab === "Worldwide" && (
@@ -268,8 +268,8 @@ export default function Worldwide() {
                                 className="snap-start flex flex-col items-center gap-3 min-w-[76px] cursor-pointer group/item select-none"
                             >
                                 <div className={`w-[60px] h-[60px] rounded-full flex items-center justify-center border transition-all duration-200 relative ${activeTab === c.name
-                                        ? "border-[#FF6600] ring-[3px] ring-orange-100 bg-orange-50 shadow-sm"
-                                        : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5"
+                                    ? "border-[#FF6600] ring-[3px] ring-orange-100 bg-orange-50 shadow-sm"
+                                    : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5"
                                     }`}>
                                     {c.code === "ALL" ? (
                                         <Globe className={`w-7 h-7 ${activeTab === c.name ? "text-[#FF6600]" : "text-gray-500"}`} strokeWidth={1.5} />
@@ -320,7 +320,45 @@ export default function Worldwide() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {categories.slice(0, 6).map((category) => {
                             const categoryProduct = topProducts.find(p => p.category_id === category.id);
-                            const image = categoryProduct?.images?.[0] || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&auto=format&fit=crop&q=80';
+
+                            // Category-specific images for variety
+                            const getCategoryImage = (categoryName: string) => {
+                                const lowerName = categoryName.toLowerCase();
+                                if (lowerName.includes('electronic') || lowerName.includes('tech')) {
+                                    return 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=600&auto=format&fit=crop&q=80';
+                                } else if (lowerName.includes('fashion') || lowerName.includes('apparel') || lowerName.includes('clothing')) {
+                                    return 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&auto=format&fit=crop&q=80';
+                                } else if (lowerName.includes('home') || lowerName.includes('furniture')) {
+                                    return 'https://images.unsplash.com/photo-1556228453-efd6c1ff04f6?w=600&auto=format&fit=crop&q=80';
+                                } else if (lowerName.includes('beauty') || lowerName.includes('cosmetic')) {
+                                    return 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=600&auto=format&fit=crop&q=80';
+                                } else if (lowerName.includes('sport') || lowerName.includes('fitness')) {
+                                    return 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=600&auto=format&fit=crop&q=80';
+                                } else if (lowerName.includes('food') || lowerName.includes('beverage')) {
+                                    return 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&auto=format&fit=crop&q=80';
+                                } else if (lowerName.includes('toy') || lowerName.includes('game')) {
+                                    return 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=600&auto=format&fit=crop&q=80';
+                                } else if (lowerName.includes('automotive') || lowerName.includes('vehicle')) {
+                                    return 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=600&auto=format&fit=crop&q=80';
+                                } else if (lowerName.includes('jewelry') || lowerName.includes('accessories')) {
+                                    return 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=600&auto=format&fit=crop&q=80';
+                                } else if (lowerName.includes('industrial') || lowerName.includes('machinery')) {
+                                    return 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=600&auto=format&fit=crop&q=80';
+                                } else {
+                                    // Default variety based on index
+                                    const defaultImages = [
+                                        'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&auto=format&fit=crop&q=80',
+                                        'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=600&auto=format&fit=crop&q=80',
+                                        'https://images.unsplash.com/photo-1556228453-efd6c1ff04f6?w=600&auto=format&fit=crop&q=80',
+                                        'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=600&auto=format&fit=crop&q=80',
+                                        'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=600&auto=format&fit=crop&q=80',
+                                        'https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&auto=format&fit=crop&q=80'
+                                    ];
+                                    return defaultImages[Math.floor(Math.random() * defaultImages.length)];
+                                }
+                            };
+
+                            const image = categoryProduct?.images?.[0] || getCategoryImage(category.name);
 
                             return (
                                 <div
@@ -382,7 +420,7 @@ export default function Worldwide() {
                                             className="flex items-center gap-3 p-2 rounded-[12px] group/item hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all"
                                         >
                                             <span className={`text-[16px] w-6 text-center italic font-black ${idx === 0 ? "text-[#FF6600]" :
-                                                    idx === 1 ? "text-[#333]" : "text-gray-300"
+                                                idx === 1 ? "text-[#333]" : "text-gray-300"
                                                 }`}>#{idx + 1}</span>
 
                                             <div className="relative">
