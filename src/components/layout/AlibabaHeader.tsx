@@ -23,6 +23,7 @@ import logo from "@/assets/logo.png";
 import { toast } from "@/hooks/use-toast";
 import { countries } from "@/data/countries";
 import { SearchAutocomplete } from "@/components/product/SearchAutocomplete";
+import { cn } from "@/lib/utils";
 
 /* ─── STYLES & CONSTANTS ─── */
 const C = {
@@ -130,13 +131,13 @@ export default function AlibabaHeader() {
     };
 
     return (
-        <div className="w-full relative z-50 font-sans">
+        <div className="w-full relative z-50 font-sans overflow-x-hidden">
 
-            {/* 1. PROMO BANNER */}
-            <div className="w-full bg-[#FFE8D6] py-[10px] px-4 flex justify-center items-center border-b border-[#ffd7b5]">
-                <div className="flex items-center space-x-2 w-full justify-center text-center">
-                    <p className="text-[#111] text-[13px] md:text-[15px] font-bold tracking-tight">
-                        Research smarter • Design easier • Source better — All-in-one with <span className="font-extrabold">AI Mode</span>
+            {/* 1. PROMO BANNER - Optimized for Mobile */}
+            <div className="w-full bg-[#FFE8D6] py-[6px] md:py-[10px] px-2 md:px-4 flex justify-center items-center border-b border-[#ffd7b5] overflow-hidden">
+                <div className="flex items-center space-x-1 md:space-x-2 w-full justify-center text-center">
+                    <p className="text-[#111] text-[11px] sm:text-[15px] font-bold tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
+                        Research smarter • Better — All-in-one with <span className="font-extrabold text-[#FF6600]">AI Mode</span>
                     </p>
                     <div className="hidden md:block relative">
                         <span className="text-[#FF6600] text-xl ml-1">✨</span>
@@ -155,16 +156,16 @@ export default function AlibabaHeader() {
             <div className="bg-white border-b border-[#E8E8E8] sticky top-0 z-[50]">
                 <div className="max-w-[1440px] mx-auto px-4 md:px-[60px] min-h-[72px] py-2 flex items-center justify-between">
 
-                    {/* LEFT: Mobile Menu & Logo */}
-                    <div className="flex items-center gap-4">
-                        <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setShowMobileMenu(true)}>
-                            <Menu className="h-6 w-6" />
+                    {/* LEFT: Mobile Menu & Logo - Sharper Mobile Presence */}
+                    <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+                        <Button variant="ghost" size="icon" className="md:hidden w-8 h-8 p-0" onClick={() => setShowMobileMenu(true)}>
+                            <Menu className="h-5 w-5" />
                         </Button>
                         <Link to="/" className="flex items-center group cursor-pointer shrink-0">
                             <img
                                 src={logo}
                                 alt="Alibaba.com"
-                                className="h-[80px] md:h-[100px] object-contain saturate-200 contrast-125 drop-shadow-sm"
+                                className="h-[40px] sm:h-[60px] md:h-[100px] object-contain saturate-200 contrast-125 drop-shadow-sm"
                             />
                         </Link>
                     </div>
@@ -194,8 +195,8 @@ export default function AlibabaHeader() {
                         </div>
                     )}
 
-                    {/* RIGHT: Utilities */}
-                    <div className="flex items-center gap-4 md:gap-[24px]">
+                    {/* RIGHT: Utilities - More compact on mobile */}
+                    <div className="flex items-center gap-3 md:gap-[24px] pr-1 md:pr-0">
 
                         {/* Extra Links for One-Header Layout */}
                         <div className="hidden xl:flex items-center gap-5 text-[13px] font-bold text-[#555]">
@@ -426,8 +427,8 @@ export default function AlibabaHeader() {
 
                 {/* MOBILE SEARCH (Non-Home Only) */}
                 {!isHomePage && location.pathname !== "/worldwide" && (
-                    <div className="md:hidden px-4 pb-3 -mt-1 bg-white border-b border-[#E8E8E8]">
-                        <div className="flex items-center w-full bg-white border border-[#FF6600] rounded-full overflow-hidden h-[40px]">
+                    <div className="md:hidden px-3 pb-3 -mt-1 bg-white border-b border-[#E8E8E8]">
+                        <div className="flex items-center w-full bg-white border border-[#FF6600] rounded-full overflow-hidden h-[36px]">
                             <input
                                 type="text"
                                 placeholder="Search products..."
@@ -468,34 +469,44 @@ export default function AlibabaHeader() {
 
                         {/* Tabs */}
                         <div className="flex items-center justify-between w-full md:w-auto md:justify-center gap-2 md:gap-12 mb-4 md:mb-8 h-[40px] md:h-[48px] overflow-x-auto scrollbar-hide px-2">
-                            {["AI Mode", "Products", "Worldwide"].map((tab) => (
-                                <div key={tab} className="flex-shrink-0 flex items-center">
+                            {[
+                                { id: "AI Mode", label: "AI Intelligence" },
+                                { id: "Products", label: "Products" },
+                                { id: "Worldwide", label: "Worldwide" }
+                            ].map((tab) => (
+                                <div key={tab.id} className="flex-shrink-0 flex items-center">
                                     <div
                                         onClick={() => {
-                                            if (tab === "AI Mode") {
+                                            if (tab.id === "AI Mode") {
                                                 navigate('/ai-mode');
-                                            } else if (tab === "Worldwide") {
+                                            } else if (tab.id === "Worldwide") {
                                                 navigate('/worldwide');
                                             } else {
-                                                setActiveTab(tab);
+                                                setActiveTab(tab.id);
                                             }
                                         }}
-                                        className={`cursor-pointer whitespace-nowrap px-1 text-[15px] sm:text-[18px] md:text-[22px] lg:text-[28px] font-bold border-b-[3px] md:border-b-[4px] transition-all pb-1 flex items-center group ${activeTab === tab
-                                            ? (tab === "AI Mode" ? 'text-black border-transparent' : 'text-[#FF6600] border-[#FF6600]')
-                                            : 'text-[#333] border-transparent hover:text-gray-600'
-                                            }`}
+                                        className={cn(
+                                            "cursor-pointer whitespace-nowrap px-1 text-[15px] sm:text-[18px] md:text-[22px] lg:text-[28px] font-bold transition-all pb-1 flex items-center group",
+                                            tab.id === "Products" ? "text-[#FF6600] border-b-[3px] md:border-b-[4px] border-[#FF6600]" :
+                                                tab.id === "Worldwide" ? "text-slate-900 border-b-[3px] md:border-b-[4px] border-transparent" :
+                                                    "text-black border-b-[3px] md:border-b-[4px] border-transparent"
+                                        )}
                                     >
-                                        {tab === "AI Mode" ? (
-                                            <div className="flex items-center">
-                                                <span>AI Mode</span>
-                                                <div className="relative ml-0.5 md:ml-1 -top-1">
-                                                    <span className="text-[#FF6600] text-lg md:text-xl">✨</span>
-                                                    <span className="absolute -top-1 -right-2 md:-right-3 text-[#FF6600] text-[7px] md:text-[8px] font-black uppercase tracking-tighter">AI</span>
+                                        {tab.id === "AI Mode" ? (
+                                            <div className="flex items-center relative gap-1.5">
+                                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-[#FF6600]">
+                                                    {tab.label}
+                                                </span>
+                                                <div className="relative -top-1.5">
+                                                    <div className="absolute inset-0 bg-orange-400 blur-[8px] opacity-40 animate-pulse rounded-full" />
+                                                    <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-orange-500 relative z-10" />
                                                 </div>
                                             </div>
-                                        ) : tab}
+                                        ) : (
+                                            tab.label
+                                        )}
                                     </div>
-                                    {tab === "AI Mode" && <div className="hidden md:block text-gray-200 text-3xl font-light opacity-50 select-none ml-6 md:ml-12">|</div>}
+                                    {tab.id === "AI Mode" && <div className="hidden md:block text-gray-200 text-3xl font-light opacity-40 select-none ml-6 md:ml-12">|</div>}
                                 </div>
                             ))}
                         </div>

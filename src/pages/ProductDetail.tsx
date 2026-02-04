@@ -126,6 +126,7 @@ export default function ProductDetail() {
     if (slug) {
       setLoading(true);
       fetchProduct();
+      window.scrollTo(0, 0);
     }
   }, [slug]);
 
@@ -134,14 +135,23 @@ export default function ProductDetail() {
       let isMounted = true;
 
       const checkFav = async () => {
-        const { data } = await supabase
-          .from('favorites')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('product_id', product.id)
-          .single();
+        try {
+          const { data, error } = await supabase
+            .from('favorites')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('product_id', product.id)
+            .limit(1);
 
-        if (isMounted) setIsFavorite(!!data);
+          if (error) {
+            console.error('Error checking favorite:', error);
+            return;
+          }
+
+          if (isMounted) setIsFavorite(data && data.length > 0);
+        } catch (err) {
+          console.error('Unexpected error checking favorite:', err);
+        }
       };
 
       checkFav();
@@ -179,11 +189,26 @@ export default function ProductDetail() {
   }, [product, slug]);
 
   const fetchProduct = async () => {
-    const { data: productData, error } = await supabase
+    // Try by slug first
+    let { data: productData, error } = await supabase
       .from('products')
       .select('*')
       .eq('slug', slug)
-      .single();
+      .maybeSingle();
+
+    // Fallback: if not found and slug looks like a UUID, try by ID
+    if (!productData && slug?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      const { data: byId, error: idError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', slug)
+        .maybeSingle();
+
+      if (byId) {
+        productData = byId;
+        error = null;
+      }
+    }
 
     if (error || !productData) {
       navigate('/404');
@@ -193,8 +218,8 @@ export default function ProductDetail() {
     setProduct(productData);
 
     const [supplierRes, profileRes] = await Promise.all([
-      supabase.from('suppliers').select('*').eq('user_id', productData.seller_id).single(),
-      supabase.from('profiles').select('full_name, company_name').eq('user_id', productData.seller_id).single(),
+      supabase.from('suppliers').select('*').eq('user_id', productData.seller_id).maybeSingle(),
+      supabase.from('profiles').select('full_name, company_name').eq('user_id', productData.seller_id).maybeSingle(),
     ]);
 
     if (supplierRes.data) setSupplier(supplierRes.data);
@@ -205,39 +230,50 @@ export default function ProductDetail() {
 
   const fetchReviews = async (productId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('reviews')
-        .select(`
-          id,
-          rating,
-          comment,
-          created_at,
-          buyer_id,
-          profiles!reviews_buyer_id_profiles_fkey (
-            full_name
-          )
-        `)
-        .eq('product_id', productId)
-        .order('created_at', { ascending: false });
+      // Step 1: Find all order IDs for this product
+      // This side-steps JOIN discovery issues in PostgREST
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('product_id', productId);
 
-      if (error) {
-        console.error('Error fetching reviews:', error);
+      if (orderError) {
+        console.error('Error fetching associated orders:', orderError);
         setReviews([]);
         return;
       }
 
-      const formattedReviews = (data || []).map(review => ({
+      const orderIds = orderData?.map(o => o.id) || [];
+
+      if (orderIds.length === 0) {
+        setReviews([]);
+        return;
+      }
+
+      // Step 2: Fetch reviews matching those order IDs
+      const { data: reviewData, error: reviewError } = await supabase
+        .from('reviews')
+        .select('*')
+        .in('order_id', orderIds)
+        .order('created_at', { ascending: false });
+
+      if (reviewError) {
+        console.error('Error fetching reviews by order IDs:', reviewError);
+        setReviews([]);
+        return;
+      }
+
+      const formattedReviews = (reviewData || []).map(review => ({
         id: review.id,
         rating: review.rating,
         comment: review.comment || '',
         created_at: review.created_at,
-        profile: review.profiles ? { full_name: review.profiles.full_name } : undefined
+        profile: { full_name: 'Verified Buyer' }
       }));
 
-      console.log(`Loaded ${formattedReviews.length} reviews for product ${productId}`);
       setReviews(formattedReviews);
     } catch (err) {
-      console.error('Unexpected error:', err);
+      console.error('Unexpected error in fetchReviews:', err);
       setReviews([]);
     }
   };
@@ -333,14 +369,14 @@ export default function ProductDetail() {
       .eq('buyer_id', user.id)
       .eq('seller_id', product.seller_id)
       .eq('product_id', product.id)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       navigate(`/messages/${existing.id}`);
       return;
     }
 
-    const { data: newConv } = await supabase
+    const { data: newConv, error: convError } = await supabase
       .from('conversations')
       .insert({
         buyer_id: user.id,
@@ -348,14 +384,22 @@ export default function ProductDetail() {
         product_id: product.id
       })
       .select()
-      .single();
+      .maybeSingle();
 
     if (newConv) {
+      // Send initial inquiry message
+      await supabase.from('messages').insert({
+        conversation_id: newConv.id,
+        sender_id: user.id,
+        content: `Hi, I'm interested in "${product.title}". Could you provide more details about lead times and customization options?`
+      });
+
       navigate(`/messages/${newConv.id}`);
     } else {
+      console.error('Conversation error:', convError);
       toast({
         title: 'Error',
-        description: 'Could not start conversation',
+        description: 'Could not start conversation. Please try again.',
         variant: 'destructive'
       });
     }
@@ -411,30 +455,30 @@ export default function ProductDetail() {
 
       <AlibabaHeader />
 
-      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        {/* Breadcrumb - Mobile responsive */}
-        <div className="mb-4 sm:mb-6 text-xs sm:text-sm text-gray-600 overflow-x-auto whitespace-nowrap pb-1">
-          <span className="hover:text-orange-500 cursor-pointer">Home</span>
-          <span className="mx-1 sm:mx-2">›</span>
-          <span className="hover:text-orange-500 cursor-pointer">Products</span>
-          <span className="mx-1 sm:mx-2">›</span>
-          <span className="text-gray-900 font-medium truncate">{product.title}</span>
+      <main className="w-full max-w-[1440px] mx-auto overflow-hidden px-4 sm:px-4 py-4 sm:py-6 pb-24 md:pb-6">
+        {/* Breadcrumb - Hidden on very small mobile, compact on others */}
+        <div className="hidden sm:flex mb-4 sm:mb-6 text-xs sm:text-sm text-gray-500 overflow-x-auto whitespace-nowrap pb-1 items-center">
+          <span className="hover:text-orange-500 cursor-pointer transition-colors">Home</span>
+          <ChevronRight className="w-3 h-3 mx-1" />
+          <span className="hover:text-orange-500 cursor-pointer transition-colors">Products</span>
+          <ChevronRight className="w-3 h-3 mx-1" />
+          <span className="text-gray-900 font-medium truncate max-w-[200px]">{product.title}</span>
         </div>
 
         <div className="grid lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Left Column: Product Images & Details (8 columns on desktop, full width on mobile) */}
           <div className="lg:col-span-8 space-y-4 sm:space-y-6">
-            {/* Product Card */}
-            <Card className="border border-gray-200 shadow-sm">
-              <CardContent className="p-3 sm:p-4 md:p-6">
+            {/* Product Detail Main Section */}
+            <Card className="border-x-0 sm:border border-gray-200 shadow-none sm:shadow-sm overflow-hidden">
+              <CardContent className="p-0 sm:p-6">
                 <div className="flex flex-col md:grid md:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
-                  {/* Product Images - Mobile responsive */}
-                  <div className="space-y-3 sm:space-y-4">
-                    <div className="relative bg-white border border-gray-200 rounded-lg p-2 sm:p-4">
+                  {/* Product Images - Full width on smallest screens */}
+                  <div className="space-y-4">
+                    <div className="relative bg-white border-b sm:border border-gray-100 sm:rounded-xl overflow-hidden aspect-square flex items-center justify-center">
                       <img
                         src={images[currentImageIndex]}
                         alt={product.title}
-                        className="w-full h-auto max-h-[280px] sm:max-h-[350px] md:max-h-[400px] object-contain"
+                        className="w-full h-full object-contain"
                       />
 
                       {images.length > 1 && (
@@ -481,155 +525,163 @@ export default function ProductDetail() {
                       </div>
                     )}
 
-                    {/* Image Actions - Stack on mobile */}
-                    <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 pt-3 sm:pt-4 border-t">
-                      <Button variant="outline" size="sm" className="gap-1 sm:gap-2 w-full sm:w-auto">
-                        <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
-                        <span className="text-xs sm:text-sm">View Larger</span>
-                      </Button>
-                      <Button variant="outline" size="sm" className="gap-1 sm:gap-2 w-full sm:w-auto">
-                        <Share2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                        <span className="text-xs sm:text-sm">Share</span>
-                      </Button>
-                    </div>
+
                   </div>
 
                   {/* Product Info - Mobile responsive */}
-                  <div className="space-y-4 sm:space-y-6">
+                  <div className="space-y-6 p-4 sm:p-0">
                     <div>
-                      <div className="flex items-start justify-between mb-2 sm:mb-3">
-                        <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 pr-2">{product.title}</h1>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={toggleFavorite}
-                          className="text-gray-500 hover:text-orange-500 flex-shrink-0"
-                        >
-                          <Heart className={`h-4 w-4 sm:h-5 sm:w-5 ${isFavorite ? 'fill-orange-500 text-orange-500' : ''}`} />
-                        </Button>
-                      </div>
-
-                      {/* Verification Badges - Wrap on mobile */}
-                      <div className="flex flex-wrap gap-1 sm:gap-2 mb-3 sm:mb-4">
-                        {product.verified && (
-                          <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
-                            <ShieldCheck className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
-                            Verified
+                      {/* Title & Badges */}
+                      <div className="mb-6">
+                        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 leading-tight mb-4 lg:pr-8 break-words overflow-wrap-anywhere">
+                          {product.title}
+                        </h1>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {product.verified && <VerifiedBadge size="sm" />}
+                          <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-100 rounded-sm font-medium px-2 py-0.5 text-[10px] sm:text-xs">
+                            Trade Assurance
                           </Badge>
-                        )}
-                        <Badge variant="outline" className="border-blue-200 text-blue-700 text-xs">
-                          <TrendingUp className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
-                          Trending
-                        </Badge>
-                        <Badge variant="outline" className="border-purple-200 text-purple-700 text-xs">
-                          <Award className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
-                          Premium
-                        </Badge>
+                          <Badge variant="outline" className="text-gray-500 border-gray-200 rounded-sm font-normal px-2 py-0.5 text-[10px] sm:text-xs bg-gray-50/50">
+                            <Truck className="w-3 h-3 mr-1" /> Ready to Ship
+                          </Badge>
+                        </div>
                       </div>
 
-                      {/* Price Section - Mobile responsive */}
-                      <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-3 sm:mb-4">
-                        <div className="flex items-baseline gap-1 sm:gap-2 mb-1 sm:mb-2">
-                          <span className="text-xs sm:text-sm text-gray-600">Unit Price:</span>
-                          <div className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600">
-                            {formatPriceOnly(unitPrice)}
+                      {/* Trade Information Block */}
+                      <div className="bg-gray-50/80 border border-gray-100 rounded-lg p-3 sm:p-6 mb-6">
+                        {/* Price Row */}
+                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 mb-4 border-b border-gray-200 pb-4 overflow-hidden">
+                          <div className="min-w-0">
+                            <p className="text-sm text-gray-500 mb-1">FOB Price / Unit</p>
+                            <div className="flex flex-wrap items-baseline gap-1 sm:gap-2">
+                              <span className="text-2xl sm:text-3xl font-bold text-orange-600">
+                                {formatPriceOnly(unitPrice)}
+                              </span>
+                              {priceRange && (
+                                <span className="text-base sm:text-lg text-gray-400 font-medium whitespace-nowrap">
+                                  - {formatPriceOnly(product.price_max || 0)}
+                                </span>
+                              )}
+                              <span className="text-gray-500 text-xs sm:text-sm font-normal">/ {product.unit}</span>
+                            </div>
                           </div>
-                          {priceRange && (
-                            <span className="text-xs sm:text-sm text-gray-500">
-                              ~ {formatPriceOnly(product.price_max || 0)}
+                          <div className="text-left sm:text-right">
+                            <p className="text-[10px] text-gray-400 mb-1 uppercase tracking-tight">Min. Order</p>
+                            <span className="text-sm sm:text-base md:text-lg font-bold text-gray-900 whitespace-nowrap">
+                              {product.moq} {product.unit}s
                             </span>
+                          </div>
+                        </div>
+
+                        {/* Logistics Summary */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-500 block mb-0.5 sm:mb-1">Lead Time:</span>
+                            <span className="font-medium text-gray-900">15-30 days</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block mb-0.5 sm:mb-1">Shipping:</span>
+                            <span className="font-medium text-gray-900">Support Express · Sea freight</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Key Attributes Summary - Compact Grid */}
+                      <div className="mb-8 p-4 sm:p-0">
+                        <h3 className="text-[10px] sm:text-xs font-bold text-gray-400 mb-4 uppercase tracking-[0.1em]">Key Attributes</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-12 text-sm">
+                          {product.specifications && typeof product.specifications === 'object' && !Array.isArray(product.specifications) ? (
+                            Object.entries(product.specifications as Record<string, unknown>).slice(0, 6).map(([key, value]) => (
+                              <div key={key} className="flex justify-between items-start border-b border-gray-50 pb-2 gap-2 sm:gap-4 overflow-hidden">
+                                <span className="text-gray-400 text-[10px] sm:text-xs flex-shrink-0 mt-0.5">{key}</span>
+                                <span className="text-gray-900 font-semibold text-right text-[11px] sm:text-sm break-words min-w-0 flex-1">{String(value)}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <>
+                              <div className="flex justify-between items-baseline border-b border-gray-50 pb-2">
+                                <span className="text-gray-400 text-xs">Material</span>
+                                <span className="text-gray-900 font-semibold">Premium Grade</span>
+                              </div>
+                              <div className="flex justify-between items-baseline border-b border-gray-50 pb-2">
+                                <span className="text-gray-400 text-xs">Classification</span>
+                                <span className="text-gray-900 font-semibold">Standard Class A</span>
+                              </div>
+                            </>
                           )}
                         </div>
+                      </div>
 
-                        <div className="grid grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm">
-                          <div>
-                            <span className="text-gray-600">MOQ:</span>
-                            <span className="ml-1 sm:ml-2 font-medium">{product.moq} {product.unit}(s)</span>
+                      {/* Quantity Selector Row - Enhanced Mobile Layout */}
+                      <div className="bg-orange-50/40 p-3 sm:p-5 rounded-xl border border-orange-100/60 mb-8">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-center gap-4">
+                            <Label className="text-gray-600 font-semibold text-sm">Quantity:</Label>
+                            <div className="flex items-center bg-white border border-gray-300 rounded shadow-sm overflow-hidden">
+                              <button
+                                onClick={() => setQuantity(Math.max(minQty, quantity - 1))}
+                                disabled={quantity <= minQty}
+                                className="px-3 py-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 disabled:opacity-30 transition-colors"
+                              >
+                                <Minus className="h-4 w-4" />
+                              </button>
+                              <input
+                                type="number"
+                                value={quantity}
+                                onChange={(e) => setQuantity(Math.max(minQty, parseInt(e.target.value || "0")))}
+                                className="w-14 sm:w-16 text-center border-none focus:ring-0 text-gray-900 font-bold py-2 text-sm"
+                              />
+                              <button
+                                onClick={() => setQuantity(quantity + 1)}
+                                className="px-3 py-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-gray-600">Supply:</span>
-                            <span className="ml-1 sm:ml-2 font-medium">10,000/month</span>
+
+                          <div className="flex items-center justify-between sm:justify-end gap-3 pt-3 sm:pt-0 border-t sm:border-none border-orange-100">
+                            <span className="text-xs text-gray-500 font-medium">Order Total:</span>
+                            <span className="font-extrabold text-orange-600 text-lg sm:text-2xl">
+                              {formatPriceOnly(totalPrice)}
+                            </span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Quantity & Total - Mobile responsive */}
-                      <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
-                          <Label className="text-gray-700 text-sm">Order Quantity</Label>
-                          <div className="flex items-center gap-1 sm:gap-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => setQuantity(Math.max(minQty, quantity - 1))}
-                              disabled={quantity <= minQty}
-                              className="border-gray-300 h-8 w-8 sm:h-9 sm:w-9"
-                            >
-                              <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
-                            <Input
-                              type="number"
-                              value={quantity}
-                              min={minQty}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value || "0", 10);
-                                setQuantity(Math.max(minQty, val));
-                              }}
-                              className="w-16 sm:w-20 text-center border-gray-300 text-sm"
-                            />
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => setQuantity(quantity + 1)}
-                              className="border-gray-300 h-8 w-8 sm:h-9 sm:w-9"
-                            >
-                              <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
-                            <span className="text-xs sm:text-sm text-gray-600 ml-1 sm:ml-2">{product.unit}(s)</span>
-                          </div>
+                      {/* Primary Actions */}
+                      <div className="space-y-4 pt-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <Button
+                            onClick={startConversation}
+                            className="h-12 sm:h-14 text-sm sm:text-base font-black bg-[#FF6600] hover:bg-[#E65C00] text-white shadow-md flex items-center justify-center gap-2 px-8 rounded-full transition-all hover:scale-[1.02] active:scale-95"
+                          >
+                            <MessageSquare className="w-5 h-5 shrink-0" />
+                            <span>Contact Supplier</span>
+                          </Button>
+                          <Button
+                            onClick={handleBuyNow}
+                            variant="outline"
+                            className="h-12 sm:h-14 text-sm sm:text-base font-black border-2 border-[#FF6600] text-[#FF6600] hover:bg-orange-50 flex items-center justify-center gap-2 px-8 rounded-full transition-all hover:scale-[1.02] active:scale-95"
+                          >
+                            <Zap className="w-5 h-5 shrink-0" />
+                            <span>Start Order</span>
+                          </Button>
                         </div>
-
-                        <div className="flex items-center justify-between border-t pt-3 sm:pt-4">
-                          <span className="font-medium text-gray-700 text-sm sm:text-base">Total Price:</span>
-                          <div className="text-xl sm:text-2xl font-bold text-green-600">
-                            {formatPriceOnly(totalPrice)}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons - Stack on mobile */}
-                      <div className="flex flex-col sm:grid sm:grid-cols-2 gap-2 sm:gap-3">
                         <Button
-                          onClick={handleBuyNow}
-                          className="bg-orange-500 hover:bg-orange-600 text-white font-medium h-11 sm:h-12 text-sm sm:text-base"
-                        >
-                          <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
-                          Order Now
-                        </Button>
-                        <Button
-                          variant="outline"
+                          variant="ghost"
                           onClick={handleAddToCart}
-                          className="border-orange-500 text-orange-500 hover:bg-orange-50 h-11 sm:h-12 text-sm sm:text-base"
+                          className="w-full text-gray-500 hover:text-orange-600 h-10 text-xs sm:text-sm"
                         >
-                          <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
-                          Add to Inquiry
+                          <ShoppingCart className="w-3.5 h-3.5 mr-1 sm:mr-2" /> <span className="truncate">Add to Inquiry Cart</span>
                         </Button>
-                      </div>
 
-                      {/* Quick Actions - Mobile optimized */}
-                      <div className="flex items-center justify-between mt-4 sm:mt-6 pt-3 sm:pt-6 border-t text-xs sm:text-sm">
-                        <button className="flex items-center gap-1 sm:gap-2 text-gray-600 hover:text-orange-500">
-                          <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
-                          <span className="hidden xs:inline">Chat Now</span>
-                        </button>
-                        <button className="flex items-center gap-1 sm:gap-2 text-gray-600 hover:text-orange-500">
-                          <Download className="h-3 w-3 sm:h-4 sm:w-4" />
-                          <span className="hidden xs:inline">Spec</span>
-                        </button>
-                        <button className="flex items-center gap-1 sm:gap-2 text-gray-600 hover:text-orange-500">
-                          <Printer className="h-3 w-3 sm:h-4 sm:w-4" />
-                          <span className="hidden xs:inline">Print</span>
-                        </button>
+                        {/* Trust Badges */}
+                        <div className="pt-4 mt-4 border-t border-gray-100 flex flex-wrap gap-4 text-xs text-gray-500 justify-center sm:justify-start">
+                          <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-green-500" /> Secure Payments</span>
+                          <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3 text-blue-500" /> Refund Policy</span>
+                          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-gray-500" /> 24/7 Support</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -637,116 +689,116 @@ export default function ProductDetail() {
               </CardContent>
             </Card>
 
-            {/* Product Tabs - Mobile responsive */}
-            <Card className="border border-gray-200 shadow-sm">
+            {/* Product Tabs - Detailed B2B Information */}
+            <Card className="border border-gray-200 shadow-sm overflow-hidden">
               <Tabs defaultValue="description" className="w-full">
-                <TabsList className="w-full flex flex-wrap md:flex-nowrap justify-start border-b rounded-none bg-transparent h-auto p-0 overflow-x-auto scrollbar-thin">
+                <TabsList className="w-full flex justify-start border-b rounded-none bg-white h-auto p-0 overflow-x-auto scrollbar-hide">
                   <TabsTrigger
                     value="description"
-                    className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm whitespace-nowrap"
+                    className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-semibold text-gray-500 transition-all whitespace-nowrap"
                   >
-                    Details
+                    Overview
                   </TabsTrigger>
                   <TabsTrigger
                     value="specs"
-                    className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm whitespace-nowrap"
+                    className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-semibold text-gray-500 transition-all whitespace-nowrap"
                   >
-                    Specs
+                    Specifications
                   </TabsTrigger>
                   <TabsTrigger
                     value="reviews"
-                    className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm whitespace-nowrap"
+                    className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-semibold text-gray-500 transition-all whitespace-nowrap"
                   >
                     Reviews ({reviews.length})
                   </TabsTrigger>
                   <TabsTrigger
                     value="shipping"
-                    className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 text-xs sm:text-sm whitespace-nowrap"
+                    className="data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-500 rounded-none px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-semibold text-gray-500 transition-all whitespace-nowrap"
                   >
                     Shipping
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="description" className="p-3 sm:p-4 md:p-6">
-                  <div className="prose max-w-none">
-                    <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Product Description</h3>
-                    <p className="text-gray-700 leading-relaxed text-sm sm:text-base">
-                      {product.description || 'No description available.'}
-                    </p>
+                <TabsContent value="description" className="p-6 md:p-8">
+                  <div className="max-w-4xl mx-auto space-y-8">
+                    {/* General Description */}
+                    <div className="prose prose-orange max-w-none">
+                      <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <Eye className="w-5 h-5 text-orange-500" />
+                        Product Description
+                      </h3>
+                      <p className="text-gray-700 leading-relaxed text-sm sm:text-base italic border-l-4 border-orange-100 pl-4 py-2 bg-orange-50/30 break-words">
+                        {product.description || 'Professional-grade solution tailored for enterprise efficiency and high-standard performance.'}
+                      </p>
+                    </div>
 
-                    {/* Features List - Stack on mobile */}
-                    <div className="grid sm:grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-6">
-                      <div className="flex items-start gap-2 sm:gap-3">
-                        <Check className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <h4 className="font-medium text-sm sm:text-base">High Quality</h4>
-                          <p className="text-xs sm:text-sm text-gray-600">Premium materials</p>
+                    {/* Features Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                      <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 hover:shadow-md transition-shadow">
+                        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
+                          <ShieldCheck className="w-6 h-6 text-orange-600" />
                         </div>
+                        <h4 className="font-bold text-gray-900 mb-2">Quality Assurance</h4>
+                        <p className="text-sm text-gray-600">Rigorous 100% inspection process ensures every unit meets international safety and durability standards.</p>
                       </div>
-                      <div className="flex items-start gap-2 sm:gap-3">
-                        <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <h4 className="font-medium text-sm sm:text-base">Fast Delivery</h4>
-                          <p className="text-xs sm:text-sm text-gray-600">15-30 days</p>
+                      <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 hover:shadow-md transition-shadow">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                          <Zap className="w-6 h-6 text-blue-600" />
                         </div>
+                        <h4 className="font-bold text-gray-900 mb-2">Operational Efficiency</h4>
+                        <p className="text-sm text-gray-600">Designed for seamless integration into existing workflows with minimal setup time and high-output performance.</p>
                       </div>
-                      <div className="flex items-start gap-2 sm:gap-3">
-                        <Globe className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <h4 className="font-medium text-sm sm:text-base">Global Shipping</h4>
-                          <p className="text-xs sm:text-sm text-gray-600">200+ countries</p>
+                      <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 hover:shadow-md transition-shadow">
+                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                          <TrendingUp className="w-6 h-6 text-green-600" />
                         </div>
+                        <h4 className="font-bold text-gray-900 mb-2">Competitive Edge</h4>
+                        <p className="text-sm text-gray-600">Superior materials and advanced engineering provide a cost-effective solution without compromising on quality.</p>
                       </div>
-                      <div className="flex items-start gap-2 sm:gap-3">
-                        <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <h4 className="font-medium text-sm sm:text-base">Quality Assurance</h4>
-                          <p className="text-xs sm:text-sm text-gray-600">100% inspection</p>
+                      <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 hover:shadow-md transition-shadow">
+                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                          <Globe className="w-6 h-6 text-purple-600" />
                         </div>
+                        <h4 className="font-bold text-gray-900 mb-2">Global Compliance</h4>
+                        <p className="text-sm text-gray-600">Fully certified for global markets with support for international regulations and documentation.</p>
                       </div>
                     </div>
                   </div>
                 </TabsContent>
 
-                <TabsContent value="specs" className="p-3 sm:p-4 md:p-6">
-                  <div className="space-y-4 sm:space-y-6">
-                    {/* Specification Tabs */}
-                    <div className="flex gap-1 sm:gap-2 border-b overflow-x-auto scrollbar-thin">
-                      <button
-                        onClick={() => setActiveSpecTab('details')}
-                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${activeSpecTab === 'details'
-                          ? 'border-b-2 border-orange-500 text-orange-500'
-                          : 'text-gray-600 hover:text-gray-900'
-                          }`}
-                      >
-                        General Details
-                      </button>
-                      <button
-                        onClick={() => setActiveSpecTab('technical')}
-                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap ${activeSpecTab === 'technical'
-                          ? 'border-b-2 border-orange-500 text-orange-500'
-                          : 'text-gray-600 hover:text-gray-900'
-                          }`}
-                      >
-                        Technical Specs
-                      </button>
+                <TabsContent value="specs" className="p-4 sm:p-6 md:p-8">
+                  <div className="max-w-4xl mx-auto">
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                      <Filter className="w-5 h-5 text-blue-600" />
+                      Technical Datasheet
+                    </h3>
+                    <div className="border border-gray-200 rounded-lg overflow-x-auto shadow-sm">
+                      <table className="w-full text-xs sm:text-sm min-w-[500px] sm:min-w-full">
+                        <thead>
+                          <tr className="bg-gray-100 border-b border-gray-200">
+                            <th className="px-4 sm:px-6 py-3 text-left font-bold text-gray-700 uppercase tracking-wider">Attribute</th>
+                            <th className="px-4 sm:px-6 py-3 text-left font-bold text-gray-700 uppercase tracking-wider">Specifications</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 overflow-x-auto">
+                          {product.specifications && typeof product.specifications === 'object' && !Array.isArray(product.specifications) ? (
+                            Object.entries(product.specifications as Record<string, unknown>).map(([key, value]) => (
+                              <tr key={key} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-4 sm:px-6 py-4 bg-gray-50/50 font-semibold text-gray-600 w-1/3 border-r border-gray-100 align-top">{key}</td>
+                                <td className="px-4 sm:px-6 py-4 text-gray-900 break-words">{String(value)}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            ['Material', 'Grade', 'Origin', 'Application', 'Finish', 'Packing'].map((key) => (
+                              <tr key={key} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-4 sm:px-6 py-4 bg-gray-50/50 font-semibold text-gray-600 w-1/3 border-r border-gray-100">{key}</td>
+                                <td className="px-4 sm:px-6 py-4 text-gray-900">Standard Industrial Grade {key}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
                     </div>
-
-                    {product.specifications && typeof product.specifications === 'object' && !Array.isArray(product.specifications) ? (
-                      <div className="border rounded-lg overflow-hidden text-sm">
-                        {Object.entries(product.specifications as Record<string, unknown>).map(([key, value]) => (
-                          <div key={key} className="flex flex-col sm:flex-row even:bg-gray-50">
-                            <div className="w-full sm:w-1/3 p-3 bg-gray-100 font-medium border-b sm:border-b-0 sm:border-r">{key}</div>
-                            <div className="w-full sm:w-2/3 p-3">{String(value)}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 sm:py-12">
-                        <Package className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-300 mb-3 sm:mb-4" />
-                        <p className="text-gray-500 text-sm sm:text-base">No specifications available.</p>
-                      </div>
-                    )}
                   </div>
                 </TabsContent>
 
@@ -1007,66 +1059,76 @@ export default function ProductDetail() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="shipping" className="p-3 sm:p-4 md:p-6">
-                  <div className="space-y-4 sm:space-y-6">
-                    <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
-                      <Card className="border border-gray-200">
-                        <CardHeader className="bg-gray-50 p-3 sm:p-4 md:p-6">
-                          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                            <Truck className="h-4 w-4 sm:h-5 sm:w-5" />
-                            Shipping Info
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-3 sm:pt-4 md:pt-6 p-3 sm:p-4 md:p-6">
-                          <div className="space-y-2 sm:space-y-4 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Lead Time:</span>
-                              <span className="font-medium">15-30 days</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Shipping Port:</span>
-                              <span className="font-medium">Shanghai</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Payment Terms:</span>
-                              <span className="font-medium">T/T, L/C</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Packaging:</span>
-                              <span className="font-medium">Export Packaging</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                <TabsContent value="shipping" className="p-6 md:p-8">
+                  <div className="max-w-4xl mx-auto space-y-8">
+                    {/* Shipping Header */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-1">Logistics & Compliance</h3>
+                        <p className="text-sm text-gray-500">Global shipping options and enterprise-grade packaging standards.</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-100 font-medium">Ocean Freight</Badge>
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-100 font-medium">Air Express</Badge>
+                      </div>
+                    </div>
 
-                      <Card className="border border-gray-200">
-                        <CardHeader className="bg-gray-50 p-3 sm:p-4 md:p-6">
-                          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                            <Package className="h-4 w-4 sm:h-5 sm:w-5" />
-                            Packaging Details
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-3 sm:pt-4 md:pt-6 p-3 sm:p-4 md:p-6">
-                          <ul className="space-y-1.5 sm:space-y-2 text-sm">
-                            <li className="flex items-start gap-2">
-                              <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                              <span>Carton box with foam</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                              <span>Waterproof wrapping</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                              <span>Palletized for bulk</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                              <span>Custom packaging</span>
-                            </li>
-                          </ul>
-                        </CardContent>
-                      </Card>
+                    {/* Lead Time Table */}
+                    <div>
+                      <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <Clock className="w-5 h-5 text-orange-500" />
+                        Lead Time Table
+                      </h4>
+                      <div className="border border-gray-100 rounded-lg overflow-x-auto">
+                        <table className="w-full text-xs sm:text-sm min-w-[500px] sm:min-w-full">
+                          <thead className="bg-gray-50 border-b border-gray-100">
+                            <tr>
+                              <th className="px-4 sm:px-6 py-3 text-left text-gray-600 font-semibold">Quantity (Pieces)</th>
+                              <th className="px-4 sm:px-6 py-3 text-left text-gray-600 font-semibold">1 - 500</th>
+                              <th className="px-4 sm:px-6 py-3 text-left text-gray-600 font-semibold">501 - 2000</th>
+                              <th className="px-4 sm:px-6 py-3 text-left text-gray-600 font-semibold">{'>'} 2000</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="border-b border-gray-50">
+                              <td className="px-4 sm:px-6 py-4 font-medium text-gray-900 bg-gray-50/50">Est. Time (days)</td>
+                              <td className="px-4 sm:px-6 py-4 text-gray-700">15</td>
+                              <td className="px-4 sm:px-6 py-4 text-gray-700">25</td>
+                              <td className="px-4 sm:px-6 py-4 text-gray-700">Negotiated</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Packaging & Customization */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="space-y-4">
+                        <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                          <Package className="w-5 h-5 text-blue-500" />
+                          Packaging Details
+                        </h4>
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-sm text-gray-600 space-y-2">
+                          <p>• Standard export-grade carton packaging.</p>
+                          <p>• Inner protection: Bubble film and moisture-proof plastic.</p>
+                          <p>• Palletized for large orders to ensure transit safety.</p>
+                          <p>• Custom logo printing on boxes available for MOQ {product.moq * 5}+.</p>
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                          <ShieldCheck className="w-5 h-5 text-green-500" />
+                          Trade Protection
+                        </h4>
+                        <div className="bg-green-50/50 p-4 rounded-lg border border-green-100 text-sm text-green-800 space-y-2">
+                          <p className="font-semibold">Trade Assurance Protected</p>
+                          <p>Your payment is held until you confirm receipt of goods and quality satisfaction.</p>
+                          <div className="flex gap-4 pt-2">
+                            <span className="flex items-center gap-1"><Check className="w-3 h-3" /> Samples Available</span>
+                            <span className="flex items-center gap-1"><Check className="w-3 h-3" /> QC Inspection</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </TabsContent>
@@ -1085,120 +1147,74 @@ export default function ProductDetail() {
 
           {/* Right Column: Supplier & Stats - Full width on mobile, sidebar on desktop */}
           <div className="lg:col-span-4 space-y-4 sm:space-y-6">
-            {/* Supplier Card - Mobile responsive */}
-            <Card className="border border-gray-200 shadow-sm lg:sticky lg:top-4">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b p-3 sm:p-4 md:p-6">
-                <CardTitle className="flex items-center gap-2 text-gray-900 text-sm sm:text-base">
-                  <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Supplier Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-4 md:p-6">
-                <div className="space-y-4 sm:space-y-6">
-                  {/* Supplier Basic Info */}
-                  <div className="flex items-start gap-3 sm:gap-4 pb-3 sm:pb-4 border-b">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 flex items-center justify-center border-2 border-white shadow-sm flex-shrink-0">
-                      <Building2 className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-base sm:text-lg text-gray-900 mb-1 truncate">
-                        {profile?.company_name || 'Global Supplier'}
-                      </h3>
-                      <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2 flex-wrap">
-                        {supplier?.verified && (
-                          <VerifiedBadge size="sm sm:md" />
-                        )}
-                        <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
-                          <ShieldCheck className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
-                          Verified
-                        </Badge>
-                      </div>
-                      <div className="text-xs sm:text-sm text-gray-600">
-                        <span className="font-medium">Response:</span> {supplier?.response_rate || 95}%
-                      </div>
-                    </div>
+            {/* Supplier Card - Professional Company Profile */}
+            <Card className="border border-gray-200 shadow-sm lg:sticky lg:top-4 overflow-hidden">
+              <div className="bg-gray-50 p-4 border-b border-gray-100 flex items-start gap-4">
+                <div className="w-12 h-12 bg-white rounded border border-gray-200 flex items-center justify-center text-xl font-bold text-gray-700 shadow-sm">
+                  {profile?.company_name?.charAt(0) || 'S'}
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 leading-tight">
+                    {profile?.company_name || 'Global Tech Supplier Co., Ltd.'}
+                  </h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 border border-orange-100 rounded">CN</span>
+                    <span className="text-xs text-gray-500">4 Yrs</span>
                   </div>
+                </div>
+              </div>
 
-                  {/* Supplier Stats */}
-                  <div className="space-y-3 sm:space-y-4">
-                    <div className="grid grid-cols-2 gap-2 sm:gap-4">
-                      <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
-                        <Clock className="h-4 w-4 sm:h-5 sm:w-5 mx-auto text-gray-600 mb-1" />
-                        <div className="text-xs sm:text-sm text-gray-600">Established</div>
-                        <div className="font-bold text-gray-900 text-sm sm:text-base">{supplier?.year_established || '2010'}</div>
-                      </div>
-                      <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
-                        <Users className="h-4 w-4 sm:h-5 sm:w-5 mx-auto text-gray-600 mb-1" />
-                        <div className="text-xs sm:text-sm text-gray-600">Employees</div>
-                        <div className="font-bold text-gray-900 text-sm sm:text-base">{supplier?.employees || '50-100'}</div>
-                      </div>
-                    </div>
-
-                    {/* Main Markets */}
-                    {supplier?.main_markets && supplier.main_markets.length > 0 && (
-                      <div>
-                        <h4 className="font-medium text-gray-700 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2 text-sm">
-                          <Globe className="h-3 w-3 sm:h-4 sm:w-4" />
-                          Main Markets
-                        </h4>
-                        <div className="flex flex-wrap gap-1 sm:gap-2">
-                          {supplier.main_markets.slice(0, 3).map((market, i) => (
-                            <Badge key={i} variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 text-xs">
-                              {market}
-                            </Badge>
-                          ))}
-                          {supplier.main_markets.length > 3 && (
-                            <Badge variant="outline" className="border-gray-200 text-gray-600 bg-gray-50 text-xs">
-                              +{supplier.main_markets.length - 3}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Business Type */}
-                    <div>
-                      <h4 className="font-medium text-gray-700 mb-1 sm:mb-2 text-sm">Business Type</h4>
-                      <div className="flex flex-wrap gap-1 sm:gap-2">
-                        <Badge className="bg-indigo-100 text-indigo-800 text-xs">Manufacturer</Badge>
-                        <Badge className="bg-purple-100 text-purple-800 text-xs">Trading</Badge>
-                        <Badge className="bg-blue-100 text-blue-800 text-xs">Exporter</Badge>
-                      </div>
-                    </div>
+              <CardContent className="p-0">
+                {/* Capabilities Grid */}
+                <div className="grid grid-cols-2 divide-x divide-gray-100 border-b border-gray-100">
+                  <div className="p-4 text-center">
+                    <div className="text-lg font-bold text-gray-900">{supplier?.response_rate || 98}%</div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">Response Score</div>
                   </div>
-
-                  {/* Action Buttons - Stack on mobile */}
-                  <div className="space-y-2 sm:space-y-3 pt-3 sm:pt-4 border-t">
-                    <Button
-                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm sm:text-base"
-                      onClick={startConversation}
-                      disabled={user?.id === product.seller_id}
-                    >
-                      <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
-                      Contact Supplier
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full border-blue-500 text-blue-600 hover:bg-blue-50 text-sm sm:text-base"
-                      onClick={() => {
-                        if (!user) {
-                          navigate('/auth');
-                        } else {
-                          navigate('/rfq/new', { state: { productId: product.id } });
-                        }
-                      }}
-                    >
-                      Send Inquiry
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="w-full text-gray-600 hover:text-blue-600 text-sm sm:text-base"
-                      onClick={() => navigate(`/supplier/${product.seller_id}`)}
-                    >
-                      <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                      View Profile
-                    </Button>
+                  <div className="p-4 text-center">
+                    <div className="text-lg font-bold text-gray-900">4.8/5</div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">Review Rating</div>
                   </div>
+                </div>
+
+                {/* Business Details */}
+                <div className="p-4 space-y-3 text-sm">
+                  <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                    <span className="text-gray-500 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" /> Business Type
+                    </span>
+                    <span className="font-medium text-gray-900">Manufacturer</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                    <span className="text-gray-500 flex items-center gap-2">
+                      <Users className="w-4 h-4" /> Employees
+                    </span>
+                    <span className="font-medium text-gray-900">{supplier?.employees || '100+'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                    <span className="text-gray-500 flex items-center gap-2">
+                      <Globe className="w-4 h-4" /> Main Market
+                    </span>
+                    <span className="font-medium text-gray-900">North America</span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="p-4 pt-0 grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate(`/supplier/${product.seller_id}`)}
+                    className="w-full text-xs sm:text-sm h-9"
+                  >
+                    View Profile
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={startConversation}
+                    className="w-full text-xs sm:text-sm h-9 hover:bg-orange-50 hover:text-orange-600"
+                  >
+                    Message
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -1232,59 +1248,60 @@ export default function ProductDetail() {
               </CardContent>
             </Card>
 
-            {/* Shipping Info Card */}
-            <Card className="border border-gray-200 shadow-sm">
-              <CardContent className="p-3 sm:p-4 md:p-6">
-                <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                  <Truck className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
-                  <h3 className="font-bold text-gray-900 text-sm sm:text-base">Shipping & Logistics</h3>
+            {/* Trade Services Card - Trust Focus */}
+            <Card className="border border-gray-200 shadow-sm overflow-hidden bg-white">
+              <div className="bg-amber-50 p-4 border-b border-amber-100">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-amber-600" />
+                  <h3 className="font-bold text-gray-900 text-sm">Trade Assurance</h3>
                 </div>
-                <div className="space-y-2 sm:space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Method:</span>
-                    <span className="font-medium">Sea/Air</span>
+              </div>
+              <CardContent className="p-4">
+                <p className="text-xs text-gray-600 mb-4">
+                  Alibaba.com protects your orders from payment to delivery.
+                </p>
+                <div className="space-y-4">
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded bg-gray-50 flex items-center justify-center flex-shrink-0">
+                      <CreditCard className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-900">Safe & Easy Payments</p>
+                      <p className="text-[10px] text-gray-500">Multiple secure payment options.</p>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Delivery:</span>
-                    <span className="font-medium">30-45 days</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Port:</span>
-                    <span className="font-medium">Shanghai</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Payment:</span>
-                    <span className="font-medium">T/T, L/C</span>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded bg-gray-50 flex items-center justify-center flex-shrink-0">
+                      <Truck className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-900">Logistics Guarantee</p>
+                      <p className="text-[10px] text-gray-500">On-time delivery or your money back.</p>
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Product Stats Card */}
+            {/* Performance Card */}
             <Card className="border border-gray-200 shadow-sm">
-              <CardHeader className="bg-gray-50 p-3 sm:p-4 md:p-6">
-                <CardTitle className="flex items-center gap-2 text-xs sm:text-sm">
-                  <BarChart className="h-3 w-3 sm:h-4 sm:w-4" />
-                  Product Statistics
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-4 md:p-6">
-                <div className="space-y-2 sm:space-y-4 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Page Views:</span>
-                    <span className="font-bold text-gray-900">1,245</span>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-bold text-gray-900">Supplier Capability</span>
+                  <Badge variant="outline" className="text-[10px] border-orange-200 text-orange-600">Verified</Badge>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500">Production Capacity</span>
+                    <span className="font-medium text-gray-900">10,000+ pcs/month</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">This Month:</span>
-                    <span className="font-bold text-gray-900">28</span>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500">Export Years</span>
+                    <span className="font-medium text-gray-900">8 Years</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Orders:</span>
-                    <span className="font-bold text-gray-900">12</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Ranking:</span>
-                    <Badge className="bg-amber-100 text-amber-800 text-xs">Top 10%</Badge>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500">Response Time</span>
+                    <span className="font-medium text-green-600">{'<'} 4 Hours</span>
                   </div>
                 </div>
               </CardContent>
@@ -1293,7 +1310,27 @@ export default function ProductDetail() {
         </div>
       </main>
 
-      <BottomNav />
+      {/* ─── FIXED MOBILE ACTION BAR ─── */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-3 flex gap-3 md:hidden z-[100] shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+        <Button
+          onClick={startConversation}
+          variant="outline"
+          className="flex-1 h-12 border-2 border-orange-500 text-orange-600 font-bold rounded-full"
+        >
+          <MessageSquare className="w-4 h-4 mr-2" />
+          Chat
+        </Button>
+        <Button
+          onClick={handleBuyNow}
+          className="flex-[1.5] h-12 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-full shadow-lg"
+        >
+          Start Order
+        </Button>
+      </div>
+
+      <div className="hidden md:block">
+        <BottomNav />
+      </div>
     </div>
   );
 }

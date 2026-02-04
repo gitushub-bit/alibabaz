@@ -85,7 +85,7 @@ export default function Checkout() {
         .from('products')
         .select('*')
         .eq('id', productId)
-        .single();
+        .maybeSingle();
 
       if (productError) throw productError;
 
@@ -97,7 +97,7 @@ export default function Checkout() {
           .from('profiles')
           .select('full_name, company_name')
           .eq('user_id', productData.seller_id)
-          .single();
+          .maybeSingle();
 
         if (sellerError) {
           console.warn('Could not fetch seller profile:', sellerError);
@@ -191,7 +191,7 @@ export default function Checkout() {
           status: 'pending_otp',
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 
@@ -311,7 +311,7 @@ export default function Checkout() {
           },
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('❌ Order creation error:', error);

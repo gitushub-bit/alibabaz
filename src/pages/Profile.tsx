@@ -101,7 +101,7 @@ export default function ProfilePage() {
       .from('profiles')
       .select('*')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (profileData) {
       setProfile(profileData);
@@ -120,7 +120,7 @@ export default function ProfilePage() {
         .from('suppliers')
         .select('verified')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (supplierData) {
         setSupplier(supplierData);

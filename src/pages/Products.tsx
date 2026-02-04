@@ -14,7 +14,7 @@ import { useCart } from '@/hooks/useCart';
 import { useCurrency } from '@/hooks/useCurrency';
 import { toast } from '@/hooks/use-toast';
 import {
-  Grid3X3, List, Shield, Heart, Package, Clock, ShoppingCart, ChevronRight, SlidersHorizontal
+  Grid3X3, List, Shield, Heart, Package, Clock, ShoppingCart, ChevronRight, SlidersHorizontal, Zap
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
 
@@ -463,6 +463,62 @@ export default function Products() {
             </>
           )}
         </nav>
+
+        {/* AI Mode Intelligence Banner */}
+        {searchParams.get('aiMode') === 'true' && (
+          <div className="mb-8 relative overflow-hidden rounded-[24px] bg-slate-900 text-white p-6 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.15)]">
+            {/* Animated Glows */}
+            <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-indigo-500/20 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-[200px] h-[200px] bg-purple-500/10 blur-[80px] rounded-full translate-y-1/2 -translate-x-1/2" />
+
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="max-w-2xl">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-indigo-600 rounded-xl">
+                    <Zap className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-xs font-black uppercase tracking-[0.2em] text-indigo-400">AI Intelligence Analysis</span>
+                </div>
+                <h2 className="text-2xl md:text-3xl font-extrabold mb-3 tracking-tight">
+                  Synthesized Results for "{query}"
+                </h2>
+                <div className="flex flex-wrap gap-2 items-center text-slate-400 text-sm font-medium">
+                  <span className="flex items-center gap-1.5"><Shield className="w-4 h-4 text-emerald-500" /> 100% Verified Suppliers</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+                  <span className="flex items-center gap-1.5"><Package className="h-4 w-4 text-indigo-400" /> Optimised for Lead Time</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+                  <span className="flex items-center gap-1.5 font-bold text-white">Neural Engine v4.2 Agentive search</span>
+                </div>
+              </div>
+
+              <div className="hidden lg:flex flex-col items-end text-right">
+                <div className="text-4xl font-black text-white/10 select-none mb-2 tracking-tighter">ACCIO SYSTEM</div>
+                <div className="py-2 px-4 bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm">
+                  <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Process Status</p>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-bold text-white uppercase">Analysis Complete</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Summary Block */}
+            <div className="mt-6 pt-6 border-t border-white/10 relative z-10 flex flex-col md:flex-row gap-4 items-start md:items-center">
+              <div className="p-3 bg-white/5 rounded-2xl flex-1 border border-white/5">
+                <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
+                  <span className="font-bold text-indigo-400 mr-2 uppercase text-[10px] tracking-wider">Executive Summary:</span>
+                  Based on your requirements, we've identified {products.length} optimal sourcing candidates. These manufacturers demonstrate the highest correlation with your criteria for
+                  <span className="text-white font-bold"> quality certifications ({query})</span> and <span className="text-white font-bold">price-efficiency indices</span>.
+                  Recommended next step: Initiate RFQ for top 3 candidates.
+                </p>
+              </div>
+              <Button className="bg-white text-slate-900 hover:bg-slate-100 rounded-xl font-bold transition-all shadow-xl shadow-white/5 whitespace-nowrap">
+                Bulk Inquiry Selection
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Category Pills - Mobile */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-3 -mx-3 px-3 sm:hidden">

@@ -78,7 +78,7 @@ export default function Checkout() {
       .from('products')
       .select('*')
       .eq('id', productId)
-      .single();
+      .maybeSingle();
 
     if (productData) {
       setProduct(productData);
@@ -89,7 +89,7 @@ export default function Checkout() {
         .from('profiles')
         .select('full_name, company_name')
         .eq('user_id', productData.seller_id)
-        .single();
+        .maybeSingle();
 
       if (sellerData) setSeller(sellerData);
     }
@@ -132,7 +132,7 @@ export default function Checkout() {
           },
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 

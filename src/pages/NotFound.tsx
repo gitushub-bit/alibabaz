@@ -11,20 +11,22 @@ const NotFound = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    console.error("404 Error: User attempted to access non-existent route:", location.pathname);
+    if (location.pathname !== '/404') {
+      console.error("404 Error: User attempted to access non-existent route:", location.pathname);
+    }
   }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      
+
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="max-w-md w-full text-center space-y-8">
           {/* Logo */}
           <div className="flex justify-center">
-            <img 
-              src={logo} 
-              alt="Logo" 
+            <img
+              src={logo}
+              alt="Logo"
               className="h-16 w-auto opacity-80"
             />
           </div>
@@ -53,15 +55,15 @@ const NotFound = () => {
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => navigate(-1)}
               className="gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
               Go Back
             </Button>
-            <Button 
+            <Button
               onClick={() => navigate('/')}
               className="gap-2 bg-primary hover:bg-primary/90"
             >
@@ -74,8 +76,8 @@ const NotFound = () => {
           <div className="pt-8 border-t">
             <p className="text-sm text-muted-foreground mb-4">Or explore these popular sections:</p>
             <div className="flex flex-wrap justify-center gap-2">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={() => navigate('/products')}
                 className="text-primary hover:text-primary"
@@ -83,24 +85,24 @@ const NotFound = () => {
                 <ShoppingBag className="h-4 w-4 mr-1" />
                 Products
               </Button>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={() => navigate('/cart')}
                 className="text-primary hover:text-primary"
               >
                 Cart
               </Button>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={() => navigate('/messages')}
                 className="text-primary hover:text-primary"
               >
                 Messages
               </Button>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={() => navigate('/profile')}
                 className="text-primary hover:text-primary"

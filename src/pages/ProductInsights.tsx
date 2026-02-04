@@ -151,26 +151,26 @@ const getSafeImage = (imageUrl?: string, index: number = 0): string => {
   if (!imageUrl || imageUrl.trim() === '') {
     return IMAGE_FALLBACKS[index % IMAGE_FALLBACKS.length];
   }
-  
+
   if (imageUrl.startsWith('http') || imageUrl.startsWith('https') || imageUrl.startsWith('data:')) {
     return imageUrl;
   }
-  
+
   if (imageUrl.startsWith('/')) {
     return imageUrl;
   }
-  
+
   try {
     const cleanUrl = imageUrl.split('?')[0].split('#')[0];
-    
+
     if (cleanUrl.includes('supabase.co')) {
       return cleanUrl;
     }
-    
+
     const { data } = supabase.storage
       .from('product-images')
       .getPublicUrl(cleanUrl);
-    
+
     return data.publicUrl || IMAGE_FALLBACKS[index % IMAGE_FALLBACKS.length];
   } catch (error) {
     console.error('Error getting image URL:', error);
@@ -180,13 +180,13 @@ const getSafeImage = (imageUrl?: string, index: number = 0): string => {
 
 const processImages = (images: any): string[] => {
   if (!images) return [IMAGE_FALLBACKS[0]];
-  
+
   if (Array.isArray(images)) {
     return images
       .filter(img => img && typeof img === 'string')
       .map((img, index) => getSafeImage(img, index));
   }
-  
+
   if (typeof images === 'string') {
     try {
       const parsed = JSON.parse(images);
@@ -199,7 +199,7 @@ const processImages = (images: any): string[] => {
       return [getSafeImage(images, 0)];
     }
   }
-  
+
   return [IMAGE_FALLBACKS[0]];
 };
 
@@ -236,19 +236,19 @@ export default function ProductInsights() {
       const endTime = new Date(product.ends_at).getTime();
       const now = Date.now();
       const diff = endTime - now;
-      
+
       if (diff > 0) {
         setTimeLeft(diff);
-        
+
         const interval = setInterval(() => {
           const newDiff = new Date(product.ends_at!).getTime() - Date.now();
           setTimeLeft(newDiff > 0 ? newDiff : 0);
-          
+
           if (newDiff <= 0) {
             clearInterval(interval);
           }
         }, 1000);
-        
+
         return () => clearInterval(interval);
       } else {
         setTimeLeft(0);
@@ -258,15 +258,15 @@ export default function ProductInsights() {
 
   const fetchProduct = async () => {
     setLoading(true);
-    
+
     try {
       console.log('Fetching product:', { id, type });
-      
+
       // Check if this is a deal URL
       if (type === 'deal') {
         console.log('Fetching deal...');
         const dealData = await fetchDealWithProduct();
-        
+
         if (dealData) {
           console.log('Deal data retrieved:', dealData);
           await processDealData(dealData);
@@ -286,7 +286,7 @@ export default function ProductInsights() {
 
     } catch (error) {
       console.error('Error fetching product:', error);
-      
+
       if (retryCount < 2) {
         setRetryCount(prev => prev + 1);
       } else {
@@ -303,7 +303,7 @@ export default function ProductInsights() {
 
     try {
       console.log('Fetching deal with ID:', id);
-      
+
       // Simple query to get deal data
       const { data: dealData, error: dealError } = await supabase
         .from('deals')
@@ -345,7 +345,7 @@ export default function ProductInsights() {
         } else {
           productData = product;
           console.log('Product data:', productData);
-          
+
           // Get category if category_id exists
           if (productData?.category_id) {
             const { data: category } = await supabase
@@ -353,7 +353,7 @@ export default function ProductInsights() {
               .select('name')
               .eq('id', productData.category_id)
               .maybeSingle();
-            
+
             if (category) {
               productData.category = { name: category.name, id: productData.category_id };
             }
@@ -378,12 +378,13 @@ export default function ProductInsights() {
       if (!searchId) return;
 
       // Try to find product by ID or slug
-      const { data: productData, error } = await supabase
-        .from('products')
-        .select('*')
-        .or(`id.eq.${searchId},slug.eq.${searchId}`)
-        .eq('published', true)
-        .maybeSingle();
+      const isUUID = searchId?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+      const query = supabase.from('products').select('*');
+
+      const { data: productData, error } = await (isUUID
+        ? query.or(`id.eq.${searchId},slug.eq.${searchId}`)
+        : query.eq('slug', searchId)
+      ).eq('published', true).maybeSingle();
 
       if (error) {
         console.error('Error fetching product:', error);
@@ -418,7 +419,7 @@ export default function ProductInsights() {
 
   const processDealData = async (dealData: any) => {
     console.log('Processing deal data:', dealData);
-    
+
     if (!dealData) {
       console.log('No deal data provided');
       createFallbackProduct();
@@ -428,7 +429,7 @@ export default function ProductInsights() {
     // Get seller info
     let sellerData = null;
     const productInfo = dealData.product;
-    
+
     if (productInfo?.seller_id) {
       sellerData = await getSellerData(productInfo.seller_id);
     } else {
@@ -437,7 +438,7 @@ export default function ProductInsights() {
       sellerData.company_name = dealData.supplier || 'Supplier';
       sellerData.verified = dealData.is_verified || false;
     }
-    
+
     setSupplier(sellerData);
 
     // Process images - use deal image first, then product images
@@ -498,7 +499,7 @@ export default function ProductInsights() {
     console.log('Transformed product for display:', transformedProduct);
     setProduct(transformedProduct);
     setQuantity(transformedProduct.moq || 1);
-    
+
     // Set countdown timer for flash deals
     if (dealData.is_flash_deal && dealData.ends_at) {
       const endTime = new Date(dealData.ends_at).getTime();
@@ -522,7 +523,7 @@ export default function ProductInsights() {
         .select('name')
         .eq('id', productData.category_id)
         .maybeSingle();
-      
+
       if (category) {
         categoryName = category.name;
       }
@@ -547,9 +548,9 @@ export default function ProductInsights() {
       unit: productData.unit || 'piece',
       supply_ability: productData.supply_ability || productData.capacity || 'Contact supplier',
       lead_time: productData.lead_time || productData.delivery_time || '15-30 days',
-      payment_terms: Array.isArray(productData.payment_terms) ? productData.payment_terms : 
-                    typeof productData.payment_terms === 'string' ? productData.payment_terms.split(',') : 
-                    ['T/T', 'L/C', 'Western Union'],
+      payment_terms: Array.isArray(productData.payment_terms) ? productData.payment_terms :
+        typeof productData.payment_terms === 'string' ? productData.payment_terms.split(',') :
+          ['T/T', 'L/C', 'Western Union'],
       packaging_details: productData.packaging_details || productData.packaging || 'Standard packaging',
       discount: productData.discount || productData.discount_percentage,
       is_verified: productData.is_verified || productData.verified || sellerData.verified,
@@ -580,12 +581,12 @@ export default function ProductInsights() {
         const transformedProducts = await Promise.all(
           relatedDeals.map(async (deal) => {
             let sellerInfo = createFallbackSeller();
-            
+
             if (deal.supplier) {
               sellerInfo.company_name = deal.supplier;
               sellerInfo.verified = deal.is_verified || false;
             }
-            
+
             return {
               id: deal.id,
               title: deal.title || 'Deal',
@@ -605,7 +606,7 @@ export default function ProductInsights() {
             };
           })
         );
-        
+
         setRelatedProducts(transformedProducts);
       } else {
         // Fallback to regular related products
@@ -677,7 +678,7 @@ export default function ProductInsights() {
       const transformedProducts = await Promise.all(
         relatedData.map(async (item) => {
           const sellerInfo = await getSellerData(item.seller_id);
-          
+
           return {
             id: item.id,
             title: item.title || 'Product',
@@ -710,7 +711,7 @@ export default function ProductInsights() {
 
     try {
       let productId = product.id;
-      
+
       // If this is a deal, use the linked product ID for reviews
       if (product.type === 'deal' && product.product_id) {
         productId = product.product_id;
@@ -1078,10 +1079,10 @@ export default function ProductInsights() {
   // Small Product Card Component
   const SmallProductCard = ({ product: item }: { product: RelatedProduct }) => {
     // Determine the correct link based on whether it's a deal
-    const productLink = item.is_deal 
+    const productLink = item.is_deal
       ? `/product-insights/deal/${item.id}`
       : `/product-insights/${item.id}`;
-    
+
     return (
       <Link to={productLink} className="group block">
         <Card className="border border-gray-200 hover:border-[#FF6B35] transition-all duration-200 hover:shadow-md h-full overflow-hidden">
@@ -1097,7 +1098,7 @@ export default function ProductInsights() {
                 }}
               />
             </div>
-            
+
             {/* Deal Badge */}
             {item.is_deal && (
               <div className="absolute top-2 left-2">
@@ -1107,7 +1108,7 @@ export default function ProductInsights() {
                 </Badge>
               </div>
             )}
-            
+
             {/* Verified Badge */}
             {item.is_verified && (
               <div className="absolute top-2 right-2">
@@ -1117,7 +1118,7 @@ export default function ProductInsights() {
                 </Badge>
               </div>
             )}
-            
+
             {item.price_min && item.price_max && item.price_max > item.price_min && (
               <div className="absolute bottom-2 left-2">
                 <Badge variant="secondary" className="bg-blue-100 text-blue-600 text-xs">
@@ -1131,7 +1132,7 @@ export default function ProductInsights() {
             <h3 className="text-sm font-medium line-clamp-2 mb-2 min-h-[2.5rem] group-hover:text-[#FF6B35] transition-colors">
               {item.title}
             </h3>
-            
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div>
@@ -1146,7 +1147,7 @@ export default function ProductInsights() {
                   </Badge>
                 )}
               </div>
-              
+
               <div className="flex items-center justify-between text-xs text-gray-500">
                 <span className="truncate max-w-[70%]">{item.supplier}</span>
                 {item.country && (
@@ -1156,10 +1157,10 @@ export default function ProductInsights() {
                   </span>
                 )}
               </div>
-              
+
               <div className="pt-2 border-t">
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   className="w-full text-xs h-7 bg-[#FF6B35] hover:bg-[#FF854F]"
                   onClick={(e) => {
                     e.preventDefault();
@@ -1296,7 +1297,7 @@ export default function ProductInsights() {
                           <p className="text-gray-500 text-sm text-center">Image not available</p>
                         </div>
                       )}
-                      
+
                       {/* Deal Badge if it's a deal */}
                       {product.type === 'deal' && (
                         <div className="absolute top-2 left-2">
@@ -1306,7 +1307,7 @@ export default function ProductInsights() {
                           </Badge>
                         </div>
                       )}
-                      
+
                       <div className="absolute top-2 sm:top-4 right-2 sm:right-4 flex gap-1 sm:gap-2">
                         <Button
                           variant="secondary"
@@ -1328,7 +1329,7 @@ export default function ProductInsights() {
                           <Share2 className="h-4 w-4 sm:h-5 sm:w-5" />
                         </Button>
                       </div>
-                      
+
                       {/* Image Navigation for Mobile */}
                       {product.images.length > 1 && (
                         <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-1 sm:gap-2">
@@ -1336,17 +1337,16 @@ export default function ProductInsights() {
                             <button
                               key={index}
                               onClick={() => setSelectedImage(index)}
-                              className={`h-1.5 sm:h-2 w-6 sm:w-8 rounded-full transition-all ${
-                                selectedImage === index 
-                                  ? 'bg-[#FF6B35]' 
+                              className={`h-1.5 sm:h-2 w-6 sm:w-8 rounded-full transition-all ${selectedImage === index
+                                  ? 'bg-[#FF6B35]'
                                   : 'bg-white/50'
-                              }`}
+                                }`}
                             />
                           ))}
                         </div>
                       )}
                     </div>
-                    
+
                     {/* Thumbnail Gallery */}
                     {product.images.length > 1 && (
                       <div className="relative">
@@ -1355,11 +1355,10 @@ export default function ProductInsights() {
                             <button
                               key={index}
                               onClick={() => setSelectedImage(index)}
-                              className={`flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 overflow-hidden ${
-                                selectedImage === index 
-                                  ? 'border-[#FF6B35]' 
+                              className={`flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 overflow-hidden ${selectedImage === index
+                                  ? 'border-[#FF6B35]'
                                   : 'border-gray-200 hover:border-gray-300'
-                              }`}
+                                }`}
                             >
                               {!imageError[index] ? (
                                 <img
@@ -1405,7 +1404,7 @@ export default function ProductInsights() {
                   <div className="lg:w-5/12 space-y-4 sm:space-y-6">
                     <div>
                       <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-2 sm:mb-3">{product.title}</h1>
-                      
+
                       {/* Flash Deal Banner */}
                       {product.type === 'deal' && product.is_flash_deal && (
                         <div className="mb-3 sm:mb-4">
@@ -1439,7 +1438,7 @@ export default function ProductInsights() {
                           </div>
                         </div>
                       )}
-                      
+
                       {/* Price */}
                       <div className="space-y-1 sm:space-y-2 mb-3 sm:mb-4">
                         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -1513,15 +1512,15 @@ export default function ProductInsights() {
 
                     {/* Action Buttons */}
                     <div className="space-y-2 sm:space-y-3">
-                      <Button 
+                      <Button
                         className="w-full bg-[#FF6B35] hover:bg-[#FF854F] text-white text-sm sm:text-base"
                         onClick={handleAddToCart}
                       >
                         <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                         Add to Cart
                       </Button>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         className="w-full border-[#FF6B35] text-[#FF6B35] hover:bg-[#FF6B35]/10 text-sm sm:text-base"
                         onClick={handleContactSupplier}
                       >
@@ -1529,14 +1528,14 @@ export default function ProductInsights() {
                         Contact Supplier
                       </Button>
                       <div className="grid grid-cols-2 gap-2">
-                        <Button 
+                        <Button
                           variant="outline"
                           className="border-gray-300 text-xs sm:text-sm"
                           onClick={handleRequestQuotation}
                         >
                           Request Quotation
                         </Button>
-                        <Button 
+                        <Button
                           variant="outline"
                           className="border-gray-300 text-xs sm:text-sm"
                           onClick={() => navigate('/cart')}
@@ -1583,26 +1582,26 @@ export default function ProductInsights() {
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <div className="border-b">
                   <TabsList className="w-full justify-start h-auto p-0 bg-transparent overflow-x-auto scrollbar-hide">
-                    <TabsTrigger 
-                      value="description" 
+                    <TabsTrigger
+                      value="description"
                       className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm whitespace-nowrap"
                     >
                       Details
                     </TabsTrigger>
-                    <TabsTrigger 
-                      value="specifications" 
+                    <TabsTrigger
+                      value="specifications"
                       className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm whitespace-nowrap"
                     >
                       Specs
                     </TabsTrigger>
-                    <TabsTrigger 
-                      value="reviews" 
+                    <TabsTrigger
+                      value="reviews"
                       className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm whitespace-nowrap"
                     >
                       Reviews ({reviews.length})
                     </TabsTrigger>
-                    <TabsTrigger 
-                      value="shipping" 
+                    <TabsTrigger
+                      value="shipping"
                       className="data-[state=active]:border-b-2 data-[state=active]:border-[#FF6B35] rounded-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm whitespace-nowrap"
                     >
                       Shipping
@@ -1684,11 +1683,10 @@ export default function ProductInsights() {
                             {[1, 2, 3, 4, 5].map((star) => (
                               <Star
                                 key={star}
-                                className={`h-4 w-4 sm:h-5 sm:w-5 ${
-                                  star <= 4.8 
-                                    ? 'fill-yellow-400 text-yellow-400' 
+                                className={`h-4 w-4 sm:h-5 sm:w-5 ${star <= 4.8
+                                    ? 'fill-yellow-400 text-yellow-400'
                                     : 'text-gray-300'
-                                }`}
+                                  }`}
                               />
                             ))}
                           </div>
@@ -1729,11 +1727,10 @@ export default function ProductInsights() {
                                       {[1, 2, 3, 4, 5].map((star) => (
                                         <Star
                                           key={star}
-                                          className={`h-3 w-3 sm:h-4 sm:w-4 ${
-                                            star <= review.rating 
-                                              ? 'fill-yellow-400 text-yellow-400' 
+                                          className={`h-3 w-3 sm:h-4 sm:w-4 ${star <= review.rating
+                                              ? 'fill-yellow-400 text-yellow-400'
                                               : 'text-gray-300'
-                                          }`}
+                                            }`}
                                         />
                                       ))}
                                     </div>
@@ -1750,7 +1747,7 @@ export default function ProductInsights() {
                             <div className="space-y-2 sm:space-y-3">
                               <h4 className="font-medium text-sm sm:text-base">{review.title}</h4>
                               <p className="text-gray-600 text-sm sm:text-base">{review.content}</p>
-                              
+
                               {review.product_attributes && (
                                 <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm">
                                   {Object.entries(review.product_attributes).map(([key, value]) => (
@@ -1870,24 +1867,24 @@ export default function ProductInsights() {
                       {product.type === 'deal' ? 'Related Deals' : 'Related Products'}
                     </h2>
                     <p className="text-sm text-gray-500">
-                      {product.type === 'deal' 
-                        ? 'Other great deals you might like' 
+                      {product.type === 'deal'
+                        ? 'Other great deals you might like'
                         : 'Similar products you might be interested in'
                       }
                     </p>
                   </div>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className="text-[#FF6B35] text-sm sm:text-base"
-                    onClick={() => product.type === 'deal' 
-                      ? navigate('/deals') 
+                    onClick={() => product.type === 'deal'
+                      ? navigate('/deals')
                       : navigate(`/products?category=${product.category_id}`)
                     }
                   >
                     View All <ChevronRightIcon className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
-                
+
                 {/* Products Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                   {relatedProducts.map((item) => (
@@ -1983,21 +1980,21 @@ export default function ProductInsights() {
 
                   {/* Contact Button */}
                   <div className="space-y-3 pt-6 border-t">
-                    <Button 
+                    <Button
                       className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
                       onClick={handleContactSupplier}
                     >
                       <MessageCircle className="h-5 w-5 mr-2" />
                       Contact Supplier
                     </Button>
-                    <Button 
+                    <Button
                       variant="outline"
                       className="w-full border-blue-500 text-blue-600 hover:bg-blue-50"
                       onClick={() => navigate('/rfq/new', { state: { productId: product?.id } })}
                     >
                       Send Inquiry
                     </Button>
-                    <Button 
+                    <Button
                       variant="ghost"
                       className="w-full text-gray-600 hover:text-blue-600"
                       onClick={() => navigate(`/supplier/${supplier.id}`)}
@@ -2089,14 +2086,14 @@ export default function ProductInsights() {
             </div>
 
             <div className="flex items-center gap-2 ml-2">
-              <Button 
+              <Button
                 size="sm"
                 className="bg-[#FF6B35] hover:bg-[#FF854F] text-xs"
                 onClick={handleAddToCart}
               >
                 <ShoppingCart className="h-4 w-4" />
               </Button>
-              <Button 
+              <Button
                 size="sm"
                 className="bg-green-600 hover:bg-green-700 text-xs"
                 onClick={() => navigate('/cart')}

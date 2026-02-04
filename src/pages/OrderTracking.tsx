@@ -91,7 +91,7 @@ export default function OrderTracking() {
             .from('profiles')
             .select('full_name, company_name')
             .eq('user_id', order.seller_id)
-            .single();
+            .maybeSingle();
 
           return {
             ...order,
@@ -147,8 +147,8 @@ export default function OrderTracking() {
         ) : selectedOrder ? (
           // Order Detail View
           <div className="space-y-6">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={() => setSelectedOrder(null)}
               className="mb-4"
             >
@@ -180,9 +180,9 @@ export default function OrderTracking() {
                       const currentIndex = getStatusIndex(selectedOrder.status);
                       const isComplete = index <= currentIndex;
                       const Icon = step.icon;
-                      
+
                       return (
-                        <div 
+                        <div
                           key={step.key}
                           className="flex flex-col items-center flex-1"
                         >
@@ -201,10 +201,10 @@ export default function OrderTracking() {
                   </div>
                   {/* Progress line */}
                   <div className="absolute top-5 left-0 right-0 h-0.5 bg-muted -z-10 mx-8">
-                    <div 
+                    <div
                       className="h-full bg-primary transition-all duration-500"
-                      style={{ 
-                        width: `${(getStatusIndex(selectedOrder.status) / (statusSteps.length - 1)) * 100}%` 
+                      style={{
+                        width: `${(getStatusIndex(selectedOrder.status) / (statusSteps.length - 1)) * 100}%`
                       }}
                     />
                   </div>
@@ -214,7 +214,7 @@ export default function OrderTracking() {
 
                 {/* Product Info */}
                 <div className="flex gap-4">
-                  <img 
+                  <img
                     src={selectedOrder.product?.images?.[0] || '/placeholder.svg'}
                     alt={selectedOrder.product?.title}
                     className="w-20 h-20 object-cover rounded-lg"
@@ -247,7 +247,7 @@ export default function OrderTracking() {
                     <p className="text-sm text-muted-foreground">
                       {selectedOrder.tracking_info.shipping_address}
                     </p>
-                    
+
                     {selectedOrder.tracking_info.notes && (
                       <>
                         <h4 className="font-semibold mt-4">Order Notes</h4>
@@ -277,14 +277,14 @@ export default function OrderTracking() {
           // Orders List View
           <div className="space-y-4">
             {orders.map((order) => (
-              <Card 
+              <Card
                 key={order.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
                 onClick={() => setSelectedOrder(order)}
               >
                 <CardContent className="p-4">
                   <div className="flex gap-4">
-                    <img 
+                    <img
                       src={order.product?.images?.[0] || '/placeholder.svg'}
                       alt={order.product?.title}
                       className="w-16 h-16 object-cover rounded-lg"

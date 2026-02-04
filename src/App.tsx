@@ -32,6 +32,8 @@ import HelpCenter from "./pages/HelpCenter";
 import Settings from "./pages/Settings";
 import AIMode from "./pages/AIMode";
 import Worldwide from "./pages/Worldwide";
+import SupplierDetail from "./pages/SupplierDetail";
+import Suppliers from "./pages/Suppliers";
 
 // Buyer Dashboard
 import BuyerDashboard from "./pages/dashboard/BuyerDashboard";
@@ -91,7 +93,6 @@ function App() {
                 <Sonner />
 
                 <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                  <FloatingCart />
                   <Routes>
                     <Route path="/" element={<Index />} />
                     <Route path="/auth" element={<Auth />} />
@@ -111,6 +112,8 @@ function App() {
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/ai-mode" element={<AIMode />} />
                     <Route path="/worldwide" element={<Worldwide />} />
+                    <Route path="/supplier/:id" element={<SupplierDetail />} />
+                    <Route path="/suppliers" element={<Suppliers />} />
 
                     {/* Buyer Dashboard */}
                     <Route path="/buyer" element={<BuyerDashboard />}>
@@ -150,6 +153,7 @@ function App() {
                     </Route>
 
                     <Route path="/checkout" element={<Checkout />} />
+                    <Route path="/404" element={<NotFound />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                   <AIAssistant />
