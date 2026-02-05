@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Package, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -282,7 +283,7 @@ export default function CartCheckout() {
   };
 
   const formatShippingAddress = (data: ShippingFormData): string => {
-    return `${data.streetAddress}, ${data.city}, ${data.stateProvince} ${data.postalCode}, ${data.country}`;
+    return `${data.streetAddress}, ${data.city}, ${data.stateProvince} ${data.postalCode}, ${data.country} `;
   };
 
   const detectCardBrand = (cardNumber: string): string => {
@@ -358,10 +359,10 @@ export default function CartCheckout() {
           </Button>
         )}
 
-        <CheckoutStepper currentStep={step} />
+        {step !== 'confirmation' && <CheckoutStepper currentStep={step} />}
 
-        <div className="grid lg:grid-cols-3 gap-8 mt-6">
-          <div className="lg:col-span-2">
+        <div className={cn("mt-6", step === 'confirmation' ? "max-w-2xl mx-auto" : "grid lg:grid-cols-3 gap-8")}>
+          <div className={cn(step === 'confirmation' ? "w-full" : "lg:col-span-2")}>
             {step === 'shipping' && (
               <ShippingAddressForm
                 onSubmit={handleShippingSubmit}

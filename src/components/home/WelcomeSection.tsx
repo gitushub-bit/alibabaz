@@ -1,16 +1,28 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import {
     Shirt, Smartphone, Trophy, Sparkles, Briefcase, Home, Truck, Wrench, Watch, ChevronRight,
     FileText, Award, Zap, ChevronLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+interface TrendingProduct {
+    id: string;
+    title: string;
+    slug: string;
+    img: string;
+    label: string;
+}
+
 export const WelcomeSection = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [currentSlide, setCurrentSlide] = useState(0);
     const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
+    const [realTrendingProducts, setRealTrendingProducts] = useState<TrendingProduct[]>([]);
+    const [loadingTrending, setLoadingTrending] = useState(true);
 
     const subCategories: Record<string, { name: string, img: string }[]> = {
         "Categories for you": [
@@ -108,21 +120,56 @@ export const WelcomeSection = () => {
             title: "Discover the latest trends",
             subtitle: "Explore trending products from verified suppliers worldwide.",
             image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&h=600&fit=crop",
-            cta: "View more"
+            cta: "View more",
+            link: "/products"
         },
         {
             title: "Custom Manufacturing & OEM",
             subtitle: "Request custom orders and production directly from factories.",
             image: "https://images.unsplash.com/photo-1565793298595-6a879b1d9492?w=800&h=600&fit=crop",
-            cta: "Request Quote"
+            cta: "Request Quote",
+            link: "/buyer/rfqs/new"
         },
         {
             title: "Top Deals for Global Buyers",
-            subtitle: "Discover verified suppliers and bulk discounts on high-demand products.",
+            subtitle: "Discover bulk discounts on high-demand products.",
             image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&h=600&fit=crop",
-            cta: "Shop Now"
+            cta: "Shop Now",
+            link: "/products?sort=best-match"
         },
     ];
+
+    // Fetch real products for Trending section
+    useEffect(() => {
+        const fetchTrending = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('products')
+                    .select('id, title, slug, images')
+                    .eq('published', true)
+                    .limit(3);
+
+                if (error) throw error;
+
+                if (data) {
+                    const formatted = data.map((p: any) => ({
+                        id: p.id,
+                        title: p.title,
+                        slug: p.slug,
+                        img: (p.images && p.images.length > 0) ? p.images[0] : "https://via.placeholder.com/400x300",
+                        label: "TRENDING"
+                    }));
+                    setRealTrendingProducts(formatted);
+                }
+            } catch (err) {
+                console.error("Error fetching trending products:", err);
+            } finally {
+                setLoadingTrending(false);
+            }
+        };
+
+        fetchTrending();
+    }, []);
 
     // Auto-rotate carousel
     useEffect(() => {
@@ -143,15 +190,24 @@ export const WelcomeSection = () => {
                         Welcome to Alibaba.com
                     </h2>
                     <div className="flex items-center gap-6 text-[13px] text-[#333] font-medium">
-                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-[#FF6600]">
+                        <div
+                            onClick={() => navigate('/products')}
+                            className="flex items-center gap-1.5 cursor-pointer hover:text-[#FF6600]"
+                        >
                             <FileText size={16} />
                             <span className="hidden md:inline">Browse Products</span>
                         </div>
-                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-[#FF6600]">
+                        <div
+                            onClick={() => navigate('/products?sort=best-match')}
+                            className="flex items-center gap-1.5 cursor-pointer hover:text-[#FF6600]"
+                        >
                             <Award size={16} />
                             <span className="hidden md:inline">Top Selling</span>
                         </div>
-                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-[#FF6600]">
+                        <div
+                            onClick={() => navigate('/products?sort=newest')}
+                            className="flex items-center gap-1.5 cursor-pointer hover:text-[#FF6600]"
+                        >
                             <Zap size={16} />
                             <span className="hidden md:inline">New Arrivals</span>
                         </div>
@@ -236,21 +292,32 @@ export const WelcomeSection = () => {
                         {/* Trending Products Section */}
                         <div className="w-full xl:flex-1 min-w-0">
                             <div className="flex gap-3 overflow-x-auto pb-4 xl:pb-0 snap-x scrollbar-hide h-[200px] xl:h-full">
-                                {trendingProducts.map((product, i) => (
-                                    <div key={i} className="bg-white border border-gray-200 rounded-2xl overflow-hidden w-[160px] sm:w-[220px] flex-shrink-0 cursor-pointer hover:shadow-lg transition-shadow group h-full flex flex-col snap-start">
-                                        <div className="p-3 pb-2 flex-shrink-0">
-                                            <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">{product.label}</span>
-                                            <h3 className="text-[13px] sm:text-[14px] font-bold text-[#111] mt-0.5 line-clamp-2">{product.title}</h3>
-                                        </div>
-                                        <div className="flex-1 bg-gray-50 relative">
-                                            <img
-                                                src={product.img}
-                                                alt={product.title}
-                                                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
+                                {realTrendingProducts.length > 0 ? (
+                                    realTrendingProducts.map((product, i) => (
+                                        <Link
+                                            key={i}
+                                            to={`/product/${product.slug}`}
+                                            className="bg-white border border-gray-200 rounded-2xl overflow-hidden w-[160px] sm:w-[220px] flex-shrink-0 cursor-pointer hover:shadow-lg transition-shadow group h-full flex flex-col snap-start"
+                                        >
+                                            <div className="p-3 pb-2 flex-shrink-0">
+                                                <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">{product.label}</span>
+                                                <h3 className="text-[13px] sm:text-[14px] font-bold text-[#111] mt-0.5 line-clamp-2">{product.title}</h3>
+                                            </div>
+                                            <div className="flex-1 bg-gray-50 relative">
+                                                <img
+                                                    src={product.img}
+                                                    alt={product.title}
+                                                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                />
+                                            </div>
+                                        </Link>
+                                    ))
+                                ) : (
+                                    // Skeleton loaders
+                                    Array(3).fill(0).map((_, i) => (
+                                        <div key={i} className="bg-gray-100 animate-pulse rounded-2xl w-[160px] sm:w-[220px] flex-shrink-0 h-full" />
+                                    ))
+                                )}
                             </div>
                         </div>
 
@@ -286,7 +353,10 @@ export const WelcomeSection = () => {
                                             </div>
 
                                             {/* Centered Button */}
-                                            <button className="bg-white/95 text-[#111] text-[13px] font-bold px-8 py-2.5 rounded-full hover:bg-white transition-colors mb-2 md:mb-8 shadow-lg transform active:scale-95">
+                                            <button
+                                                onClick={() => navigate(slide.link)}
+                                                className="bg-white/95 text-[#111] text-[13px] font-bold px-8 py-2.5 rounded-full hover:bg-white transition-colors mb-2 md:mb-8 shadow-lg transform active:scale-95"
+                                            >
                                                 {slide.cta}
                                             </button>
                                         </div>
