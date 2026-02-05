@@ -222,7 +222,7 @@ export default function OrderTracking() {
                   <div className="flex-1">
                     <h3 className="font-semibold">{selectedOrder.product?.title}</h3>
                     <p className="text-sm text-muted-foreground">
-                      Seller: {selectedOrder.seller_profile?.company_name || selectedOrder.seller_profile?.full_name}
+                      Seller: {selectedOrder.seller_profile?.company_name || selectedOrder.seller_profile?.full_name || 'Unknown Seller'}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Quantity: {selectedOrder.quantity}
@@ -299,7 +299,7 @@ export default function OrderTracking() {
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {order.seller_profile?.company_name || order.seller_profile?.full_name}
+                        {order.seller_profile?.company_name || order.seller_profile?.full_name || 'Unknown Seller'}
                       </p>
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-sm text-muted-foreground flex items-center gap-1">

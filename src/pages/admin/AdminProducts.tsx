@@ -21,13 +21,13 @@ import {
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
-import { 
-  Download, 
-  Upload, 
-  Package, 
-  Edit, 
-  Trash2, 
-  Eye, 
+import {
+  Download,
+  Upload,
+  Package,
+  Edit,
+  Trash2,
+  Eye,
   EyeOff,
   CheckCircle,
   XCircle,
@@ -123,13 +123,13 @@ export default function AdminProducts() {
       const enriched = await Promise.all((data || []).map(async (product: any) => {
         let sellerName = 'Unknown Seller';
         if (product.seller_id) {
-          const { data: seller } = await supabase
-            .from('sellers')
-            .select('name')
-            .eq('id', product.seller_id)
-            .single();
-          if (seller) {
-            sellerName = seller.name;
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('company_name, full_name')
+            .eq('user_id', product.seller_id)
+            .maybeSingle();
+          if (profile) {
+            sellerName = profile.company_name || profile.full_name || 'Unknown Seller';
           }
         }
         return {
@@ -151,7 +151,7 @@ export default function AdminProducts() {
   };
 
   const filteredProducts = products.filter(product => {
-    const matchesSearch = 
+    const matchesSearch =
       product.title.toLowerCase().includes(search.toLowerCase()) ||
       product.slug.toLowerCase().includes(search.toLowerCase()) ||
       product.sellerName?.toLowerCase().includes(search.toLowerCase());
@@ -414,10 +414,10 @@ export default function AdminProducts() {
 
   const exportProductsCSV = () => {
     const headers = [
-      'id', 'title', 'slug', 'description', 'price_min', 'price_max', 
+      'id', 'title', 'slug', 'description', 'price_min', 'price_max',
       'inventory', 'published', 'verified', 'category', 'seller_id'
     ];
-    
+
     const csvContent = [
       headers.join(','),
       ...products.map(p => [
@@ -488,7 +488,7 @@ export default function AdminProducts() {
               .eq('id', existingProductId);
 
             if (error) throw error;
-            
+
             productId = existingProductId;
             updated++;
           } else {
@@ -566,9 +566,8 @@ export default function AdminProducts() {
         fetchProducts();
         toast({
           title: 'Import Complete',
-          description: `Successfully imported ${success} new products and updated ${updated} existing products${
-            errors.length > 0 ? ` (${errors.length} errors)` : ''
-          }`
+          description: `Successfully imported ${success} new products and updated ${updated} existing products${errors.length > 0 ? ` (${errors.length} errors)` : ''
+            }`
         });
       }
 
@@ -637,16 +636,16 @@ export default function AdminProducts() {
 
         {selectedIds.length > 0 && (
           <div className="flex gap-2">
-            <Button 
-              onClick={bulkPublish} 
-              variant="outline" 
+            <Button
+              onClick={bulkPublish}
+              variant="outline"
               size="sm"
             >
               <Eye className="w-4 h-4 mr-2" /> Publish Selected
             </Button>
-            <Button 
-              onClick={bulkUnpublish} 
-              variant="outline" 
+            <Button
+              onClick={bulkUnpublish}
+              variant="outline"
               size="sm"
             >
               <EyeOff className="w-4 h-4 mr-2" /> Unpublish Selected
@@ -974,8 +973,8 @@ export default function AdminProducts() {
                     readOnly
                     className="bg-muted"
                   />
-                  <Button 
-                    onClick={() => generateAI(selectedProduct)} 
+                  <Button
+                    onClick={() => generateAI(selectedProduct)}
                     size="sm"
                     variant="outline"
                   >
@@ -1047,10 +1046,10 @@ export default function AdminProducts() {
 
                 <div className="space-y-2">
                   <Label>Created At</Label>
-                  <Input 
-                    value={format(new Date(selectedProduct.created_at), 'PPpp')} 
-                    readOnly 
-                    className="bg-muted" 
+                  <Input
+                    value={format(new Date(selectedProduct.created_at), 'PPpp')}
+                    readOnly
+                    className="bg-muted"
                   />
                 </div>
               </TabsContent>
@@ -1111,7 +1110,7 @@ export default function AdminProducts() {
                 <div>
                   <h4 className="font-medium mb-2">Price Range</h4>
                   <p>
-                    {productToPreview.price_min && productToPreview.price_max 
+                    {productToPreview.price_min && productToPreview.price_max
                       ? `$${productToPreview.price_min} - $${productToPreview.price_max}`
                       : 'Not set'}
                   </p>
@@ -1159,13 +1158,13 @@ export default function AdminProducts() {
         type="products"
         requiredColumns={['title']}
         optionalColumns={[
-          'slug', 
-          'description', 
-          'price_min', 
-          'price_max', 
-          'inventory', 
-          'published', 
-          'verified', 
+          'slug',
+          'description',
+          'price_min',
+          'price_max',
+          'inventory',
+          'published',
+          'verified',
           'image_url',
           'category'
         ]}

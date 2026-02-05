@@ -326,7 +326,7 @@ export default function Checkout() {
                         <h3 className="font-semibold">{product.title}</h3>
                         <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                           <Store className="h-4 w-4" />
-                          {seller?.company_name || seller?.full_name || 'Seller'}
+                          {seller?.company_name || seller?.full_name || 'Unknown Seller'}
                         </p>
                         <p className="font-semibold mt-2">
                           ${product.price_min?.toFixed(2) || product.price_max?.toFixed(2) || '0.00'} / unit

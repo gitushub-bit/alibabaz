@@ -309,7 +309,7 @@ export default function ProductDetail() {
       moq: product.moq || 1,
       unit: product.unit || 'piece',
       seller_id: product.seller_id,
-      seller_name: profile?.company_name || profile?.full_name || 'Seller',
+      seller_name: profile?.company_name || profile?.full_name || 'Unknown Seller',
     });
 
     toast({

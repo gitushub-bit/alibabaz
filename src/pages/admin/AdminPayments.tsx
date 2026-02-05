@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { 
-  Search, 
-  Eye, 
+import {
+  Search,
+  Eye,
   CreditCard,
   DollarSign,
   CheckCircle,
@@ -101,13 +101,13 @@ export default function AdminPayments() {
   };
 
   const filteredTransactions = transactions.filter(txn => {
-    const matchesSearch = 
+    const matchesSearch =
       txn.id.toLowerCase().includes(search.toLowerCase()) ||
       txn.user_profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
       txn.card_last_four?.includes(search);
-    
+
     const matchesStatus = statusFilter === 'all' || txn.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -246,7 +246,7 @@ export default function AdminPayments() {
                       {txn.id.slice(0, 8)}...
                     </TableCell>
                     <TableCell>
-                      {txn.user_profile?.company_name || txn.user_profile?.full_name || 'Unknown'}
+                      {txn.user_profile?.company_name || txn.user_profile?.full_name || 'Unknown Seller'}
                     </TableCell>
                     <TableCell className="font-medium">
                       ${txn.amount.toFixed(2)} {txn.currency}
@@ -286,8 +286,8 @@ export default function AdminPayments() {
                       <div className="flex items-center gap-2">
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="icon"
                               onClick={() => setSelectedTransaction(txn)}
                             >
@@ -344,7 +344,7 @@ export default function AdminPayments() {
 
                                 <div>
                                   <p className="text-muted-foreground text-sm mb-2">Update Status</p>
-                                  <Select 
+                                  <Select
                                     value={selectedTransaction.status}
                                     onValueChange={(v) => {
                                       updateTransactionStatus(selectedTransaction.id, v);

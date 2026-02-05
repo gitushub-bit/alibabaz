@@ -9,12 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { 
-  Search, 
-  Eye, 
-  Package, 
-  Truck, 
-  CheckCircle, 
+import {
+  Search,
+  Eye,
+  Package,
+  Truck,
+  CheckCircle,
   XCircle,
   Clock,
   DollarSign,
@@ -88,7 +88,7 @@ export default function AdminOrders() {
         const [buyerRes, sellerRes, productRes] = await Promise.all([
           supabase.from('profiles').select('full_name, company_name').eq('user_id', order.buyer_id).single(),
           supabase.from('profiles').select('full_name, company_name').eq('user_id', order.seller_id).single(),
-          order.product_id 
+          order.product_id
             ? supabase.from('products').select('title').eq('id', order.product_id).single()
             : null,
         ]);
@@ -109,7 +109,7 @@ export default function AdminOrders() {
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     const { error } = await supabase
       .from('orders')
-      .update({ 
+      .update({
         status: newStatus,
         tracking_info: {
           status_history: [
@@ -130,20 +130,20 @@ export default function AdminOrders() {
   };
 
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = 
+    const matchesSearch =
       order.id.toLowerCase().includes(search.toLowerCase()) ||
       order.buyer_profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
       order.buyer_profile?.company_name?.toLowerCase().includes(search.toLowerCase()) ||
       order.product?.title?.toLowerCase().includes(search.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
-  const totalRevenue = orders.reduce((sum, order) => 
-    order.status !== 'cancelled' && order.status !== 'refunded' 
-      ? sum + order.total_price 
+  const totalRevenue = orders.reduce((sum, order) =>
+    order.status !== 'cancelled' && order.status !== 'refunded'
+      ? sum + order.total_price
       : sum, 0
   );
 
@@ -289,7 +289,7 @@ export default function AdminOrders() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        {order.seller_profile?.company_name || order.seller_profile?.full_name || 'Unknown'}
+                        {order.seller_profile?.company_name || order.seller_profile?.full_name || 'Unknown Seller'}
                       </div>
                     </TableCell>
                     <TableCell className="font-medium">
@@ -346,11 +346,11 @@ export default function AdminOrders() {
                                     <p>{format(new Date(selectedOrder.updated_at), 'PPpp')}</p>
                                   </div>
                                 </div>
-                                
+
                                 <div>
                                   <p className="text-muted-foreground text-sm mb-2">Update Status</p>
-                                  <Select 
-                                    value={selectedOrder.status} 
+                                  <Select
+                                    value={selectedOrder.status}
                                     onValueChange={(v) => updateOrderStatus(selectedOrder.id, v)}
                                   >
                                     <SelectTrigger>
@@ -371,7 +371,7 @@ export default function AdminOrders() {
                             )}
                           </DialogContent>
                         </Dialog>
-                        <Select 
+                        <Select
                           value={order.status}
                           onValueChange={(v) => updateOrderStatus(order.id, v)}
                         >
